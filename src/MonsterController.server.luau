@@ -80,10 +80,33 @@ end
 --- HANYA jika kandidat baru layak menggantikan target sekarang; jika tidak,
 --- mengembalikan target sekarang (tidak berubah).
 ---
---- Aturan: (1) hormati commit time, (2) evaluasi hanya tiap RetargetInterval,
---- (3) kandidat baru harus lebih dekat >= hysteresis% ATAU >= MinGap studs.
+--- Saat mengejar, monster sudah "berburu" -> deteksi 360 derajat (ignoreFOV).
+---
+--- Aturan mode ITEM_HOLDER (PRIORITAS ITEM di atas jarak):
+---   - target sekarang BUKAN holder, tapi ADA holder terlihat -> SWITCH INSTAN
+---     (abaikan commit time & hysteresis; item = prioritas mutlak)
+---   - target sekarang holder, ada holder lain -> pakai hysteresis (anti-thrash)
+---   - tidak ada holder -> fallback NEAREST + hysteresis
+--- Aturan mode NEAREST:
+---   - (1) hormati commit time, (2) tiap RetargetInterval,
+---     (3) kandidat baru harus lebih dekat >= hysteresis persen ATAU >= MinGap studs.
 local function evaluateRetarget(ctx: MonsterContext): (Player?, Model?)
 	local now = tick()
+
+	-- Mode ITEM_HOLDER: cek prioritas item DULU (bypass commit time/hysteresis)
+	if ctx.chaseMode == "ITEM_HOLDER" then
+		local curIsHolder = TargetFinder:holdsTargetItem(ctx.targetChar)
+		-- Cari holder terdekat (360 derajat karena sedang berburu)
+		local holderP, holderC = TargetFinder:findItemHolder(ctx.model, true)
+
+		if not curIsHolder and holderC then
+			-- Target sekarang bukan pembawa item, tapi ada pembawa item terlihat
+			-- -> LANGSUNG alihkan (item = prioritas mutlak, abaikan jarak).
+			return holderP, holderC
+		end
+		-- Kalau target sekarang SUDAH holder, lanjut ke logika hysteresis di bawah
+		-- (biar dua pemegang item tidak bikin monster kejang-kejang).
+	end
 
 	-- (1) Commit time: wajib komit dulu sebelum boleh mikir switch
 	if (now - ctx.lockTime) < Config.RetargetCommitTime then
@@ -96,16 +119,16 @@ local function evaluateRetarget(ctx: MonsterContext): (Player?, Model?)
 	end
 	ctx.lastRetarget = now
 
-	-- Cari kandidat sesuai mode
+	-- Cari kandidat sesuai mode (360 derajat, sedang berburu)
 	local candP, candC
 	if ctx.chaseMode == "ITEM_HOLDER" then
-		candP, candC = TargetFinder:findItemHolder(ctx.model)
+		candP, candC = TargetFinder:findItemHolder(ctx.model, true)
 		if not (candP and candC) then
 			-- Tidak ada holder -> fallback nearest
-			candP, candC = TargetFinder:findNearest(ctx.model)
+			candP, candC = TargetFinder:findNearest(ctx.model, true)
 		end
 	else -- NEAREST
-		candP, candC = TargetFinder:findNearest(ctx.model)
+		candP, candC = TargetFinder:findNearest(ctx.model, true)
 	end
 
 	if not (candP and candC) then
@@ -129,6 +152,25 @@ local function evaluateRetarget(ctx: MonsterContext): (Player?, Model?)
 	end
 
 	return ctx.targetPlayer, ctx.targetChar
+end
+
+--- Fix jeda pasca-kill: ketika target hilang/mati, JANGAN langsung patroli.
+--- Coba akuisisi ulang seketika dengan deteksi 360 derajat (monster masih
+--- "panas" dari berburu). Kalau ketemu korban lain dalam jangkauan -> lock
+--- & kembali CHASING tanpa jeda. Kalau tidak ada -> baru PATROL.
+--- Mengembalikan true jika berhasil mengunci target baru.
+local function reacquireOrPatrol(fsm: any, ctx: MonsterContext): boolean
+	local p, c = TargetFinder:acquireTarget(ctx.model, ctx.chaseMode, true)  -- ignoreFOV = 360
+	if p and c then
+		lockTarget(ctx, p, c)
+		fsm:setState("CHASING", ctx)
+		return true
+	end
+
+	ctx.targetPlayer = nil
+	ctx.targetChar = nil
+	fsm:setState("PATROL", ctx)
+	return false
 end
 
 ---------------------------------------------------------------------
@@ -239,10 +281,8 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 				else
 					print("[MonsterAI] " .. ctx.model.Name .. ": Target hilang/mati.")
 				end
-				ctx.targetPlayer = nil
-				ctx.targetChar = nil
-				fsm:setState("PATROL", ctx)
-				task.wait(0.5)
+				-- Fix jeda pasca-kill: langsung cari korban lain (360) sebelum patroli.
+				reacquireOrPatrol(fsm, ctx)
 				return
 			end
 
@@ -311,9 +351,9 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 		onUpdate = function()
 			-- Validasi target
 			if not TargetFinder:isValidTarget(ctx.targetChar) then
-				ctx.targetPlayer = nil
-				ctx.targetChar = nil
-				fsm:setState("PATROL", ctx)
+				-- Fix jeda pasca-kill: target baru saja mati -> langsung cari
+				-- korban berikutnya (360 derajat) tanpa lewat patroli dulu.
+				reacquireOrPatrol(fsm, ctx)
 				return
 			end
 

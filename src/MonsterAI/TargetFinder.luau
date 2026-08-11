@@ -9,6 +9,12 @@
 	  - Line of Sight (LOS) raycasting
 	  - Safe Zone filtering (player di safe zone tidak ditarget)
 	  - Hanya menarget player yang masih hidup
+
+	Catatan tentang FOV vs 360:
+	  Parameter `ignoreFOV` (opsional) melewati pengecekan sudut pandang.
+	  Dipakai saat monster SUDAH dalam mode berburu (CHASING / re-acquire
+	  pasca-kill) supaya monster jadi "waspada 360 derajat". Untuk AKUISISI
+	  awal (IDLE/PATROL) FOV tetap dihormati agar realistis.
 --]]
 
 local Players = game:GetService("Players")
@@ -32,7 +38,8 @@ end
 
 --- Raycast dari monster ke target untuk memastikan tidak ada
 --- obstacle yang menghalangi pandangan (Line of Sight).
-function TargetFinder:_hasLineOfSight(monsterModel: Model, monsterRoot: BasePart, targetChar: Model): boolean
+--- @param ignoreFOV  Jika true, lewati pengecekan FOV (deteksi 360 derajat).
+function TargetFinder:_hasLineOfSight(monsterModel: Model, monsterRoot: BasePart, targetChar: Model, ignoreFOV: boolean?): boolean
 	local targetRoot = targetChar:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not targetRoot then return false end
 
@@ -44,8 +51,8 @@ function TargetFinder:_hasLineOfSight(monsterModel: Model, monsterRoot: BasePart
 		return false
 	end
 
-	-- FOV check
-	if not self:_isInFieldOfView(monsterRoot, targetRoot.Position) then
+	-- FOV check (dilewati saat ignoreFOV = true)
+	if not ignoreFOV and not self:_isInFieldOfView(monsterRoot, targetRoot.Position) then
 		return false
 	end
 
@@ -91,7 +98,8 @@ end
 
 --- Mencari player terdekat yang valid sebagai target.
 --- Mengembalikan Player dan Character, atau nil jika tidak ditemukan.
-function TargetFinder:findNearest(monsterModel: Model): (Player?, Model?)
+--- @param ignoreFOV  Jika true, deteksi 360 derajat (untuk mode berburu).
+function TargetFinder:findNearest(monsterModel: Model, ignoreFOV: boolean?): (Player?, Model?)
 	local monsterRoot = monsterModel:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not monsterRoot then
 		return nil, nil
@@ -107,7 +115,7 @@ function TargetFinder:findNearest(monsterModel: Model): (Player?, Model?)
 			local targetRoot = char:FindFirstChild("HumanoidRootPart") :: BasePart
 			local dist = (monsterRoot.Position - targetRoot.Position).Magnitude
 
-			if dist < closestDist and self:_hasLineOfSight(monsterModel, monsterRoot, char) then
+			if dist < closestDist and self:_hasLineOfSight(monsterModel, monsterRoot, char, ignoreFOV) then
 				closestDist = dist
 				bestPlayer = player
 				bestChar = char
@@ -179,8 +187,9 @@ function TargetFinder:holdsTargetItem(character: Model?): boolean
 end
 
 --- Mencari player pemegang item terdekat yang valid.
---- Mengembalikan (Player?, Model?) — nil jika tidak ada holder yang terlihat.
-function TargetFinder:findItemHolder(monsterModel: Model): (Player?, Model?)
+--- Mengembalikan (Player?, Model?) - nil jika tidak ada holder yang terlihat.
+--- @param ignoreFOV  Jika true, deteksi 360 derajat (untuk mode berburu).
+function TargetFinder:findItemHolder(monsterModel: Model, ignoreFOV: boolean?): (Player?, Model?)
 	local monsterRoot = monsterModel:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not monsterRoot then
 		return nil, nil
@@ -196,7 +205,7 @@ function TargetFinder:findItemHolder(monsterModel: Model): (Player?, Model?)
 			local targetRoot = char:FindFirstChild("HumanoidRootPart") :: BasePart
 			local dist = (monsterRoot.Position - targetRoot.Position).Magnitude
 
-			if dist < closestDist and self:_hasLineOfSight(monsterModel, monsterRoot, char) then
+			if dist < closestDist and self:_hasLineOfSight(monsterModel, monsterRoot, char, ignoreFOV) then
 				closestDist = dist
 				bestPlayer = player
 				bestChar = char
@@ -211,18 +220,19 @@ end
 --- Dipakai di state IDLE & PATROL untuk keputusan "siapa yang dilirik".
 ---   PERSISTENT / NEAREST -> findNearest
 ---   ITEM_HOLDER          -> findItemHolder, fallback findNearest bila tak ada holder
-function TargetFinder:acquireTarget(monsterModel: Model, mode: string): (Player?, Model?)
+--- @param ignoreFOV  Jika true, deteksi 360 derajat (untuk re-acquire pasca-kill).
+function TargetFinder:acquireTarget(monsterModel: Model, mode: string, ignoreFOV: boolean?): (Player?, Model?)
 	if mode == "ITEM_HOLDER" then
-		local p, c = self:findItemHolder(monsterModel)
+		local p, c = self:findItemHolder(monsterModel, ignoreFOV)
 		if p and c then
 			return p, c
 		end
 		-- Fallback: tidak ada pemegang item -> kejar yang terdekat
-		return self:findNearest(monsterModel)
+		return self:findNearest(monsterModel, ignoreFOV)
 	end
 
 	-- PERSISTENT & NEAREST sama-sama akuisisi awal = terdekat
-	return self:findNearest(monsterModel)
+	return self:findNearest(monsterModel, ignoreFOV)
 end
 
 --- Jarak monster -> karakter (helper untuk logika retarget).
