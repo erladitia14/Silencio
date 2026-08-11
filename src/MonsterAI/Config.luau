@@ -30,7 +30,10 @@ Config.FieldOfView      = 160   -- Sudut pandang deteksi (derajat, dari arah had
 --   "NEAREST"     = kejar terdekat, boleh retarget dinamis (anti-thrash)
 --   "ITEM_HOLDER" = prioritas pemegang Tool tertentu; fallback ke NEAREST
 Config.ChaseMode        = "NEAREST"      -- PERSISTENT | NEAREST | ITEM_HOLDER
-Config.TargetItemName   = "Flashlight"   -- Nama Tool untuk mode ITEM_HOLDER
+-- Mode ITEM_HOLDER menarget player yang memegang Tool ber-Attribute "MonsterBait" = true.
+-- Cukup tag Tool-nya di Studio (Attributes > MonsterBait, tipe Bool, centang),
+-- nama Tool bebas. Bisa banyak item berbeda sekaligus.
+Config.BaitAttribute    = "MonsterBait"  -- Nama Attribute (Bool) penanda item pemicu
 
 -- Give-up untuk mode PERSISTENT: 0 = kejar selamanya sampai target mati.
 -- Jika >0, monster menyerah setelah sekian detik tak bisa menyentuh target.

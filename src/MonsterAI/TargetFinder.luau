@@ -144,20 +144,22 @@ function TargetFinder:isInAttackRange(monsterModel: Model, targetChar: Model): b
 	return (monsterRoot.Position - targetRoot.Position).Magnitude <= Config.AttackRadius
 end
 
---- Cek apakah sebuah karakter (player) sedang memegang Tool
---- dengan nama Config.TargetItemName. Mengecek Character (equipped)
---- dan Backpack (tersimpan) supaya deteksi lebih andal.
+--- Cek apakah sebuah karakter (player) sedang membawa Tool yang di-tag
+--- sebagai umpan monster, yaitu Tool dengan Attribute Config.BaitAttribute = true.
+--- Nama Tool bebas; cukup di-tag di Studio. Mengecek Tool yang sedang
+--- di-equip (child Character) DAN yang tersimpan di Backpack.
 function TargetFinder:holdsTargetItem(character: Model?): boolean
 	if not character then
 		return false
 	end
 
-	local itemName = Config.TargetItemName
+	local attr = Config.BaitAttribute
 
 	-- Equipped di Character (Tool jadi child langsung saat di-equip)
-	local equipped = character:FindFirstChild(itemName)
-	if equipped and equipped:IsA("Tool") then
-		return true
+	for _, child in character:GetChildren() do
+		if child:IsA("Tool") and child:GetAttribute(attr) == true then
+			return true
+		end
 	end
 
 	-- Tersimpan di Backpack
@@ -165,9 +167,10 @@ function TargetFinder:holdsTargetItem(character: Model?): boolean
 	if player then
 		local backpack = player:FindFirstChildOfClass("Backpack")
 		if backpack then
-			local stored = backpack:FindFirstChild(itemName)
-			if stored and stored:IsA("Tool") then
-				return true
+			for _, child in backpack:GetChildren() do
+				if child:IsA("Tool") and child:GetAttribute(attr) == true then
+					return true
+				end
 			end
 		end
 	end
