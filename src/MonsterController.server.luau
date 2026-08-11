@@ -60,7 +60,76 @@ export type MonsterContext = {
 	animation:      any,
 	targetPlayer:   Player?,
 	targetChar:     Model?,
+	chaseMode:      string,   -- PERSISTENT | NEAREST | ITEM_HOLDER (per-monster)
+	lockTime:       number,   -- tick() saat target sekarang di-lock (untuk commit time)
+	lastRetarget:   number,   -- tick() evaluasi retarget terakhir
+	unreachSince:   number,   -- tick() sejak target PERSISTENT tak terjangkau (0 = terjangkau)
 }
+
+--- Helper: catat lock target baru (reset timer commit & give-up).
+local function lockTarget(ctx: MonsterContext, player: Player?, char: Model?)
+	ctx.targetPlayer = player
+	ctx.targetChar = char
+	ctx.lockTime = tick()
+	ctx.lastRetarget = tick()
+	ctx.unreachSince = 0
+end
+
+--- Helper anti-thrash: evaluasi apakah harus GANTI target saat mengejar.
+--- Dipakai mode NEAREST & ITEM_HOLDER. Mengembalikan (newPlayer?, newChar?)
+--- HANYA jika kandidat baru layak menggantikan target sekarang; jika tidak,
+--- mengembalikan target sekarang (tidak berubah).
+---
+--- Aturan: (1) hormati commit time, (2) evaluasi hanya tiap RetargetInterval,
+--- (3) kandidat baru harus lebih dekat >= hysteresis% ATAU >= MinGap studs.
+local function evaluateRetarget(ctx: MonsterContext): (Player?, Model?)
+	local now = tick()
+
+	-- (1) Commit time: wajib komit dulu sebelum boleh mikir switch
+	if (now - ctx.lockTime) < Config.RetargetCommitTime then
+		return ctx.targetPlayer, ctx.targetChar
+	end
+
+	-- (2) Throttle evaluasi
+	if (now - ctx.lastRetarget) < Config.RetargetInterval then
+		return ctx.targetPlayer, ctx.targetChar
+	end
+	ctx.lastRetarget = now
+
+	-- Cari kandidat sesuai mode
+	local candP, candC
+	if ctx.chaseMode == "ITEM_HOLDER" then
+		candP, candC = TargetFinder:findItemHolder(ctx.model)
+		if not (candP and candC) then
+			-- Tidak ada holder -> fallback nearest
+			candP, candC = TargetFinder:findNearest(ctx.model)
+		end
+	else -- NEAREST
+		candP, candC = TargetFinder:findNearest(ctx.model)
+	end
+
+	if not (candP and candC) then
+		return ctx.targetPlayer, ctx.targetChar
+	end
+
+	-- Kandidat sama dengan target sekarang -> tidak berubah
+	if candC == ctx.targetChar then
+		return ctx.targetPlayer, ctx.targetChar
+	end
+
+	-- (3) Hysteresis: kandidat harus SIGNIFIKAN lebih dekat
+	local curDist = TargetFinder:distanceTo(ctx.model, ctx.targetChar)
+	local candDist = TargetFinder:distanceTo(ctx.model, candC)
+
+	local closerByPct = candDist <= curDist * (1 - Config.RetargetHysteresis)
+	local closerByGap = candDist <= (curDist - Config.RetargetMinGap)
+
+	if closerByPct or closerByGap then
+		return candP, candC
+	end
+
+	return ctx.targetPlayer, ctx.targetChar
+end
 
 ---------------------------------------------------------------------
 -- STATE DEFINITIONS
@@ -82,10 +151,9 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 			-- yang lewat (FIX bug A: sebelumnya task.wait memblok deteksi).
 			local elapsed = 0
 			while elapsed < Config.PatrolWaitTime do
-				local player, char = TargetFinder:findNearest(ctx.model)
+				local player, char = TargetFinder:acquireTarget(ctx.model, ctx.chaseMode)
 				if player and char then
-					ctx.targetPlayer = player
-					ctx.targetChar = char
+					lockTarget(ctx, player, char)
 					fsm:setState("CHASING", ctx)
 					return
 				end
@@ -107,10 +175,9 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 
 		onUpdate = function()
 			-- Cek target dulu sebelum bergerak
-			local player, char = TargetFinder:findNearest(ctx.model)
+			local player, char = TargetFinder:acquireTarget(ctx.model, ctx.chaseMode)
 			if player and char then
-				ctx.targetPlayer = player
-				ctx.targetChar = char
+				lockTarget(ctx, player, char)
 				fsm:setState("CHASING", ctx)
 				return
 			end
@@ -129,10 +196,9 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 				destination,
 				function()
 					-- Abort navigation jika target ditemukan
-					local p, c = TargetFinder:findNearest(ctx.model)
+					local p, c = TargetFinder:acquireTarget(ctx.model, ctx.chaseMode)
 					if p and c then
-						ctx.targetPlayer = p
-						ctx.targetChar = c
+						lockTarget(ctx, p, c)
 						return true
 					end
 					return false
@@ -163,7 +229,10 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 		end,
 
 		onUpdate = function()
-			-- Validasi target masih layak
+			-- Validasi target masih layak.
+			-- PERSISTENT: hanya menyerah kalau target MATI / hilang dari world
+			-- (Safe Zone tetap dihormati sebagai aturan game, tidak bisa ditembus).
+			-- NEAREST/ITEM_HOLDER: menyerah bila target tak valid (mati/safezone/hilang).
 			if not TargetFinder:isValidTarget(ctx.targetChar) then
 				if ctx.targetChar and SafeZoneManager:isInSafeZone(ctx.targetChar) then
 					print("[MonsterAI] " .. ctx.model.Name .. ": Target masuk Safe Zone!")
@@ -183,13 +252,41 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 				return
 			end
 
-			-- Cek apakah target masih dalam chase range
-			if not TargetFinder:isInChaseRange(ctx.model, ctx.targetChar :: Model) then
-				print("[MonsterAI] " .. ctx.model.Name .. ": Target keluar dari jangkauan.")
-				ctx.targetPlayer = nil
-				ctx.targetChar = nil
-				fsm:setState("PATROL", ctx)
-				return
+			if ctx.chaseMode == "PERSISTENT" then
+				-- PERSISTENT: kejar terus tanpa peduli chase range / LOS.
+				-- Target hanya lepas kalau mati/safezone (sudah dicek di atas).
+				-- Opsional give-up bila terlalu lama tak terjangkau.
+				if Config.PersistentGiveUpTime > 0 then
+					if not TargetFinder:isInChaseRange(ctx.model, ctx.targetChar :: Model) then
+						if ctx.unreachSince == 0 then
+							ctx.unreachSince = tick()
+						elseif (tick() - ctx.unreachSince) >= Config.PersistentGiveUpTime then
+							print("[MonsterAI] " .. ctx.model.Name .. ": Menyerah (target terlalu lama tak terjangkau).")
+							ctx.targetPlayer = nil
+							ctx.targetChar = nil
+							fsm:setState("PATROL", ctx)
+							return
+						end
+					else
+						ctx.unreachSince = 0
+					end
+				end
+			else
+				-- NEAREST / ITEM_HOLDER: hormati chase range + boleh retarget (anti-thrash)
+				if not TargetFinder:isInChaseRange(ctx.model, ctx.targetChar :: Model) then
+					print("[MonsterAI] " .. ctx.model.Name .. ": Target keluar dari jangkauan.")
+					ctx.targetPlayer = nil
+					ctx.targetChar = nil
+					fsm:setState("PATROL", ctx)
+					return
+				end
+
+				-- Evaluasi ganti target (dengan commit time + hysteresis + interval)
+				local newP, newC = evaluateRetarget(ctx)
+				if newC and newC ~= ctx.targetChar then
+					print("[MonsterAI] " .. ctx.model.Name .. ": Ganti target -> " .. (newP and newP.Name or "?"))
+					lockTarget(ctx, newP, newC)
+				end
 			end
 
 			-- Kejar target langsung (tanpa pathfinding untuk responsivitas)
@@ -259,6 +356,16 @@ local function initializeMonster(monsterModel: Model)
 	humanoid.WalkSpeed = Config.PatrolSpeed
 	humanoid.AutoRotate = true
 
+	-- Tentukan chase mode: Attribute per-monster > default Config.
+	-- Attribute "ChaseMode" (string) di Model monster meng-override default.
+	local modeAttr = monsterModel:GetAttribute("ChaseMode")
+	local chaseMode = (typeof(modeAttr) == "string" and modeAttr ~= "") and modeAttr or Config.ChaseMode
+	if chaseMode ~= "PERSISTENT" and chaseMode ~= "NEAREST" and chaseMode ~= "ITEM_HOLDER" then
+		warn("[MonsterAI] ChaseMode '" .. tostring(chaseMode) .. "' tidak dikenal pada " .. monsterModel.Name .. ". Fallback ke NEAREST.")
+		chaseMode = "NEAREST"
+	end
+	print("[MonsterAI] " .. monsterModel.Name .. " chase mode: " .. chaseMode)
+
 	-- Inisialisasi AnimationManager untuk monster
 	local animManager = AnimationManager.new(monsterModel)
 
@@ -273,6 +380,10 @@ local function initializeMonster(monsterModel: Model)
 		animation = animManager,
 		targetPlayer = nil,
 		targetChar   = nil,
+		chaseMode    = chaseMode,
+		lockTime     = 0,
+		lastRetarget = 0,
+		unreachSince = 0,
 	}
 
 	-- Register states

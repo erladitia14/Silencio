@@ -144,4 +144,96 @@ function TargetFinder:isInAttackRange(monsterModel: Model, targetChar: Model): b
 	return (monsterRoot.Position - targetRoot.Position).Magnitude <= Config.AttackRadius
 end
 
+--- Cek apakah sebuah karakter (player) sedang memegang Tool
+--- dengan nama Config.TargetItemName. Mengecek Character (equipped)
+--- dan Backpack (tersimpan) supaya deteksi lebih andal.
+function TargetFinder:holdsTargetItem(character: Model?): boolean
+	if not character then
+		return false
+	end
+
+	local itemName = Config.TargetItemName
+
+	-- Equipped di Character (Tool jadi child langsung saat di-equip)
+	local equipped = character:FindFirstChild(itemName)
+	if equipped and equipped:IsA("Tool") then
+		return true
+	end
+
+	-- Tersimpan di Backpack
+	local player = Players:GetPlayerFromCharacter(character)
+	if player then
+		local backpack = player:FindFirstChildOfClass("Backpack")
+		if backpack then
+			local stored = backpack:FindFirstChild(itemName)
+			if stored and stored:IsA("Tool") then
+				return true
+			end
+		end
+	end
+
+	return false
+end
+
+--- Mencari player pemegang item terdekat yang valid.
+--- Mengembalikan (Player?, Model?) — nil jika tidak ada holder yang terlihat.
+function TargetFinder:findItemHolder(monsterModel: Model): (Player?, Model?)
+	local monsterRoot = monsterModel:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not monsterRoot then
+		return nil, nil
+	end
+
+	local closestDist = Config.DetectionRadius
+	local bestPlayer: Player? = nil
+	local bestChar: Model? = nil
+
+	for _, player in Players:GetPlayers() do
+		local char = player.Character
+		if char and self:isValidTarget(char) and self:holdsTargetItem(char) then
+			local targetRoot = char:FindFirstChild("HumanoidRootPart") :: BasePart
+			local dist = (monsterRoot.Position - targetRoot.Position).Magnitude
+
+			if dist < closestDist and self:_hasLineOfSight(monsterModel, monsterRoot, char) then
+				closestDist = dist
+				bestPlayer = player
+				bestChar = char
+			end
+		end
+	end
+
+	return bestPlayer, bestChar
+end
+
+--- Dispatcher AKUISISI target berdasarkan mode chase.
+--- Dipakai di state IDLE & PATROL untuk keputusan "siapa yang dilirik".
+---   PERSISTENT / NEAREST -> findNearest
+---   ITEM_HOLDER          -> findItemHolder, fallback findNearest bila tak ada holder
+function TargetFinder:acquireTarget(monsterModel: Model, mode: string): (Player?, Model?)
+	if mode == "ITEM_HOLDER" then
+		local p, c = self:findItemHolder(monsterModel)
+		if p and c then
+			return p, c
+		end
+		-- Fallback: tidak ada pemegang item -> kejar yang terdekat
+		return self:findNearest(monsterModel)
+	end
+
+	-- PERSISTENT & NEAREST sama-sama akuisisi awal = terdekat
+	return self:findNearest(monsterModel)
+end
+
+--- Jarak monster -> karakter (helper untuk logika retarget).
+--- Mengembalikan math.huge bila salah satu root tak ada.
+function TargetFinder:distanceTo(monsterModel: Model, targetChar: Model?): number
+	if not targetChar then
+		return math.huge
+	end
+	local monsterRoot = monsterModel:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local targetRoot = targetChar:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not monsterRoot or not targetRoot then
+		return math.huge
+	end
+	return (monsterRoot.Position - targetRoot.Position).Magnitude
+end
+
 return TargetFinder

@@ -22,6 +22,31 @@ Config.LoseTargetRadius = 58    -- Jarak dimana monster kehilangan target (1.3x 
 Config.FieldOfView      = 160   -- Sudut pandang deteksi (derajat, dari arah hadap)
 
 -----------------------------------------------------------------
+-- CHASE MODE
+-----------------------------------------------------------------
+-- Mode pengejaran default. Bisa di-override per-monster lewat
+-- Attribute "ChaseMode" (string) pada Model monster di Studio.
+--   "PERSISTENT"  = kunci 1 target sampai MATI (abaikan jarak/LOS)
+--   "NEAREST"     = kejar terdekat, boleh retarget dinamis (anti-thrash)
+--   "ITEM_HOLDER" = prioritas pemegang Tool tertentu; fallback ke NEAREST
+Config.ChaseMode        = "NEAREST"      -- PERSISTENT | NEAREST | ITEM_HOLDER
+Config.TargetItemName   = "Flashlight"   -- Nama Tool untuk mode ITEM_HOLDER
+
+-- Give-up untuk mode PERSISTENT: 0 = kejar selamanya sampai target mati.
+-- Jika >0, monster menyerah setelah sekian detik tak bisa menyentuh target.
+Config.PersistentGiveUpTime = 0          -- detik (0 = tanpa give-up)
+
+-----------------------------------------------------------------
+-- ANTI-THRASH (retargeting) — mencegah monster "di-main-mainin"
+-- oleh beberapa player yang gantian jadi umpan.
+-- Berlaku untuk mode NEAREST & ITEM_HOLDER (tidak untuk PERSISTENT).
+-----------------------------------------------------------------
+Config.RetargetCommitTime = 2.5   -- Wajib komit ke target minimal sekian detik sebelum boleh switch
+Config.RetargetInterval   = 1.0   -- Jeda evaluasi ganti-target (detik); bukan tiap tick
+Config.RetargetHysteresis = 0.30  -- Kandidat baru harus >= sekian persen lebih dekat (0.30 = 30%)
+Config.RetargetMinGap     = 8     -- ATAU minimal sekian studs lebih dekat
+
+-----------------------------------------------------------------
 -- COMBAT
 -----------------------------------------------------------------
 Config.AttackRadius     = 4     -- Jarak jangkauan serangan (studs)
