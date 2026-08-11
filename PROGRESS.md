@@ -4,7 +4,8 @@
 > Target rilis: **akhir September 2026** · Chapter 1: *The Mask Maze*
 >
 > **Aturan catat progress:** file ini HANYA di-update ketika Aer bilang "catat progress".
-> Bukan otomatis. Entri terbaru di atas.
+> Setiap perintah = **1 entri baru yang merangkum progres turn itu secara keseluruhan**.
+> Bukan otomatis, bukan dipecah per-fitur kecil. Entri terbaru di atas.
 
 ---
 
@@ -13,51 +14,51 @@
 - **Source of truth:** folder lokal `C:\Users\erlan\Documents\Silencio` (Rojo) → di-push ke Studio.
 - **Repo:** `erladitia14/Silencio` (private) · branch `main`.
 - **Verifikasi tanpa playtest:** struktural + compile-check Studio + behavioral test. Playtest = Aer.
-- Format tanggal: entri diberi label commit hash + ringkasan.
 
 ---
 
 ## 🗓️ Log Progress
 
-### Entri #2 — Fix feedback playtest ITEM_HOLDER · commit `f2fdb4f`
-**Fitur/Task:** Monster AI — perbaikan berdasarkan playtest mode ITEM_HOLDER.
+### Entri #1 — Chasing mode Monster AI: implementasi + iterasi playtest
+**Commit:** `5c400ad` → `63e6b67` → `f2fdb4f` (+ `be71b87` docs)
+**Task terkait:** #10 NPC Monster Script.
 
+**Ringkasan menyeluruh:** membangun fitur pilihan mode pengejaran monster, lalu memperbaikinya berdasarkan feedback playtest Aer.
+
+#### 1. Chasing mode selectable (3 mode)
+Dipilih per-monster via Attribute `ChaseMode` (String) di Model, fallback ke `Config.ChaseMode`:
+- **PERSISTENT** — kunci 1 target sampai MATI/hilang; abaikan jarak & LOS; Safe Zone tetap dihormati. `PersistentGiveUpTime=0` = kejar selamanya.
+- **NEAREST** (default) — kejar terdekat, retarget dinamis + anti-thrash.
+- **ITEM_HOLDER** — prioritas pemegang Tool ber-Attribute `MonsterBait=true` (nama Tool bebas), fallback ke NEAREST bila tak ada holder.
+
+**Anti-thrash 3 lapis** (cegah monster "di-main-mainin" 2 player oper-operan): commit time 2.5s + hysteresis 30%/8studs + interval 1s. Dipakai di NEAREST & ITEM_HOLDER, TIDAK di PERSISTENT.
+
+**ITEM_HOLDER pakai Attribute `MonsterBait`** (bukan match nama Tool) — lebih fleksibel: banyak item beda bisa memicu monster cukup dengan tag Attribute.
+
+#### 2. Fix berdasarkan feedback playtest ITEM_HOLDER
 **Masalah yang dilaporkan Aer:**
-1. **Bug A** — 1 orang pegang MonsterBait, 1 tidak. Monster tetap ngejar yang **tidak** pegang MonsterBait walau pemegang bait muter-muter di dekat.
-2. **Bug B** — setelah monster membunuh player, dia **patroli dulu** (jeda lama) sebelum ngejar target berikutnya.
+- **Bug A** — 1 orang pegang MonsterBait, 1 tidak. Monster tetap ngejar yang **tidak** pegang walau pemegang bait muter-muter di dekat.
+- **Bug B** — setelah membunuh player, monster **patroli dulu** (jeda lama) sebelum ngejar target berikutnya.
 
 **Diagnosis:**
-- **Bug A = A2 (bug logika, bukan salah setting).** Attribute monster sudah benar `ChaseMode=ITEM_HOLDER` (diverifikasi via MCP). Akar: `evaluateRetarget` memberlakukan hysteresis jarak (30%/8studs) ke SEMUA pergantian target — termasuk saat mau pindah dari non-holder ke holder. Karena pemegang bait tidak "cukup lebih dekat", monster nggak mau pindah.
-- **Bug B** — saat target mati (di state ATTACKING/CHASING), kode langsung `setState("PATROL")` + `task.wait(0.5)`. Korban berikutnya baru ke-detect saat kebetulan masuk FOV/radius sambil patroli.
+- **Bug A = A2 (bug logika, bukan salah setting).** Attribute monster sudah benar `ChaseMode=ITEM_HOLDER` (diverifikasi via MCP). Akar: `evaluateRetarget` memberlakukan hysteresis jarak ke SEMUA switch — termasuk pindah dari non-holder ke holder, jadi pemegang bait yang "tidak cukup lebih dekat" tak pernah diambil.
+- **Bug B** — saat target mati, kode langsung `setState("PATROL")` + `task.wait(0.5)`; korban berikut baru ke-detect saat kebetulan masuk FOV sambil patroli.
 
-**Solusi yang diterapkan:**
-- **Fix A2:** `evaluateRetarget` mode ITEM_HOLDER → **SWITCH INSTAN** ke pemegang bait saat target sekarang bukan holder (bypass commit time + hysteresis; item = prioritas mutlak). Kalau dua-duanya holder → tetap pakai hysteresis (anti-thrash, biar monster nggak kejang).
-- **Fix B:** helper baru `reacquireOrPatrol()` dipanggil di CHASING & ATTACKING saat target invalid → langsung akuisisi ulang & lanjut CHASING kalau ada korban lain; buang `task.wait(0.5)`.
-- **360° saat berburu:** `TargetFinder` dapat param `ignoreFOV`. Saat retarget & re-acquire pasca-kill, FOV dilewati (monster waspada penuh 360° setelah mulai mengejar). Akuisisi awal di IDLE/PATROL **tetap FOV** (realistis) — sesuai keputusan Aer.
+**Solusi:**
+- **Fix A2:** mode ITEM_HOLDER → **SWITCH INSTAN** ke pemegang bait saat target sekarang bukan holder (bypass commit time + hysteresis; item = prioritas mutlak). Dua holder → tetap hysteresis (anti-thrash).
+- **Fix B:** helper `reacquireOrPatrol()` di CHASING & ATTACKING → begitu target invalid, langsung akuisisi ulang & lanjut CHASING kalau ada korban lain; `task.wait(0.5)` dibuang.
+- **360° saat berburu:** `TargetFinder` dapat param `ignoreFOV`. Saat retarget & re-acquire pasca-kill, FOV dilewati (monster waspada penuh 360°). Akuisisi awal di IDLE/PATROL **tetap FOV** (realistis) — keputusan Aer.
 
-**File berubah:**
-- `src/MonsterAI/TargetFinder.luau` — param `ignoreFOV` mengalir ke `_hasLineOfSight`/`findNearest`/`findItemHolder`/`acquireTarget`.
-- `src/MonsterController.server.luau` — `evaluateRetarget` prioritas holder instan, helper `reacquireOrPatrol`, dipakai di CHASING & ATTACKING.
-
-**Verifikasi:** ad-hoc lokal (struktural 2/2, marker 11/11, sim logika 5/5 — T1 bug report → SWITCH_HOLDER) + Studio (3 script COMPILE_OK, source match, Attribute monster terbaca). **Belum playtest** (Aer yang tes).
-
----
-
-### Entri #1 — Chasing mode selectable (3 mode) · commit `5c400ad` → refactor `63e6b67`
-**Fitur/Task:** Task #10 NPC Monster Script — tambah pilihan mode pengejaran monster.
-
-**Yang dikerjakan:**
-- **3 chase mode** dipilih per-monster via Attribute `ChaseMode` (String) di Model, fallback ke `Config.ChaseMode`:
-  - **PERSISTENT** — kunci 1 target sampai MATI/hilang; abaikan jarak & LOS; Safe Zone tetap dihormati. `PersistentGiveUpTime=0` = kejar selamanya.
-  - **NEAREST** (default) — kejar terdekat, retarget dinamis dengan anti-thrash.
-  - **ITEM_HOLDER** — prioritas pemegang Tool ber-Attribute `MonsterBait=true` (nama Tool bebas), fallback ke NEAREST bila tak ada holder.
-- **Anti-thrash 3 lapis** (mencegah monster "di-main-mainin" 2 player oper-operan): commit time 2.5s + hysteresis 30%/8studs + interval 1s. Dipakai di NEAREST & ITEM_HOLDER, TIDAK di PERSISTENT.
-- **ITEM_HOLDER pakai Attribute `MonsterBait`** (bukan match nama Tool) — lebih fleksibel, banyak item beda bisa memicu monster cukup dengan tag Attribute.
-
-**Parameter Config (di-tune sendiri oleh Aer):**
+#### 3. Parameter Config (di-tune sendiri oleh Aer)
 `ChaseMode`, `BaitAttribute="MonsterBait"`, `PersistentGiveUpTime=0`, `RetargetCommitTime=2.5`, `RetargetInterval=1.0`, `RetargetHysteresis=0.30`, `RetargetMinGap=8`.
 
-**Verifikasi:** struktural + compile-check Studio + 8 behavioral test (8/8 lulus).
+#### 4. File berubah
+- `src/MonsterAI/Config.luau` — blok CHASE MODE & ANTI-THRASH, `BaitAttribute`.
+- `src/MonsterAI/TargetFinder.luau` — `holdsTargetItem` (Attribute-based), `findItemHolder`, `acquireTarget`, param `ignoreFOV`.
+- `src/MonsterController.server.luau` — context `chaseMode`+timing, `evaluateRetarget` (prioritas holder instan), `reacquireOrPatrol`, CHASING/ATTACKING rewrite.
+
+#### 5. Verifikasi
+Struktural balanced + Studio (3 script COMPILE_OK, source match, Attribute monster `ChaseMode=ITEM_HOLDER` terbaca) + behavioral test (chasing awal 8/8, fix retarget 5/5 — termasuk T1 bug report → SWITCH_HOLDER). **Belum playtest** (Aer yang tes).
 
 ---
 
