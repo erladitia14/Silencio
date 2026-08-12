@@ -19,6 +19,23 @@
 
 ## 🗓️ Log Progress
 
+### Entri #2 — Relokasi modules Monster AI → `ReplicatedStorage/Modules/EnemyController`
+**Commit:** `ba3c408`
+**Task terkait:** #10 NPC Monster Script (perapian struktur).
+
+**Ringkasan menyeluruh:** Aer memindah folder modules Monster AI di Studio ke `ReplicatedStorage/Modules` dan rename jadi **EnemyController**; assistant "menjahit" penghubungnya agar sistem tetap jalan.
+
+**Yang dikerjakan:**
+- **Studio (langsung via MCP):** `MonsterController` — require path diubah dari `script.Parent:FindFirstChild("MonsterAI")` → `ReplicatedStorage.Modules:WaitForChild("EnemyController")`; header SETUP/ARSITEKTUR diupdate.
+- **Lokal (source of truth, supaya Rojo tidak meng-overwrite):** file di-`git mv` ke `src/ServerScriptService/...` + `src/ReplicatedStorage/Modules/EnemyController/...`; `default.project.json` di-update (mapping `ServerScriptService` → `src/ServerScriptService`, `ReplicatedStorage/Modules` → `src/ReplicatedStorage/Modules`); edit path di file lokal `MonsterController.server.luau` agar match Studio.
+- Modules internal pakai relative require (`script.Parent`) → tidak perlu diubah, aman dipindah.
+
+**Verifikasi:** Studio — compile OK, 8/8 module `require` OK dari path baru, 0 referensi path lama, folder lama di SSS bersih. Lokal (ad-hoc `hermes-verify-*.py`, sudah dibersihkan) — 30 cek: mapping Rojo, path baru/hilang di MonsterController, structural balance, 8 modules ada, relative require aman → **ALL PASS**. **Belum playtest** (Aer yang tes).
+
+**Catatan:** ReplicatedStorage ke-replicate ke client — source modules AI "terlihat" dari sisi player. Aman (logic tetap server-side), tapi jangan taruh sistem rahasia di sini.
+
+---
+
 ### Entri #1 — Chasing mode Monster AI: implementasi + iterasi playtest
 **Commit:** `5c400ad` → `63e6b67` → `f2fdb4f` (+ `be71b87` docs)
 **Task terkait:** #10 NPC Monster Script.
@@ -66,7 +83,7 @@ Struktural balanced + Studio (3 script COMPILE_OK, source match, Attribute monst
 
 1. **Pilih mode per-monster:** set Attribute `ChaseMode` (String) di Model monster → `PERSISTENT` / `NEAREST` / `ITEM_HOLDER`. Kosong = pakai default `Config.ChaseMode`.
 2. **Tag item umpan (mode ITEM_HOLDER):** kasih Attribute `MonsterBait` (Bool, centang) di Tool umpan. Nama Tool bebas, bisa banyak item.
-3. **Tune angka:** semua di `src/MonsterAI/Config.luau` (blok CHASE MODE & ANTI-THRASH).
+3. **Tune angka:** semua di `src/ReplicatedStorage/Modules/EnemyController/Config.luau` (blok CHASE MODE & ANTI-THRASH).
 4. **Perilaku deteksi:** akuisisi awal (IDLE/PATROL) pakai FOV realistis; begitu sudah mengejar → deteksi 360°.
 
 ---
