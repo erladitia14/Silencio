@@ -10,22 +10,23 @@
 	
 	SETUP:
 	  - Letakkan script ini di ServerScriptService
-	  - Folder "MonsterAI" berisi semua ModuleScript harus ada
-	    sebagai child/sibling di ServerScriptService
+	  - Folder "EnemyController" berisi semua ModuleScript harus ada
+	    di ReplicatedStorage/Modules
 	  - Beri tag "Monster" pada setiap Model NPC monster di Workspace
 	    ATAU letakkan script ini langsung di dalam Model monster
-	
+
 	ARSITEKTUR:
 	  ServerScriptService/
-	  ├── MonsterController  (Script ini)
-	  └── MonsterAI/         (Folder)
-	      ├── Config
-	      ├── StateMachine
-	      ├── SafeZoneManager
-	      ├── TargetFinder
-	      ├── NavigationManager
-	      ├── CombatManager
-	      └── PatrolManager
+	  MonsterController  (Script ini)
+	  ReplicatedStorage/Modules/
+	  EnemyController/   (Folder)
+	      Config
+	      StateMachine
+	      SafeZoneManager
+	      TargetFinder
+	      NavigationManager
+	      CombatManager
+	      PatrolManager
 --]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -33,10 +34,11 @@ local CollectionService = game:GetService("CollectionService")
 ---------------------------------------------------------------------
 -- REQUIRE MODULES
 ---------------------------------------------------------------------
-local modulesFolder   = script.Parent:FindFirstChild("MonsterAI")
-	or script.Parent:WaitForChild("MonsterAI", 10)
+local modulesFolder   = game:GetService("ReplicatedStorage")
+	:WaitForChild("Modules", 10)
+	:WaitForChild("EnemyController", 10)
 
-assert(modulesFolder, "[MonsterController] Folder 'MonsterAI' tidak ditemukan di ServerScriptService!")
+assert(modulesFolder, "[MonsterController] Folder 'EnemyController' tidak ditemukan di ReplicatedStorage.Modules!")
 
 local Config            = require(modulesFolder:WaitForChild("Config"))
 local StateMachine      = require(modulesFolder:WaitForChild("StateMachine"))
