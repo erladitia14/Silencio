@@ -9,15 +9,17 @@ Menggunakan **Finite State Machine (FSM)** pattern dengan modul terpisah untuk s
 
 ```
 ServerScriptService/
-├── MonsterController        ← Script utama (orchestrator)
-└── MonsterAI/               ← Folder berisi semua module
+├── EnemyController          ← Script utama (orchestrator)
+ReplicatedStorage/Modules/
+└── EnemyController/         ← Folder berisi semua module
     ├── Config               ← Konfigurasi terpusat
     ├── StateMachine         ← FSM generik & reusable
     ├── SafeZoneManager      ← Deteksi area aman (OBB check)
     ├── TargetFinder         ← Pencarian target (FOV, LOS, range)
     ├── NavigationManager    ← Pathfinding & navigasi
     ├── CombatManager        ← Serangan, damage, cooldown, animasi
-    └── PatrolManager        ← Waypoint patrol system
+    ├── PatrolManager        ← Waypoint patrol system
+    └── AnimationManager     ← Animasi monster
 ```
 
 ---

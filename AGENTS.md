@@ -17,17 +17,17 @@
 
 ## My Tasks (Erlangga/Aer)
 ### Task #10: NPC Monster Script (HIGH Priority, Deadline 2026-08-12)
-- **Location:** `src/MonsterController.server.luau`
+- **Location:** `src/ServerScriptService/EnemyController.server.luau`
 - **Architecture:** FSM (Finite State Machine) modular system
-- **Components:**
-  - `src/MonsterAI/Config` — Behavior parameters
-  - `src/MonsterAI/StateMachine` — Core transition logic
-  - `src/MonsterAI/SafeZoneManager` — Patrol boundaries
-  - `src/MonsterAI/TargetFinder` — Player detection
-  - `src/MonsterAI/NavigationManager` — Pathfinding
-  - `src/MonsterAI/CombatManager` — Attack patterns
-  - `src/MonsterAI/PatrolManager` — Idle exploration
-  - `src/MonsterAI/AnimationManager` — Movement sequences
+- **Components:** (modules di `src/ReplicatedStorage/Modules/EnemyController/`)
+  - `EnemyController/Config` — Behavior parameters
+  - `EnemyController/StateMachine` — Core transition logic
+  - `EnemyController/SafeZoneManager` — Patrol boundaries
+  - `EnemyController/TargetFinder` — Player detection
+  - `EnemyController/NavigationManager` — Pathfinding
+  - `EnemyController/CombatManager` — Attack patterns
+  - `EnemyController/PatrolManager` — Idle exploration
+  - `EnemyController/AnimationManager` — Movement sequences
 
 ### Task #16: KEY SYSTEM (HIGH Priority, Deadline 2026-08-17)
 - **Progression:** Control room key → Power switch → Carnival lights

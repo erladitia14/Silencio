@@ -1,5 +1,5 @@
 --[[
-	MonsterController.server.luau
+	EnemyController.server.luau
 	-----------------------------
 	Script utama yang mengorkestrasi semua modul Monster AI.
 	
@@ -17,7 +17,7 @@
 
 	ARSITEKTUR:
 	  ServerScriptService/
-	  MonsterController  (Script ini)
+	  EnemyController  (Script ini)
 	  ReplicatedStorage/Modules/
 	  EnemyController/   (Folder)
 	      Config
@@ -38,7 +38,7 @@ local modulesFolder   = game:GetService("ReplicatedStorage")
 	:WaitForChild("Modules", 10)
 	:WaitForChild("EnemyController", 10)
 
-assert(modulesFolder, "[MonsterController] Folder 'EnemyController' tidak ditemukan di ReplicatedStorage.Modules!")
+assert(modulesFolder, "[EnemyController] Folder 'EnemyController' tidak ditemukan di ReplicatedStorage.Modules!")
 
 local Config            = require(modulesFolder:WaitForChild("Config"))
 local StateMachine      = require(modulesFolder:WaitForChild("StateMachine"))
