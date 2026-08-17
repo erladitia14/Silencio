@@ -33,14 +33,6 @@
 - **Progression:** Control room key → Power switch → Carnival lights
 - **Purpose:** Gating system for chapter completion
 
-## Unity Teaching Projects (For Students)
-- **Fayyadz:** Flappy Bird clone
-- **Rezoz:** Coin Collect 3D lane runner
-- **Teaching Approach:** MCP-assisted debugging, Inspector guidance
-- **Best Practice:** Match request wording precisely when ambiguous
-- **Roblox Analogy Interpretation:** Answer Unity-native questions
-- **Animation Retargeting:** Verify Mixamo→Roblox works in both Blender and Studio
-
 ## Documentation
 - **MoM PDF:** `Silencio MoM_0_.pdf` in project folder
 - **Game Design:** Keep all rules documented in AGENTS.md
