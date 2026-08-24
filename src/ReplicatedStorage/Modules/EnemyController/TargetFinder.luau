@@ -21,6 +21,7 @@ local Players = game:GetService("Players")
 
 local Config          = require(script.Parent.Config)
 local SafeZoneManager = require(script.Parent.SafeZoneManager)
+local SkinBinder      = require(script.Parent.SkinBinder)
 
 local TargetFinder = {}
 
@@ -56,10 +57,15 @@ function TargetFinder:_hasLineOfSight(monsterModel: Model, monsterRoot: BasePart
 		return false
 	end
 
-	-- Raycast
+	-- Raycast.
+	-- PENTING: kecualikan rig DAN skin visualnya. Pada pola "driver + skin"
+	-- mesh badan monster berada di LUAR model rig (sibling di folder yang
+	-- sama), jadi kalau tidak difilter ray langsung menabrak badan monster
+	-- sendiri dari jarak <1 stud -> LOS selalu gagal -> monster buta permanen.
+	-- CanCollide = false tidak menolong: raycast tetap mengenai part non-collide.
 	local rayParams = RaycastParams.new()
 	rayParams.FilterType = Enum.RaycastFilterType.Exclude
-	rayParams.FilterDescendantsInstances = { monsterModel }
+	rayParams.FilterDescendantsInstances = SkinBinder:getIgnoreList(monsterModel)
 	rayParams.IgnoreWater = true
 
 	local result = workspace:Raycast(origin, direction, rayParams)
@@ -140,7 +146,105 @@ function TargetFinder:isInChaseRange(monsterModel: Model, targetChar: Model): bo
 	return (monsterRoot.Position - targetRoot.Position).Magnitude <= Config.LoseTargetRadius
 end
 
+---------------------------------------------------------------------
+-- JANGKAUAN SERANG ADAPTIF
+---------------------------------------------------------------------
+--[[
+	MASALAH: Config.AttackRadius diukur PUSAT ke PUSAT (root ke root).
+	Untuk NPC raksasa itu tidak cukup — badannya lebar dan root-nya tinggi,
+	jadi saat player sudah menempel di badan monster, jarak antar-pusat
+	masih jauh melebihi radius. Akibatnya monster besar tidak pernah
+	bisa menyerang.
+
+	Contoh nyata (NPC tinggi 12 studs vs Config.AttackRadius = 4):
+	  radius badan 3.33 + radius player 1.0 = 4.33 studs horizontal
+	  selisih tinggi root                   = 4.94 studs
+	  -> jarak pusat-pusat 6.56 studs, DI LUAR radius 4.
+
+	SOLUSI: hitung jangkauan dari UKURAN NPC itu sendiri, sehingga monster
+	kecil tetap harus dekat sementara monster raksasa dapat jangkauan
+	proporsional. Tim bisa membuat NPC ukuran apa pun tanpa tuning manual.
+
+	Override manual tetap tersedia: Attribute "AttackRadius" (number) pada
+	Model monster mengunci nilainya, mengabaikan perhitungan otomatis.
+--]]
+
+-- Cache per-monster: ukuran model tidak berubah tiap tick, jadi jangan
+-- panggil GetExtentsSize() 10x/detik untuk setiap monster.
+local reachCache: { [Model]: number } = {}
+
+--- Perkiraan radius tubuh player R15 standar (studs).
+local PLAYER_RADIUS = 1.0
+
+--- Hitung jangkauan serang efektif untuk sebuah monster.
+--- Mengembalikan jarak pusat-ke-pusat maksimum yang dihitung sebagai "menempel".
+function TargetFinder:getAttackReach(monsterModel: Model): number
+	-- 1. Override manual per-monster
+	local attr = monsterModel:GetAttribute("AttackRadius")
+	if typeof(attr) == "number" and attr > 0 then
+		return attr
+	end
+
+	-- 2. Cache
+	local cached = reachCache[monsterModel]
+	if cached then
+		return cached
+	end
+
+	-- 3. Hitung dari ukuran NPC
+	local reach = Config.AttackRadius
+
+	local ok, extents = pcall(function()
+		return monsterModel:GetExtentsSize()
+	end)
+
+	if ok and extents then
+		local monsterRoot = monsterModel:FindFirstChild("HumanoidRootPart") :: BasePart?
+
+		-- Komponen horizontal: setengah lebar badan + radius player
+		local bodyRadius = math.max(extents.X, extents.Z) / 2
+		local horizontal = bodyRadius + PLAYER_RADIUS
+
+		-- Komponen vertikal: selisih tinggi root monster vs root player.
+		-- Player R15 standar punya root ~3 studs di atas kaki; kalau root
+		-- monster jauh lebih tinggi, selisih ini yang bikin jarak melonjak.
+		local vertical = 0
+		if monsterRoot then
+			local lowest = math.huge
+			for _, part in monsterModel:GetChildren() do
+				if part:IsA("BasePart") then
+					lowest = math.min(lowest, part.Position.Y - part.Size.Y / 2)
+				end
+			end
+			if lowest < math.huge then
+				local rootHeight = monsterRoot.Position.Y - lowest
+				vertical = math.max(0, rootHeight - 3.0)
+			end
+		end
+
+		local computed = math.sqrt(horizontal * horizontal + vertical * vertical)
+
+		-- Beri sedikit kelonggaran supaya serangan tidak pas-pasan di ambang,
+		-- lalu jangan sampai LEBIH KECIL dari nilai Config (monster kecil
+		-- tetap memakai jangkauan minimal yang sudah di-tune).
+		reach = math.max(Config.AttackRadius, computed * 1.15)
+	end
+
+	reachCache[monsterModel] = reach
+	return reach
+end
+
+--- Buang cache jangkauan (dipakai bila ukuran monster berubah saat runtime).
+function TargetFinder:invalidateReach(monsterModel: Model?)
+	if monsterModel then
+		reachCache[monsterModel] = nil
+	else
+		reachCache = {}
+	end
+end
+
 --- Cek apakah target berada dalam jangkauan serang.
+--- Jangkauan menyesuaikan ukuran monster (lihat getAttackReach).
 function TargetFinder:isInAttackRange(monsterModel: Model, targetChar: Model): boolean
 	local monsterRoot = monsterModel:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local targetRoot = targetChar:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -149,7 +253,8 @@ function TargetFinder:isInAttackRange(monsterModel: Model, targetChar: Model): b
 		return false
 	end
 
-	return (monsterRoot.Position - targetRoot.Position).Magnitude <= Config.AttackRadius
+	local dist = (monsterRoot.Position - targetRoot.Position).Magnitude
+	return dist <= self:getAttackReach(monsterModel)
 end
 
 --- Cek apakah sebuah karakter (player) sedang membawa Tool yang di-tag

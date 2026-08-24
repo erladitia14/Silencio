@@ -1,8 +1,12 @@
 --[[
 	CombatManager.luau
 	------------------
-	Mengelola sistem combat monster: serangan, damage, cooldown,
-	dan animasi attack.
+	Mengelola sistem combat monster: serangan, damage, cooldown.
+
+	CATATAN ANIMASI:
+	  Modul ini TIDAK menyentuh Animator secara langsung lagi.
+	  Animasi attack diserahkan ke script NPC lewat event "Attack"
+	  pada BindableEvent "AISignal" (di-emit oleh EnemyController).
 --]]
 
 local Config = require(script.Parent.Config)
@@ -18,7 +22,6 @@ function CombatManager.new(monsterModel: Model, animManager: any?)
 	self._humanoid = monsterModel:FindFirstChildOfClass("Humanoid") :: Humanoid
 	self._animManager = animManager
 	self._lastAttackTime = 0
-	self._fallbackAttackTrack = nil :: AnimationTrack?  -- cache track fallback (FIX bug D)
 	return self
 end
 
@@ -43,53 +46,28 @@ function CombatManager:attack(targetChar: Model): boolean
 	targetHumanoid:TakeDamage(Config.Damage)
 	self._lastAttackTime = tick()
 
-	-- Play attack animation
+	-- Animasi default (opt-in saja). Jalur normal: EnemyController emit "Attack".
 	self:_playAttackAnimation()
 
 	return true
 end
 
---- Memainkan animasi serangan jika tersedia.
+--- Memainkan animasi serangan HANYA bila animasi default sedang dipakai.
+---
+--- PENTING: modul ini TIDAK lagi menyentuh Animator secara langsung.
+--- Jalur normal = EnemyController emit event "Attack" lewat AISignal, lalu
+--- script animasi milik NPC yang memutuskan animasi apa yang diputar.
+--- `_animManager` hanya terisi kalau Model punya UseDefaultAnimations = true.
 function CombatManager:_playAttackAnimation()
 	if self._animManager and self._animManager.playAttack then
-		local played = self._animManager:playAttack()
-		if played then return end
-	end
-
-	local animFolder = self._model:FindFirstChild("Animations")
-	if not animFolder then return end
-
-	local attackAnim = animFolder:FindFirstChild("Attack") :: Animation?
-	if not attackAnim then return end
-
-	local animator = self._humanoid:FindFirstChildOfClass("Animator")
-	if not animator then return end
-
-	-- FIX bug D: cache track fallback agar tidak LoadAnimation baru tiap serang
-	-- (mencegah akumulasi AnimationTrack / memory leak).
-	local track = self._fallbackAttackTrack
-	if not track then
-		local ok, loaded = pcall(function()
-			return animator:LoadAnimation(attackAnim)
-		end)
-		if not ok or not loaded then return end
-		track = loaded
-		self._fallbackAttackTrack = track
-	end
-
-	if not track.IsPlaying then
-		track:Play(0.1)
+		self._animManager:playAttack()
 	end
 end
 
---- Membersihkan resource milik CombatManager (track fallback).
---- Normalnya animasi dikelola AnimationManager; ini hanya untuk jalur fallback.
+--- Cleanup. Tidak ada lagi AnimationTrack yang dimiliki modul ini;
+--- disediakan agar pemanggilan ctx.combat:destroy() tetap aman.
 function CombatManager:destroy()
-	if self._fallbackAttackTrack then
-		self._fallbackAttackTrack:Stop()
-		self._fallbackAttackTrack:Destroy()
-		self._fallbackAttackTrack = nil
-	end
+	self._animManager = nil
 end
 
 return CombatManager

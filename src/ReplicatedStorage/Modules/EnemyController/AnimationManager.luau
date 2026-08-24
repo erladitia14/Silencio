@@ -1,13 +1,27 @@
 --[[
 	AnimationManager.luau
 	---------------------
-	Mengelola animasi NPC Monster di sisi server.
-	
-	MASALAH YANG DISELESAIKAN:
-	  - Script 'Animate' bawaan Roblox pada NPC seringkali berupa LocalScript,
-	    sehingga TIDAK berjalan ketika dipasang pada NPC di Workspace.
-	  - Modul ini menggantikan peran LocalScript Animate dengan mengelola
-	    animasi (Idle, Walk, Run, Jump, Fall, Attack) langsung dari Server.
+	Mengelola animasi NPC monster di sisi server, OTOMATIS.
+
+	TUJUAN: cukup beri tag "Monster" pada Model NPC -> NPC langsung
+	patrol/chase/idle LENGKAP dengan animasi. Tanpa menempel script
+	tambahan, tanpa mengisi ID animasi manual.
+
+	DARI MANA ID ANIMASI DIAMBIL (urutan prioritas):
+	  1. Folder "Animations" di dalam Model      -> untuk animasi custom (mis. Attack)
+	  2. Paket "Animate" bawaan rig Roblox       -> idle/walk/run/jump/fall sudah ada di sini
+	  3. ID default Roblox (R6/R15)              -> jaring pengaman terakhir
+
+	Pencocokan nama TIDAK case-sensitive: "Idle" cocok dengan "idle",
+	"Walk" dengan "walk", dst. Rig Roblox menamai anaknya huruf kecil,
+	jadi tanpa ini animasi asli NPC terabaikan diam-diam.
+
+	CATATAN PENTING:
+	  - Script "Animate" bawaan Roblox berupa LocalScript, TIDAK jalan
+	    pada NPC di Workspace. Modul ini menggantikan perannya dari server.
+	  - Hanya SATU pihak yang boleh menyetir Animator. Kalau tim ingin
+	    mengurus animasi NPC sendiri, beri Attribute "NoAutoAnimations" = true
+	    pada Model, lalu pakai kanal "AIState" + "AISignal" dari EnemyController.
 --]]
 
 local Config = require(script.Parent.Config)
@@ -15,23 +29,54 @@ local Config = require(script.Parent.Config)
 local AnimationManager = {}
 AnimationManager.__index = AnimationManager
 
--- Animation ID bawaan Roblox (R15 & R6)
+-- Animation ID bawaan Roblox (R15 & R6) — jaring pengaman terakhir
 local DEFAULT_ANIMS = {
 	R15 = {
-		Idle  = "http://www.roblox.com/asset/?id=507766388",
-		Walk  = "http://www.roblox.com/asset/?id=913402848",
-		Run   = "http://www.roblox.com/asset/?id=913376220",
-		Jump  = "http://www.roblox.com/asset/?id=507765000",
-		Fall  = "http://www.roblox.com/asset/?id=507767968",
+		Idle  = "rbxassetid://507766388",
+		Walk  = "rbxassetid://913402848",
+		Run   = "rbxassetid://913376220",
+		Jump  = "rbxassetid://507765000",
+		Fall  = "rbxassetid://507767968",
 	},
 	R6 = {
-		Idle  = "http://www.roblox.com/asset/?id=180435571",
-		Walk  = "http://www.roblox.com/asset/?id=180436334",
-		Run   = "http://www.roblox.com/asset/?id=180436334",
-		Jump  = "http://www.roblox.com/asset/?id=125750702",
-		Fall  = "http://www.roblox.com/asset/?id=180436148",
-	}
+		Idle  = "rbxassetid://180435571",
+		Walk  = "rbxassetid://180436334",
+		Run   = "rbxassetid://180436334",
+		Jump  = "rbxassetid://125750702",
+		Fall  = "rbxassetid://180436148",
+	},
 }
+
+--- Cari anak berdasarkan nama, TANPA membedakan huruf besar/kecil.
+local function findChildInsensitive(parent: Instance?, name: string): Instance?
+	if not parent then return nil end
+	local wanted = string.lower(name)
+	for _, child in ipairs(parent:GetChildren()) do
+		if string.lower(child.Name) == wanted then
+			return child
+		end
+	end
+	return nil
+end
+
+--- Ambil AnimationId dari sebuah node: bisa Animation langsung,
+--- atau StringValue/Folder yang membungkus Animation di dalamnya
+--- (bentuk paket "Animate" bawaan Roblox: Animate/idle/Animation1).
+local function extractAnimId(node: Instance?): string?
+	if not node then return nil end
+
+	if node:IsA("Animation") and node.AnimationId ~= "" then
+		return node.AnimationId
+	end
+
+	-- Wrapper: ambil Animation pertama di dalamnya
+	local inner = node:FindFirstChildOfClass("Animation")
+	if inner and inner.AnimationId ~= "" then
+		return inner.AnimationId
+	end
+
+	return nil
+end
 
 --- Membuat instance AnimationManager baru untuk monster model.
 function AnimationManager.new(monsterModel: Model)
@@ -53,6 +98,7 @@ function AnimationManager.new(monsterModel: Model)
 	self._currentTrack = nil :: AnimationTrack?
 	self._currentAnimName = "" :: string
 	self._connections = {} :: { RBXScriptConnection }
+	self._sources = {} :: { [string]: string }  -- dari mana tiap animasi didapat (untuk log)
 
 	self:_loadAnimations()
 	self:_setupStateListeners()
@@ -60,42 +106,45 @@ function AnimationManager.new(monsterModel: Model)
 	return self
 end
 
---- Extract AnimationId dari object Animation, StringValue, atau default ID
-function AnimationManager:_getAnimId(name: string): string
-	-- 1. Cari folder "Animations" di dalam model
-	local animFolder = self._model:FindFirstChild("Animations")
+--- Cari AnimationId untuk sebuah nama animasi.
+--- Mengembalikan (animId, sumber) supaya bisa dilaporkan ke Output.
+function AnimationManager:_getAnimId(name: string): (string?, string)
+	-- 1. Folder "Animations" custom di dalam model (prioritas tertinggi)
+	local animFolder = findChildInsensitive(self._model, "Animations")
 	if animFolder then
-		local found = animFolder:FindFirstChild(name)
-		if found and found:IsA("Animation") and found.AnimationId ~= "" then
-			return found.AnimationId
+		local id = extractAnimId(findChildInsensitive(animFolder, name))
+		if id then
+			return id, "Animations/" .. name
 		end
 	end
 
-	-- 2. Cari di script/folder "Animate" jika ada
-	local animateObj = self._model:FindFirstChild("Animate")
+	-- 2. Paket "Animate" bawaan rig Roblox (idle/walk/run/jump/fall/...)
+	local animateObj = findChildInsensitive(self._model, "Animate")
 	if animateObj then
-		local found = animateObj:FindFirstChild(name)
-		if found then
-			if found:IsA("Animation") and found.AnimationId ~= "" then
-				return found.AnimationId
-			elseif found:IsA("StringValue") then
-				local childAnim = found:FindFirstChildOfClass("Animation")
-				if childAnim and childAnim.AnimationId ~= "" then
-					return childAnim.AnimationId
-				end
-			end
+		local id = extractAnimId(findChildInsensitive(animateObj, name))
+		if id then
+			return id, "Animate/" .. name
 		end
 	end
 
-	-- 3. Fallback ke ID default Roblox
+	-- 3. ID default Roblox
 	local defaults = DEFAULT_ANIMS[self._rigType]
-	return defaults[name] or defaults.Idle
+	local fallback = defaults[name]
+	if fallback then
+		return fallback, "default-" .. self._rigType
+	end
+
+	-- Tidak ada sama sekali (mis. "Attack" tanpa aset) -> jangan paksa Idle,
+	-- biar pemanggil tahu animasi ini memang tidak tersedia.
+	return nil, "TIDAK ADA"
 end
 
 --- Helper untuk memuat dan menyimpan AnimationTrack
 function AnimationManager:_loadTrack(name: string): AnimationTrack?
-	local animId = self:_getAnimId(name)
-	if not animId or animId == "" then return nil end
+	local animId, source = self:_getAnimId(name)
+	self._sources[name] = source
+
+	if not animId then return nil end
 
 	local anim = Instance.new("Animation")
 	anim.AnimationId = animId
@@ -109,17 +158,23 @@ function AnimationManager:_loadTrack(name: string): AnimationTrack?
 		return track
 	end
 
+	self._sources[name] = source .. " (GAGAL LOAD)"
 	return nil
 end
 
 --- Memuat semua track animasi utama
 function AnimationManager:_loadAnimations()
-	self:_loadTrack("Idle")
-	self:_loadTrack("Walk")
-	self:_loadTrack("Run")
-	self:_loadTrack("Jump")
-	self:_loadTrack("Fall")
-	self:_loadTrack("Attack")
+	for _, name in ipairs({ "Idle", "Walk", "Run", "Jump", "Fall", "Attack" }) do
+		self:_loadTrack(name)
+	end
+
+	-- Laporkan hasil supaya jelas animasi mana yang aktif & dari mana asalnya
+	local report = {}
+	for _, name in ipairs({ "Idle", "Walk", "Run", "Jump", "Fall", "Attack" }) do
+		local mark = self._tracks[name] and "OK" or "-"
+		table.insert(report, string.format("%s:%s(%s)", name, mark, self._sources[name] or "?"))
+	end
+	print("[AnimationManager] " .. self._model.Name .. " -> " .. table.concat(report, " "))
 end
 
 --- Memainkan track animasi berdasarkan nama
@@ -145,6 +200,7 @@ function AnimationManager:play(name: string, transitionTime: number?)
 	self._currentAnimName = name
 
 	if not track.IsPlaying then
+		track.Looped = true
 		track:Play(fadeTime)
 	end
 end
@@ -184,8 +240,8 @@ function AnimationManager:_setupStateListeners()
 end
 
 --- Memainkan animasi serangan (Attack) secara eksplisit.
---- FIX bug C: update _currentTrack & _currentAnimName supaya animasi attack
---- tidak keburu di-Stop oleh handler Running (Walk/Run) saat monster bergerak.
+--- Mengembalikan false bila NPC ini belum punya animasi serang, supaya
+--- pemanggil tidak menganggap animasi sudah jalan.
 function AnimationManager:playAttack(): boolean
 	local attackTrack = self._tracks["Attack"]
 	if not attackTrack then
@@ -201,10 +257,13 @@ function AnimationManager:playAttack(): boolean
 		self._currentTrack:Stop(0.1)
 	end
 
+	-- FIX bug C: update _currentTrack & _currentAnimName supaya animasi attack
+	-- tidak keburu di-Stop oleh handler Running (Walk/Run) saat monster bergerak.
 	self._currentTrack = attackTrack
 	self._currentAnimName = "Attack"
 
 	if not attackTrack.IsPlaying then
+		attackTrack.Looped = false
 		attackTrack:Play(0.1)
 	end
 

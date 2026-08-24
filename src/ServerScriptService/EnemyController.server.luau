@@ -14,7 +14,7 @@
 	    di ReplicatedStorage/Modules
 	  - Beri tag "Monster" pada setiap Model NPC monster di Workspace
 	    ATAU letakkan script ini langsung di dalam Model monster
-
+	
 	ARSITEKTUR:
 	  ServerScriptService/
 	  EnemyController  (Script ini)
@@ -48,6 +48,7 @@ local NavigationManager = require(modulesFolder:WaitForChild("NavigationManager"
 local CombatManager     = require(modulesFolder:WaitForChild("CombatManager"))
 local PatrolManager     = require(modulesFolder:WaitForChild("PatrolManager"))
 local AnimationManager  = require(modulesFolder:WaitForChild("AnimationManager"))
+local SkinBinder        = require(modulesFolder:WaitForChild("SkinBinder"))
 
 ---------------------------------------------------------------------
 -- TYPES
@@ -66,15 +67,81 @@ export type MonsterContext = {
 	lockTime:       number,   -- tick() saat target sekarang di-lock (untuk commit time)
 	lastRetarget:   number,   -- tick() evaluasi retarget terakhir
 	unreachSince:   number,   -- tick() sejak target PERSISTENT tak terjangkau (0 = terjangkau)
+	signal:         BindableEvent?,  -- publikasi event AI ke script NPC (animasi dsb)
 }
+
+---------------------------------------------------------------------
+-- PUBLIKASI STATE & EVENT (animation-agnostic)
+---------------------------------------------------------------------
+--[[
+	PRINSIP: core AI TIDAK PERNAH menyentuh Animator / memutar animasi.
+	Ia hanya MELAPORKAN apa yang sedang terjadi, lewat 2 kanal:
+
+	  1. Attribute "AIState" di Model monster
+	     -> "IDLE" | "PATROL" | "CHASING" | "ATTACKING" | "DEAD"
+	     Untuk KEADAAN (bisa dibaca kapan saja, juga dari client).
+
+	  2. BindableEvent "AISignal" (otomatis dibuat di dalam Model)
+	     -> Fire("Attack", targetChar)
+	        Fire("TargetAcquired", targetChar)
+	        Fire("TargetLost")
+	        Fire("Died")
+	     Untuk KEJADIAN sekejap. Attribute tidak dipakai di sini karena
+	     set nilai yang sama tidak memicu sinyal (serangan ke-2 jadi senyap).
+
+	Jadi tiap NPC boleh punya animasi sendiri: cukup pasang script animasi
+	di dalam Model NPC yang membaca "AIState" + mendengar "AISignal".
+	TIDAK perlu mengubah script AI ini sama sekali.
+--]]
+
+--- Pastikan BindableEvent "AISignal" ada di dalam Model monster.
+local function ensureSignal(monsterModel: Model): BindableEvent
+	local existing = monsterModel:FindFirstChild("AISignal")
+	if existing and existing:IsA("BindableEvent") then
+		return existing
+	end
+
+	local signal = Instance.new("BindableEvent")
+	signal.Name = "AISignal"
+	signal.Parent = monsterModel
+	return signal
+end
+
+--- Kirim event AI ke script NPC. Aman dipanggil walau signal belum ada.
+local function emit(ctx: MonsterContext, eventName: string, ...)
+	if ctx.signal then
+		ctx.signal:Fire(eventName, ...)
+	end
+end
+
+--- Publikasi state AI ke Attribute Model (dipanggil di setiap onEnter).
+local function publishState(ctx: MonsterContext, stateName: string)
+	ctx.model:SetAttribute("AIState", stateName)
+end
 
 --- Helper: catat lock target baru (reset timer commit & give-up).
 local function lockTarget(ctx: MonsterContext, player: Player?, char: Model?)
+	local isNewTarget = (char ~= nil and char ~= ctx.targetChar)
+
 	ctx.targetPlayer = player
 	ctx.targetChar = char
 	ctx.lockTime = tick()
 	ctx.lastRetarget = tick()
 	ctx.unreachSince = 0
+
+	if isNewTarget then
+		emit(ctx, "TargetAcquired", char)
+	end
+end
+
+--- Helper: lepas target + kabari NPC (supaya animasi bisa turun ke idle/walk).
+local function clearTarget(ctx: MonsterContext)
+	local had = ctx.targetChar ~= nil
+	ctx.targetPlayer = nil
+	ctx.targetChar = nil
+	if had then
+		emit(ctx, "TargetLost")
+	end
 end
 
 --- Helper anti-thrash: evaluasi apakah harus GANTI target saat mengejar.
@@ -169,8 +236,7 @@ local function reacquireOrPatrol(fsm: any, ctx: MonsterContext): boolean
 		return true
 	end
 
-	ctx.targetPlayer = nil
-	ctx.targetChar = nil
+	clearTarget(ctx)
 	fsm:setState("PATROL", ctx)
 	return false
 end
@@ -188,6 +254,7 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 	fsm:addState("IDLE", {
 		onEnter = function()
 			ctx.humanoid.WalkSpeed = Config.PatrolSpeed
+			publishState(ctx, "IDLE")
 		end,
 
 		onUpdate = function()
@@ -215,6 +282,7 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 	fsm:addState("PATROL", {
 		onEnter = function()
 			ctx.humanoid.WalkSpeed = Config.PatrolSpeed
+			publishState(ctx, "PATROL")
 		end,
 
 		onUpdate = function()
@@ -267,6 +335,7 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 	fsm:addState("CHASING", {
 		onEnter = function()
 			ctx.humanoid.WalkSpeed = Config.ChaseSpeed
+			publishState(ctx, "CHASING")
 			if ctx.targetPlayer then
 				print("[MonsterAI] " .. ctx.model.Name .. " mengejar " .. ctx.targetPlayer.Name)
 			end
@@ -304,8 +373,7 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 							ctx.unreachSince = tick()
 						elseif (tick() - ctx.unreachSince) >= Config.PersistentGiveUpTime then
 							print("[MonsterAI] " .. ctx.model.Name .. ": Menyerah (target terlalu lama tak terjangkau).")
-							ctx.targetPlayer = nil
-							ctx.targetChar = nil
+							clearTarget(ctx)
 							fsm:setState("PATROL", ctx)
 							return
 						end
@@ -317,8 +385,7 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 				-- NEAREST / ITEM_HOLDER: hormati chase range + boleh retarget (anti-thrash)
 				if not TargetFinder:isInChaseRange(ctx.model, ctx.targetChar :: Model) then
 					print("[MonsterAI] " .. ctx.model.Name .. ": Target keluar dari jangkauan.")
-					ctx.targetPlayer = nil
-					ctx.targetChar = nil
+					clearTarget(ctx)
 					fsm:setState("PATROL", ctx)
 					return
 				end
@@ -348,6 +415,7 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 	fsm:addState("ATTACKING", {
 		onEnter = function()
 			ctx.humanoid.WalkSpeed = 0  -- Berhenti saat menyerang
+			publishState(ctx, "ATTACKING")
 		end,
 
 		onUpdate = function()
@@ -367,9 +435,14 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 				return
 			end
 
-			-- Serang jika cooldown selesai
+			-- Serang jika cooldown selesai.
+			-- Animasi TIDAK diputar di sini: cukup emit event "Attack",
+			-- script animasi milik NPC yang memutuskan animasi apa yang jalan.
 			if ctx.combat:canAttack() then
-				ctx.combat:attack(ctx.targetChar :: Model)
+				local hit = ctx.combat:attack(ctx.targetChar :: Model)
+				if hit then
+					emit(ctx, "Attack", ctx.targetChar)
+				end
 			end
 
 			task.wait(0.3)
@@ -392,6 +465,18 @@ local function initializeMonster(monsterModel: Model)
 		return
 	end
 
+	-- GUARD: MaxHealth/Health = 0 bikin main loop (while Health > 0) tidak pernah
+	-- jalan sekali pun -> NPC diam total tanpa error. Ini jebakan senyap yang
+	-- sulit dilacak, jadi laporkan JELAS dan perbaiki otomatis.
+	if humanoid.MaxHealth <= 0 then
+		warn("[MonsterAI] " .. monsterModel.Name .. ": MaxHealth=0 (NPC dianggap mati -> AI tidak akan jalan). Diperbaiki otomatis ke 100. Set MaxHealth di Studio agar tidak berulang.")
+		humanoid.MaxHealth = 100
+		humanoid.Health = 100
+	elseif humanoid.Health <= 0 then
+		warn("[MonsterAI] " .. monsterModel.Name .. ": Health=0 saat init (NPC mati) -> AI tidak akan jalan. Diperbaiki otomatis ke MaxHealth.")
+		humanoid.Health = humanoid.MaxHealth
+	end
+
 	print("[MonsterAI] Menginisialisasi AI untuk: " .. monsterModel.Name)
 
 	-- Setup Humanoid
@@ -408,8 +493,52 @@ local function initializeMonster(monsterModel: Model)
 	end
 	print("[MonsterAI] " .. monsterModel.Name .. " chase mode: " .. chaseMode)
 
-	-- Inisialisasi AnimationManager untuk monster
-	local animManager = AnimationManager.new(monsterModel)
+	-- PASANG SKIN (mesh visual) bila ada.
+	-- NPC bisa terdiri dari dua model di folder yang sama:
+	--   rig  -> tag "Monster"      (Humanoid, gerak, damage, tabrakan)
+	--   skin -> tag "MonsterSkin"  (mesh visual + animasi)
+	-- SkinBinder yang mengurus weld, mematikan collision skin, menyembunyikan
+	-- rig, dan mematikan script animasi lama yang berebut Animator.
+	local bind = SkinBinder:bind(monsterModel)
+	if bind.error then
+		warn("[MonsterAI] " .. monsterModel.Name .. ": skin gagal dipasang -> " .. tostring(bind.error))
+	elseif bind.skins > 0 then
+		print(string.format(
+			"[MonsterAI] %s: skin terpasang (%d skin, weld baru %d, sudah ada %d, collision off %d, part rig disembunyikan %d, animator %d, part diluruskan %d%s)",
+			monsterModel.Name, bind.skins, bind.welded, bind.alreadyWelded,
+			bind.collisionOff, bind.rigHidden, bind.animated, bind.aligned,
+			#bind.scriptsDisabled > 0 and (", script dimatikan: " .. table.concat(bind.scriptsDisabled, " ")) or ""
+		))
+	end
+
+	-- Kanal publikasi ke script NPC (animasi, SFX, VFX, dll)
+	local signal = ensureSignal(monsterModel)
+
+	-- ANIMASI OTOMATIS (default NYALA).
+	-- Cukup tag "Monster" -> NPC langsung beranimasi. AnimationManager membaca
+	-- ID animasi dari dalam Model itu sendiri (folder "Animations" custom, lalu
+	-- paket "Animate" bawaan rig, lalu default Roblox), jadi tidak perlu
+	-- menempel script atau mengisi ID manual.
+	--
+	-- OPT-OUT: beri Attribute "NoAutoAnimations" = true (Bool) pada Model bila
+	-- tim ingin mengurus animasi NPC itu sendiri. Core AI tetap melaporkan
+	-- keadaan lewat Attribute "AIState" + BindableEvent "AISignal", jadi script
+	-- animasi buatan tim bisa mengikuti tanpa mengubah script ini.
+	-- Penting: hanya SATU pihak yang boleh menyetir Animator (dua penyetir pada
+	-- Animator yang sama = animasi kejang).
+	local animManager = nil
+	if monsterModel:GetAttribute("NoAutoAnimations") == true then
+		print("[MonsterAI] " .. monsterModel.Name .. ": animasi diserahkan ke script NPC (NoAutoAnimations=true).")
+	else
+		local ok, mgr = pcall(function()
+			return AnimationManager.new(monsterModel)
+		end)
+		if ok then
+			animManager = mgr
+		else
+			warn("[MonsterAI] " .. monsterModel.Name .. ": gagal memuat animasi otomatis -> " .. tostring(mgr))
+		end
+	end
 
 	-- Buat context
 	local ctx: MonsterContext = {
@@ -426,6 +555,7 @@ local function initializeMonster(monsterModel: Model)
 		lockTime     = 0,
 		lastRetarget = 0,
 		unreachSince = 0,
+		signal       = signal,
 	}
 
 	-- Register states
@@ -440,7 +570,18 @@ local function initializeMonster(monsterModel: Model)
 			ctx.fsm:update(ctx)
 			task.wait(0.1)
 		end
-		animManager:destroy()
+		-- Kabari script NPC bahwa monster mati (animasi death diurus NPC sendiri)
+		publishState(ctx, "DEAD")
+		emit(ctx, "Died")
+
+		if animManager then
+			animManager:destroy()
+		end
+		if ctx.combat and ctx.combat.destroy then
+			ctx.combat:destroy()
+		end
+		-- Lepas animator skin + catatan ignore-list raycast
+		SkinBinder:unbind(monsterModel)
 		print("[MonsterAI] " .. monsterModel.Name .. " telah mati. AI dihentikan.")
 	end)
 end
