@@ -19,6 +19,80 @@
 
 ## 🗓️ Log Progress
 
+### Entri #3 — Animasi otomatis, pola "driver + skin", jangkauan serang adaptif
+**Commit:** `e3f4b2c` → auto-align bone (lihat #4b)
+**Task terkait:** #10 NPC Monster Script.
+
+**Ringkasan menyeluruh:** Aer minta script AI dibuat **se-versatile mungkin** — tim bisa memakainya tanpa mengubah isinya, dan dia tidak mau mengurus animasi per-NPC. Sesi ini memindahkan animasi keluar dari core AI, lalu membangun sistem NPC visual berbasis dua tag. Empat bug nyata ketemu di jalan, semuanya dari playtest Aer.
+
+#### 1. Animasi keluar dari core AI
+EnemyController tidak lagi memaksakan animasi; ia hanya **melapor**:
+- Attribute `AIState` → `IDLE` | `PATROL` | `CHASING` | `ATTACKING` | `DEAD` (di-set tiap `onEnter`)
+- BindableEvent `AISignal` (otomatis dibuat di Model) → `Attack`, `TargetAcquired`, `TargetLost`, `Died`
+
+Kejadian sekejap pakai **event**, bukan attribute: set nilai yang sama tidak memicu sinyal, jadi serangan ke-2 akan senyap. `CombatManager` berhenti menyentuh Animator sama sekali.
+
+#### 2. AnimationManager: otomatis, cukup tag
+Baca ID animasi dari dalam Model sendiri — folder `Animations` → paket `Animate` milik rig → default Roblox. Nama **tidak case-sensitive**.
+
+**Bug ditemukan:** pencarian dulu case-sensitive (`Idle`), padahal rig Roblox menamai anaknya huruf kecil (`idle`). Akibatnya **semua** animasi asli NPC diabaikan diam-diam dan sistem selalu jatuh ke ID hardcode. Setelah fix: Clown 5/5 animasi terbaca dari `Animate/` miliknya.
+
+Opt-out: Attribute `NoAutoAnimations`.
+
+#### 3. Pola "driver + skin" — dua tag, nol konfigurasi (ide Aer)
+NPC bisa terdiri dari **dua model di folder yang sama**:
+```
+Clown (Folder)
+├── Hitbox  <- tag "Monster"      : rig R15 + Humanoid. Gerak, damage, tabrakan.
+└── Clown   <- tag "MonsterSkin"  : mesh visual (import Mixamo) + animasi.
+```
+Perlu karena karakter import (bone `mixamorig:*`, satu MeshPart, `AnimationController`) tidak punya Humanoid → tidak bisa chase/patrol/damage/pathfinding. Rig jadi "mesin", mesh jadi kulit. **Tanpa retargeting.**
+
+**`SkinBinder.luau`** (modul baru) otomatis mengerjakan: weld tiap part skin → `HumanoidRootPart`; skin `CanCollide=false` + `Massless=true`; luruskan orientasi; sembunyikan rig; matikan script animasi lama yang berebut Animator; pasang animator.
+
+**`SkinAnimator.luau`** (modul baru) memutar animasi skin lewat `AnimationController`-nya sendiri, mengikuti `AIState`. Satu `AnimationId` = satu track (state yang memakai ID sama berbagi track, jadi pindah state tidak menghentikan-memulai animasi yang sama).
+
+Opt-out: `KeepRigVisible`, `KeepSkinCollision`, `KeepSkinOrientation`.
+
+#### 4. Empat bug dari playtest Aer
+
+| Gejala | Akar masalah |
+|---|---|
+| NPC **diam total** | `MaxHealth`/`Health` = 0 → main loop `while Health > 0` tidak pernah jalan sekali pun. Sekarang ada guard + `warn`. |
+| Monster besar **tak bisa deal damage** | `AttackRadius` diukur pusat-ke-pusat. `Hitbox` tinggi 12 studs: jarak saat player menempel 6.56 > radius 4. Jangkauan sekarang dihitung dari ukuran NPC (Hitbox → 7.55, NPC kecil tetap 4.00). Override: Attribute `AttackRadius`. |
+| Monster **buta permanen** | Raycast LOS hanya memfilter rig, padahal skin adalah **sibling di luar model** → ray menabrak badan sendiri dari <1 stud, LOS selalu gagal. `CanCollide=false` tidak menolong. `SkinBinder:getIgnoreList()` sekarang memfilter rig + skin. |
+| Badut **jalan menyamping** | `WeldConstraint` membekukan offset saat dibuat; mesh import melenceng 90°. Orientasi sekarang diluruskan **sebelum** weld (posisi tidak digeser). Perbaikan ini butuh 3 iterasi — lihat #4b. |
+
+#### 4b. Auto-align: tiga kesalahanku sebelum benar
+Aer memutar `HitBox` supaya searah badut, tapi mesh ikut berputar dan animasinya tetap menyimpang. Permintaannya jelas: **harus otomatis, jangan align manual.** Tiga hal salah, ditemukan berurutan:
+
+1. **Acuan salah.** Aku membandingkan `MeshPart`, padahal yang menentukan arah animasi adalah **skeleton (`Bone`)**. Mesh bisa tampak lurus sementara tulangnya menyamping. Sekarang acuannya bone akar (`hips`/`root`/`pelvis`), fallback ke Bone pertama, lalu ke geometri part.
+2. **Ruang koordinat salah.** `Bone` turunan `Attachment`, jadi `Bone.CFrame` itu **relatif parent**; yang di ruang dunia `Bone.WorldCFrame`. Perhitunganku mencampur dua ruang — semua sudut bone yang kulaporkan sebelum ini tidak sahih (terbaca 0° padahal aslinya 180°).
+3. **Urutan salah.** Aku memutar mesh **sementara weld masih terpasang**. Weld ke root langsung menariknya balik, jadi set `CFrame` sama sekali tidak berefek. Urutan benar: `needsAlign()` → bongkar weld → putar → weld ulang.
+
+Verifikasi: sandbox 9/9 (bone sengaja menyimpang 180°/90°/45°, rig anchored, mesh sudah ter-weld) → semua terkoreksi ke 0.00°, idempoten, posisi tidak melompat. Pada aset asli, rig diputar +37°/+90°/−113°/+180° → bone tetap **0.00°** di semua sudut, lalu dipulihkan tepat ke posisi awal.
+
+#### 5. Rig hanya disembunyikan saat Play
+`Transparency = 1` cuma diterapkan bila `RunService:IsRunning()`. Kalau dilakukan di edit mode, nilainya **ikut tersimpan ke file place** dan rig hilang permanen dari viewport — padahal di edit mode rig perlu terlihat untuk diposisikan/di-skala.
+
+#### 6. File berubah
+Baru: `SkinBinder.luau`, `SkinAnimator.luau`, `ServerStorage/NPCAnimationTemplate.server.luau` (contoh untuk tim).
+Diubah: `EnemyController.server.luau`, `TargetFinder.luau`, `AnimationManager.luau`, `CombatManager.luau`.
+
+#### 7. Verifikasi
+Ad-hoc (proyek ini tidak punya test runner / build step / linter Luau — tidak ada perintah kanonik): compile via `loadstring` di Studio (10/10 script), uji perilaku per fitur di Studio, parity byte lokal↔Studio, plus kontrol negatif tiap batch (mutan sengaja dirusak → exit 1). Pra-push: **31/31 pass**, 7 file byte-identical dengan Studio. Script verifikasi dibuat di `Temp` lalu dihapus.
+
+**Belum playtest** untuk kondisi akhir (rig hilang + mesh tampil saat Play, monster mengejar & memukul). Playtest = Aer.
+
+**Catatan proses:** dua kali aku bertindak dari data statis tanpa bukti runtime (`CanCollide`, lalu `HipHeight`) dan dua-duanya salah sampai Aer harus reset project. Pelajarannya: physics mati di edit mode, jadi dugaan soal gerakan/tabrakan **harus** dikonfirmasi playtest sebelum diperlakukan sebagai fakta. Juga: perubahan ModuleScript tidak berlaku pada sesi Play yang sudah jalan (`require` di-cache) — harus Stop lalu Play ulang.
+
+**Gotcha alat verifikasi** (bikin FAIL palsu, jangan diulang):
+- `loadstring` membuat **salinan modul terpisah**, jadi state antar-modul (mis. `boundSkins`) tidak terbagi. Untuk uji lintas modul, pakai `require()` atau shim `require` yang mengembalikan instance yang sama.
+- Skrip cek statis yang membuang komentar juga **mengosongkan string literal** — assert soal isi string (`"SkinWeld"`, `IsA("Bone")`) harus memakai source mentah.
+- Luau punya **if-expression** (`return if x then a else b`) yang tidak ditutup `end`, jadi hitung-blok naif melaporkan selisih palsu. Kebenaran sintaksis ditentukan `loadstring` di Studio.
+
+---
+
 ### Entri #2 — Relokasi modules Monster AI → `ReplicatedStorage/Modules/EnemyController`
 **Commit:** `ba3c408`
 **Task terkait:** #10 NPC Monster Script (perapian struktur).
@@ -85,6 +159,43 @@ Struktural balanced + Studio (3 script COMPILE_OK, source match, Attribute monst
 2. **Tag item umpan (mode ITEM_HOLDER):** kasih Attribute `MonsterBait` (Bool, centang) di Tool umpan. Nama Tool bebas, bisa banyak item.
 3. **Tune angka:** semua di `src/ReplicatedStorage/Modules/EnemyController/Config.luau` (blok CHASE MODE & ANTI-THRASH).
 4. **Perilaku deteksi:** akuisisi awal (IDLE/PATROL) pakai FOV realistis; begitu sudah mengejar → deteksi 360°.
+
+---
+
+## 📌 NPC baru: cukup tag (referensi cepat)
+
+**NPC biasa (rig R15 ber-Humanoid):** kasih tag `Monster` → dapat AI + animasi otomatis. Selesai.
+
+**NPC pakai mesh visual terpisah** (mis. import Mixamo yang tak punya Humanoid) — dua model di **folder yang sama**:
+
+| Instance | Tag | Perannya |
+|---|---|---|
+| rig R15 + Humanoid | `Monster` | gerak, damage, tabrakan, tinggi berdiri |
+| mesh visual | `MonsterSkin` | tampilan + animasi |
+
+Sistem otomatis: weld ke `HumanoidRootPart`, matikan collision skin, luruskan orientasi, sembunyikan rig **saat Play**, matikan script animasi lama yang bentrok, sambungkan animasi ke `AIState`.
+
+**Boleh diputar bebas.** Kalau kamu memutar rig di Explorer, sistem meluruskan arah skin otomatis saat bind — acuannya **bone** skeleton, jadi animasi selalu searah arah jalan. Tidak perlu align manual.
+
+**Animasi per-state (opsional):** taruh `Animation` di folder `Animations` dalam Model, nama `Idle` / `Walk` / `Run` / `Attack` / `Death`. Nama tidak case-sensitive. Kalau cuma ada satu animasi, dipakai untuk semua state.
+
+**Tim mau animasi berlogika sendiri:** `NoAutoAnimations` = true, lalu ikuti Attribute `AIState` + BindableEvent `AISignal` (`Attack`, `TargetAcquired`, `TargetLost`, `Died`). Contoh siap pakai: `ServerStorage/NPCAnimationTemplate`. **Jangan ubah EnemyController.**
+
+**Attribute yang tersedia**
+
+| Attribute | Tipe | Fungsi |
+|---|---|---|
+| `ChaseMode` | String | `PERSISTENT` / `NEAREST` / `ITEM_HOLDER` |
+| `AttackRadius` | number | kunci jangkauan serang (default: dihitung dari ukuran NPC) |
+| `NoAutoAnimations` | Bool | animasi diurus script NPC sendiri |
+| `KeepRigVisible` | Bool | rig tetap tampak saat Play |
+| `KeepSkinCollision` | Bool | jangan matikan collision skin |
+| `KeepSkinOrientation` | Bool | jangan luruskan orientasi skin |
+
+**Jebakan yang sudah kena sekali** (cek ini dulu kalau NPC aneh):
+- `MaxHealth`/`Health` = 0 → NPC **diam total tanpa error**. Sudah ada guard + `warn`.
+- Monster raksasa tak bisa memukul → jangkauan sekarang otomatis proporsional.
+- Perubahan ModuleScript **tidak berlaku** pada sesi Play yang sudah jalan (`require` di-cache) → Stop lalu Play ulang.
 
 ---
 

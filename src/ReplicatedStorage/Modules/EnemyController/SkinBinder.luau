@@ -136,8 +136,85 @@ local function disableConflictingScripts(skin: Instance): { string }
 	return disabled
 end
 
+--- Bongkar weld skin<->root yang sudah ada. Dipakai ketika orientasi skin baru
+--- dikoreksi: weld lama masih memegang offset yang salah, jadi harus dibuat
+--- ulang. Mengembalikan jumlah weld yang dihapus.
+local function removeSkinWelds(skin: Instance, root: BasePart): number
+	local n = 0
+	local parts = collectParts(skin)
+	local lookup: { [BasePart]: true } = {}
+	for _, p in parts do
+		lookup[p] = true
+	end
+
+	-- Weld bisa diparent di sisi mana pun: periksa root dan tiap part skin.
+	local scan = { root }
+	for _, p in parts do
+		table.insert(scan, p)
+	end
+	for _, host in scan do
+		for _, d in host:GetChildren() do
+			if d:IsA("WeldConstraint") then
+				local a, b = d.Part0, d.Part1
+				local joinsSkinToRoot = (a == root and b and lookup[b])
+					or (b == root and a and lookup[a])
+				if joinsSkinToRoot then
+					d:Destroy()
+					n += 1
+				end
+			end
+		end
+	end
+	return n
+end
+
 --- Toleransi selisih sudut hadap yang dianggap "sudah lurus" (derajat).
 local ALIGN_TOLERANCE_DEG = 1.0
+
+--- Cari acuan orientasi skin. Bone diutamakan karena SKELETON-lah yang
+--- menentukan arah animasi, bukan CFrame MeshPart: mesh bisa tampak lurus
+--- sementara tulangnya menghadap ke samping, sehingga animasinya menyamping.
+local function findPivot(skin: Instance): (BasePart | Bone)?
+	for _, d in skin:GetDescendants() do
+		if d:IsA("Bone") then
+			local n = string.lower(d.Name)
+			if string.find(n, "hips") or string.find(n, "root") or string.find(n, "pelvis") then
+				return d
+			end
+		end
+	end
+
+	local bone = skin:FindFirstChildWhichIsA("Bone", true)
+	if bone then
+		return bone
+	end
+
+	if skin:IsA("BasePart") then
+		return skin
+	elseif skin:IsA("Model") and skin.PrimaryPart then
+		return skin.PrimaryPart
+	end
+	return skin:FindFirstChildWhichIsA("BasePart", true)
+end
+
+--- Orientasi pivot di ruang DUNIA.
+--- Bone turunan Attachment: `Bone.CFrame` RELATIF PARENT, `WorldCFrame` yang
+--- di ruang dunia. Mencampur keduanya menghasilkan sudut ngawur.
+local function pivotWorldCFrame(pivot: BasePart | Bone): CFrame
+	return if pivot:IsA("Bone") then pivot.WorldCFrame else pivot.CFrame
+end
+
+--- Apakah skin perlu diluruskan? Dipisah supaya bisa diputuskan SEBELUM weld
+--- dibongkar (mesh yang masih ter-weld ke root anchored tidak bisa diputar —
+--- weld langsung menariknya balik, jadi rotasi terlihat "tidak berefek").
+local function needsAlign(skin: Instance, root: BasePart): boolean
+	local pivot = findPivot(skin)
+	if not pivot then
+		return false
+	end
+	local dot = math.clamp(root.CFrame.LookVector:Dot(pivotWorldCFrame(pivot).LookVector), -1, 1)
+	return math.deg(math.acos(dot)) > ALIGN_TOLERANCE_DEG
+end
 
 --- Luruskan arah hadap skin agar sama dengan rig, TANPA memindahkan posisinya.
 --- Mengembalikan jumlah part yang diputar (0 bila sudah lurus / tak ada acuan).
@@ -145,33 +222,32 @@ local ALIGN_TOLERANCE_DEG = 1.0
 --- Kenapa perlu: WeldConstraint membekukan offset relatif saat dibuat. Mesh
 --- hasil import sering menghadap sumbu berbeda dari rig R15, dan selisih itu
 --- ikut terkunci -> NPC berjalan maju tetapi badannya menyamping.
+---
+--- WAJIB dipanggil SETELAH weld skin<->rig dibongkar, kalau tidak rotasinya
+--- tidak berefek (lihat catatan di needsAlign).
 local function alignSkinToRig(skin: Instance, root: BasePart): number
-	-- Acuan orientasi skin: PrimaryPart, atau BasePart pertama yang ditemukan.
-	local pivot: BasePart? = nil
-	if skin:IsA("BasePart") then
-		pivot = skin
-	elseif skin:IsA("Model") and skin.PrimaryPart then
-		pivot = skin.PrimaryPart
-	else
-		pivot = skin:FindFirstChildWhichIsA("BasePart", true)
-	end
+	local pivot = findPivot(skin)
 	if not pivot then
 		return 0
 	end
 
+	local pivotWorld = pivotWorldCFrame(pivot)
+
 	-- Sudah lurus? Jangan disentuh (hindari jitter presisi float).
-	local dot = math.clamp(root.CFrame.LookVector:Dot(pivot.CFrame.LookVector), -1, 1)
+	local dot = math.clamp(root.CFrame.LookVector:Dot(pivotWorld.LookVector), -1, 1)
 	if math.deg(math.acos(dot)) <= ALIGN_TOLERANCE_DEG then
 		return 0
 	end
 
-	-- Rotasi yang membawa orientasi pivot ke orientasi rig.
-	local rotOnly = root.CFrame.Rotation * pivot.CFrame.Rotation:Inverse()
+	-- Rotasi yang membawa orientasi pivot ke orientasi rig. Diterapkan sebagai
+	-- delta DUNIA (dikali dari kiri) sehingga berlaku sama untuk semua part —
+	-- termasuk saat pivot-nya bone yang tidak sejajar dengan mesh induknya.
+	local delta = root.CFrame.Rotation * pivotWorld.Rotation:Inverse()
 
 	local n = 0
 	for _, part in collectParts(skin) do
 		-- Putar di sekitar posisi part itu sendiri: posisi tetap, arah berubah.
-		part.CFrame = CFrame.new(part.Position) * rotOnly * part.CFrame.Rotation
+		part.CFrame = CFrame.new(part.Position) * (delta * part.CFrame.Rotation)
 		n += 1
 	end
 	return n
@@ -202,6 +278,7 @@ function SkinBinder:bind(rig: Model): { [string]: any }
 		rigHidden = 0,
 		animated = 0,
 		aligned = 0,
+		reWelded = 0,
 		scriptsDisabled = {},
 	}
 
@@ -226,12 +303,14 @@ function SkinBinder:bind(rig: Model): { [string]: any }
 			table.insert(result.scriptsDisabled, skin.Name .. "/" .. nm)
 		end
 
-		-- Luruskan arah hadap skin dengan rig SEBELUM di-weld.
-		-- WeldConstraint MEMBEKUKAN offset saat dibuat: kalau mesh dipasang
-		-- menghadap arah lain (kasus nyata: melenceng 90 derajat), selisih itu
-		-- terbawa selamanya -> NPC jalan ke depan tapi badannya menyamping.
-		-- Posisi TIDAK diubah, hanya rotasi, dan hanya bila memang menyimpang.
-		if not keepOrientation then
+		-- Luruskan arah hadap skin ke rig. Posisi TIDAK diubah, hanya rotasi,
+		-- dan hanya bila memang menyimpang.
+		--
+		-- URUTAN PENTING: cek dulu (needsAlign), bongkar weld, BARU putar.
+		-- Mesh yang masih ter-weld ke root anchored tidak bisa diputar — weld
+		-- langsung menariknya balik sehingga set CFrame tampak tidak berefek.
+		if not keepOrientation and needsAlign(skin, root) then
+			result.reWelded = removeSkinWelds(skin, root)
 			result.aligned += alignSkinToRig(skin, root)
 		end
 
