@@ -19,6 +19,38 @@
 
 ## 🗓️ Log Progress
 
+### Entri #5 — Audit sistem animasi skin (tanpa perubahan kode)
+**Task terkait:** #10 NPC Monster Script.
+
+**Konteks:** Aer menanyakan apakah animasi badut masih di-handle script `Clown.Anim`, dan apakah cukup me-*rename* Animation yang sudah ada untuk memakai beberapa animasi. Turn ini **murni investigasi + uji** — tidak ada kode yang diubah.
+
+**Keadaan sebenarnya di Studio (dibaca, bukan diasumsikan):**
+
+| Instance | Kelas | Status | Catatan |
+|---|---|---|---|
+| `Clown.Anim` | Script | **Enabled = false** | Sudah dimatikan `SkinBinder` (aturan satu penyetir). Isinya 1 Animation `103353830011402` — ID **R15 default**, bukan animasi khas badut |
+| `Hitbox.Animate` | **LocalScript** | Enabled = true | Paket R15 bawaan, 27 animasi standar Roblox |
+| `Clown.AnimationController` | AnimationController | aktif | Disetir `SkinAnimator` mengikuti `AIState` |
+| `Hitbox.Humanoid.Animator` | Animator | aktif | Jalur `AnimationManager` |
+
+Dua koreksi terhadap asumsi yang beredar:
+1. **Animasi TIDAK lagi di-handle script Clown** — `Anim` sudah disabled sejak `SkinBinder` dipasang.
+2. **`Hitbox.Animate` itu LocalScript**, dan LocalScript tidak berjalan di NPC non-player. Jadi 27 animasi di dalamnya sebetulnya tidak dieksekusi siapa pun; yang benar-benar menyetir adalah `AnimationManager` / `SkinAnimator`.
+
+**Hasil uji `SkinAnimator` (18/18 di Studio, modul dimuat segar):**
+- Folder `Animations` lengkap → 5 state dapat track **berbeda** (bukan berbagi), sumber tercatat `Animations/<Nama>`.
+- `applyState` benar: `IDLE`→Idle, `PATROL`→Walk, `CHASING`→Run, `DEAD`→Death. `Attack` via `playOnce` (Looped=false) sementara Idle tetap Looped.
+- Nama huruf kecil (`animations/idle`) tetap kebaca.
+- Isi sebagian (cuma Idle+Run) → sisanya fallback, tidak error.
+- **Kondisi NPC sekarang direplikasi:** tanpa folder `Animations`, kelima state **berbagi satu track** → itu sebabnya idle/jalan/ngejar terlihat sama.
+- **Jebakan terkonfirmasi:** Animation yang di-*rename* jadi `Idle` tapi berada **di dalam script `Anim`** (bukan di folder `Animations`) tetap terbaca sebagai `fallback-tunggal`. Rename saja tidak cukup — folder wajib ada.
+
+**Kesimpulan untuk Aer:** modul sudah siap, tidak perlu ubah script. Yang dibutuhkan: buat folder `Animations` di dalam **skin** (`Clown`), isi Animation `Idle`/`Walk`/`Run`/`Attack`/`Death` beserta AnimationId.
+
+**Peringatan aset (belum terverifikasi, di luar jangkauan MCP):** badut ini skinned mesh bertulang `mixamorig:*` yang diputar via `AnimationController`. Animasi **R15 Roblox tidak akan cocok** dengan skeleton itu. Animasi Mixamo harus di-publish ulang terhadap rig badut, dan di-upload oleh akun/grup yang sama dengan tempat game berjalan — kalau tidak, `LoadAnimation` gagal saat runtime. Kecocokan ID hanya terbukti lewat Play.
+
+---
+
 ### Entri #4 — Spesifikasi per-NPC lewat Attribute (override Config)
 **Task terkait:** #10 NPC Monster Script.
 
@@ -211,7 +243,34 @@ Sistem otomatis: weld ke `HumanoidRootPart`, matikan collision skin, luruskan or
 
 **Boleh diputar bebas.** Kalau kamu memutar rig di Explorer, sistem meluruskan arah skin otomatis saat bind — acuannya **orientasi MeshPart**, jadi badan menghadap arah jalan. Tidak perlu align manual. Kalau "depan" mesh ternyata kebalik (aset Mixamo), set Attribute `SkinYawOffset` (derajat) di rig, sekali saja.
 
-**Animasi per-state (opsional):** taruh `Animation` di folder `Animations` dalam Model, nama `Idle` / `Walk` / `Run` / `Attack` / `Death`. Nama tidak case-sensitive. Kalau cuma ada satu animasi, dipakai untuk semua state.
+**Animasi per-state (opsional):** taruh `Animation` di dalam **folder bernama `Animations`**, dengan nama `Idle` / `Walk` / `Run` / `Attack` / `Death`. Nama folder & animasi **tidak case-sensitive** (`animations/idle` juga kebaca). Kalau cuma ada satu animasi, dipakai untuk semua state.
+
+Peta state → animasi: `IDLE`→`Idle`, `PATROL`→`Walk`, `CHASING`→`Run`, event `Attack`→`Attack` (sekali, tidak loop), event `Died`→`Death`.
+
+**Letak folder menentukan siapa yang memutar:**
+
+| NPC | Folder `Animations` ditaruh di | Diputar oleh |
+|---|---|---|
+| Satu Model biasa (rig ber-Humanoid) | Model itu sendiri | `AnimationManager` (via Humanoid) |
+| Pola driver+skin | **Model skin** (yang ber-tag `MonsterSkin`) | `SkinAnimator` (via AnimationController) |
+
+Contoh untuk badut (`Clown` = skin, `Hitbox` = rig):
+
+```
+workspace.Clown
+├── Hitbox          <- tag "Monster"      (rig; folder animasi TIDAK di sini)
+└── Clown           <- tag "MonsterSkin"
+    └── Animations  <- folder di SKIN
+        ├── Idle    (Animation -> isi AnimationId)
+        ├── Walk
+        ├── Run
+        ├── Attack
+        └── Death
+```
+
+**Jebakan (sudah diuji):** me-*rename* `Animation` yang sudah ada — misalnya yang nempel di dalam script `Anim` — menjadi `Idle` **tidak cukup**. Resolver mencari folder `Animations` sebagai anak dari Model; Animation di luar folder itu hanya kepungut sebagai *fallback tunggal*, jadi semua state tetap memakai animasi yang sama. Folder-nya wajib ada.
+
+Isi sebagian saja juga boleh: nama yang tidak ada jatuh ke fallback, tidak error.
 
 **Tim mau animasi berlogika sendiri:** `NoAutoAnimations` = true, lalu ikuti Attribute `AIState` + BindableEvent `AISignal` (`Attack`, `TargetAcquired`, `TargetLost`, `Died`). Contoh siap pakai: `ServerStorage/NPCAnimationTemplate`. **Jangan ubah EnemyController.**
 
