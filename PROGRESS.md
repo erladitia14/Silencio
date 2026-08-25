@@ -20,7 +20,7 @@
 ## 🗓️ Log Progress
 
 ### Entri #3 — Animasi otomatis, pola "driver + skin", jangkauan serang adaptif
-**Commit:** `e3f4b2c` → auto-align bone (lihat #4b)
+**Commit:** `e3f4b2c` → `2182678` (auto-align, lihat #4b)
 **Task terkait:** #10 NPC Monster Script.
 
 **Ringkasan menyeluruh:** Aer minta script AI dibuat **se-versatile mungkin** — tim bisa memakainya tanpa mengubah isinya, dan dia tidak mau mengurus animasi per-NPC. Sesi ini memindahkan animasi keluar dari core AI, lalu membangun sistem NPC visual berbasis dua tag. Empat bug nyata ketemu di jalan, semuanya dari playtest Aer.
@@ -52,7 +52,7 @@ Perlu karena karakter import (bone `mixamorig:*`, satu MeshPart, `AnimationContr
 
 **`SkinAnimator.luau`** (modul baru) memutar animasi skin lewat `AnimationController`-nya sendiri, mengikuti `AIState`. Satu `AnimationId` = satu track (state yang memakai ID sama berbagi track, jadi pindah state tidak menghentikan-memulai animasi yang sama).
 
-Opt-out: `KeepRigVisible`, `KeepSkinCollision`, `KeepSkinOrientation`.
+Opt-out / tuning: `KeepRigVisible`, `KeepSkinCollision`, `KeepSkinOrientation`, `SkinYawOffset` (koreksi arah hadap skin, derajat).
 
 #### 4. Empat bug dari playtest Aer
 
@@ -61,16 +61,25 @@ Opt-out: `KeepRigVisible`, `KeepSkinCollision`, `KeepSkinOrientation`.
 | NPC **diam total** | `MaxHealth`/`Health` = 0 → main loop `while Health > 0` tidak pernah jalan sekali pun. Sekarang ada guard + `warn`. |
 | Monster besar **tak bisa deal damage** | `AttackRadius` diukur pusat-ke-pusat. `Hitbox` tinggi 12 studs: jarak saat player menempel 6.56 > radius 4. Jangkauan sekarang dihitung dari ukuran NPC (Hitbox → 7.55, NPC kecil tetap 4.00). Override: Attribute `AttackRadius`. |
 | Monster **buta permanen** | Raycast LOS hanya memfilter rig, padahal skin adalah **sibling di luar model** → ray menabrak badan sendiri dari <1 stud, LOS selalu gagal. `CanCollide=false` tidak menolong. `SkinBinder:getIgnoreList()` sekarang memfilter rig + skin. |
-| Badut **jalan menyamping** | `WeldConstraint` membekukan offset saat dibuat; mesh import melenceng 90°. Orientasi sekarang diluruskan **sebelum** weld (posisi tidak digeser). Perbaikan ini butuh 3 iterasi — lihat #4b. |
+| Badut **jalan menyamping** | `WeldConstraint` membekukan offset saat dibuat; mesh import melenceng 90°. Orientasi mesh sekarang diluruskan ke rig **sebelum** weld (posisi tidak digeser). Perjalanan menuju solusi yang benar butuh beberapa iterasi — lihat #4b. |
 
-#### 4b. Auto-align: tiga kesalahanku sebelum benar
-Aer memutar `HitBox` supaya searah badut, tapi mesh ikut berputar dan animasinya tetap menyimpang. Permintaannya jelas: **harus otomatis, jangan align manual.** Tiga hal salah, ditemukan berurutan:
+#### 4b. Auto-align: perjalanan sampai benar (acuan MESH, bukan bone)
+**Commit final: `2182678`.** Aer memutar `HitBox`, mesh ikut, animasi tetap menyimpang. Permintaannya jelas: **harus otomatis, jangan align manual.** Butuh beberapa kali salah:
 
-1. **Acuan salah.** Aku membandingkan `MeshPart`, padahal yang menentukan arah animasi adalah **skeleton (`Bone`)**. Mesh bisa tampak lurus sementara tulangnya menyamping. Sekarang acuannya bone akar (`hips`/`root`/`pelvis`), fallback ke Bone pertama, lalu ke geometri part.
-2. **Ruang koordinat salah.** `Bone` turunan `Attachment`, jadi `Bone.CFrame` itu **relatif parent**; yang di ruang dunia `Bone.WorldCFrame`. Perhitunganku mencampur dua ruang — semua sudut bone yang kulaporkan sebelum ini tidak sahih (terbaca 0° padahal aslinya 180°).
-3. **Urutan salah.** Aku memutar mesh **sementara weld masih terpasang**. Weld ke root langsung menariknya balik, jadi set `CFrame` sama sekali tidak berefek. Urutan benar: `needsAlign()` → bongkar weld → putar → weld ulang.
+1. **Percobaan 1 — acuan MeshPart.** Mesh lurus, tapi Aer lapor "arah animasinya salah" saat jalan → kusimpulkan (keliru) bahwa acuan yang benar adalah bone.
+2. **Percobaan 2 — acuan bone (`58c05df`).** Kupindah acuan ke skeleton (`Bone`). Sepanjang jalan menemukan dua gotcha nyata: `Bone.CFrame` itu **relatif parent** (yang di ruang dunia `WorldCFrame`), dan align **tidak berefek** kalau weld belum dibongkar (weld menarik mesh balik). Kedua hal itu benar dan tetap relevan. Tapi hasilnya: badut malah nyamping saat jalan.
+3. **Percobaan 3 — balik ke MESH + knob (`2182678`, final).** Ternyata **premisku soal bone salah**. Saat NPC jalan, yang memutar badan ke arah gerak adalah root rig; mesh mengikutinya lewat weld. Animasi walk cuma menggerakkan kaki di tempat — **tidak** mengubah arah hadap badan. Jadi arah badan saat jalan = **arah MeshPart**, bukan bone.
 
-Verifikasi: sandbox 9/9 (bone sengaja menyimpang 180°/90°/45°, rig anchored, mesh sudah ter-weld) → semua terkoreksi ke 0.00°, idempoten, posisi tidak melompat. Pada aset asli, rig diputar +37°/+90°/−113°/+180° → bone tetap **0.00°** di semua sudut, lalu dipulihkan tepat ke posisi awal.
+**Solusi final:**
+- Acuan align = geometri MeshPart (`findPivot` → MeshPart / PrimaryPart / BasePart pertama).
+- `targetRotation(rig, root)` = orientasi rig + **`SkinYawOffset`** (Attribute derajat, default 0). Untuk aset yang "depan"-nya tidak sejajar sumbu Roblox (mesh Mixamo sering kebalik 180° atau nyamping 90°), tim cukup ketik satu angka — tanpa mengubah script inti.
+- Urutan tetap: `needsAlign()` → bongkar weld (`removeSkinWelds`) → putar → weld ulang.
+
+**Pelajaran proses:** aku dua kali menyimpulkan dari pose diam di edit mode ("kelihatan lurus/miring") padahal arah saat **jalan** hanya terbukti lewat Play. Arah animasi berjalan tidak bisa diverifikasi dari geometri statis — itu domain playtest, bukan MCP.
+
+Verifikasi final (`2182678`): sandbox 9/9 (mesh menyimpang 90°/120° → lurus; `SkinYawOffset` 180° → 180° dari rig, 90° → 90°; idempoten; `KeepSkinOrientation` dihormati; rig arah bebas ikut); aset asli mesh 90° → **0.00°** dari rig, posisi tidak melompat, 1 weld; statis+parity 26/26; kontrol negatif exit 1.
+
+**Masih belum terverifikasi:** apakah 0° itu arah depan yang benar saat badut **jalan**. Kalau ternyata mundur/nyamping, cukup set `SkinYawOffset` — bukan perubahan kode. Playtest = Aer.
 
 #### 5. Rig hanya disembunyikan saat Play
 `Transparency = 1` cuma diterapkan bila `RunService:IsRunning()`. Kalau dilakukan di edit mode, nilainya **ikut tersimpan ke file place** dan rig hilang permanen dari viewport — padahal di edit mode rig perlu terlihat untuk diposisikan/di-skala.
@@ -175,7 +184,7 @@ Struktural balanced + Studio (3 script COMPILE_OK, source match, Attribute monst
 
 Sistem otomatis: weld ke `HumanoidRootPart`, matikan collision skin, luruskan orientasi, sembunyikan rig **saat Play**, matikan script animasi lama yang bentrok, sambungkan animasi ke `AIState`.
 
-**Boleh diputar bebas.** Kalau kamu memutar rig di Explorer, sistem meluruskan arah skin otomatis saat bind — acuannya **bone** skeleton, jadi animasi selalu searah arah jalan. Tidak perlu align manual.
+**Boleh diputar bebas.** Kalau kamu memutar rig di Explorer, sistem meluruskan arah skin otomatis saat bind — acuannya **orientasi MeshPart**, jadi badan menghadap arah jalan. Tidak perlu align manual. Kalau "depan" mesh ternyata kebalik (aset Mixamo), set Attribute `SkinYawOffset` (derajat) di rig, sekali saja.
 
 **Animasi per-state (opsional):** taruh `Animation` di folder `Animations` dalam Model, nama `Idle` / `Walk` / `Run` / `Attack` / `Death`. Nama tidak case-sensitive. Kalau cuma ada satu animasi, dipakai untuk semua state.
 
@@ -191,6 +200,7 @@ Sistem otomatis: weld ke `HumanoidRootPart`, matikan collision skin, luruskan or
 | `KeepRigVisible` | Bool | rig tetap tampak saat Play |
 | `KeepSkinCollision` | Bool | jangan matikan collision skin |
 | `KeepSkinOrientation` | Bool | jangan luruskan orientasi skin |
+| `SkinYawOffset` | number | koreksi arah hadap skin, derajat (mis. 180 kalau mesh menghadap mundur, 90 kalau nyamping). Default 0 |
 
 **Jebakan yang sudah kena sekali** (cek ini dulu kalau NPC aneh):
 - `MaxHealth`/`Health` = 0 → NPC **diam total tanpa error**. Sudah ada guard + `warn`.
