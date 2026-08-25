@@ -253,7 +253,7 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 	------------------------------------------------------------
 	fsm:addState("IDLE", {
 		onEnter = function()
-			ctx.humanoid.WalkSpeed = Config.PatrolSpeed
+			ctx.humanoid.WalkSpeed = Config.get(ctx.model, "PatrolSpeed")
 			publishState(ctx, "IDLE")
 		end,
 
@@ -261,7 +261,8 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 			-- Polling target selama masa idle agar tidak "buta" terhadap player
 			-- yang lewat (FIX bug A: sebelumnya task.wait memblok deteksi).
 			local elapsed = 0
-			while elapsed < Config.PatrolWaitTime do
+			local waitTime = Config.get(ctx.model, "PatrolWaitTime")
+			while elapsed < waitTime do
 				local player, char = TargetFinder:acquireTarget(ctx.model, ctx.chaseMode)
 				if player and char then
 					lockTarget(ctx, player, char)
@@ -281,7 +282,7 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 	------------------------------------------------------------
 	fsm:addState("PATROL", {
 		onEnter = function()
-			ctx.humanoid.WalkSpeed = Config.PatrolSpeed
+			ctx.humanoid.WalkSpeed = Config.get(ctx.model, "PatrolSpeed")
 			publishState(ctx, "PATROL")
 		end,
 
@@ -334,7 +335,7 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 	------------------------------------------------------------
 	fsm:addState("CHASING", {
 		onEnter = function()
-			ctx.humanoid.WalkSpeed = Config.ChaseSpeed
+			ctx.humanoid.WalkSpeed = Config.get(ctx.model, "ChaseSpeed")
 			publishState(ctx, "CHASING")
 			if ctx.targetPlayer then
 				print("[MonsterAI] " .. ctx.model.Name .. " mengejar " .. ctx.targetPlayer.Name)
@@ -405,7 +406,7 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 		end,
 
 		onExit = function()
-			ctx.humanoid.WalkSpeed = Config.PatrolSpeed
+			ctx.humanoid.WalkSpeed = Config.get(ctx.model, "PatrolSpeed")
 		end,
 	})
 
@@ -479,8 +480,16 @@ local function initializeMonster(monsterModel: Model)
 
 	print("[MonsterAI] Menginisialisasi AI untuk: " .. monsterModel.Name)
 
+	-- OVERRIDE PER-NPC: laporkan Attribute yang salah tipe/negatif SEKALI di
+	-- sini. Resolver (Config.get) sendiri silent karena dipanggil tiap tick;
+	-- tanpa laporan ini, override yang salah ketik akan diam-diam diabaikan
+	-- dan tim bingung kenapa "tidak ngefek".
+	for _, problem in Config.validateOverrides(monsterModel) do
+		warn("[MonsterAI] " .. monsterModel.Name .. ": " .. problem)
+	end
+
 	-- Setup Humanoid
-	humanoid.WalkSpeed = Config.PatrolSpeed
+	humanoid.WalkSpeed = Config.get(monsterModel, "PatrolSpeed")
 	humanoid.AutoRotate = true
 
 	-- Tentukan chase mode: Attribute per-monster > default Config.

@@ -27,7 +27,7 @@ end
 
 --- Cek apakah serangan sudah bisa dilakukan (cooldown selesai).
 function CombatManager:canAttack(): boolean
-	return (tick() - self._lastAttackTime) >= Config.AttackCooldown
+	return (tick() - self._lastAttackTime) >= Config.get(self._model, "AttackCooldown")
 end
 
 --- Melakukan serangan ke target.
@@ -43,7 +43,7 @@ function CombatManager:attack(targetChar: Model): boolean
 	end
 
 	-- Deal damage
-	targetHumanoid:TakeDamage(Config.Damage)
+	targetHumanoid:TakeDamage(Config.get(self._model, "Damage"))
 	self._lastAttackTime = tick()
 
 	-- Animasi default (opt-in saja). Jalur normal: EnemyController emit "Attack".

@@ -210,7 +210,11 @@ function AnimationManager:_setupStateListeners()
 	-- Event saat pergerakan (speed) berubah
 	local runConn = self._humanoid.Running:Connect(function(speed)
 		if speed > 0.1 then
-			if speed > (Config.PatrolSpeed + 2) then
+			-- Ambang walk->run relatif terhadap PatrolSpeed NPC INI (bisa
+			-- di-override per-NPC), bukan default global. Kalau memakai global,
+			-- NPC dengan PatrolSpeed lebih tinggi akan memutar "Run" padahal
+			-- sedang patroli biasa.
+			if speed > (Config.get(self._model, "PatrolSpeed") + 2) then
 				self:play("Run")
 			else
 				self:play("Walk")

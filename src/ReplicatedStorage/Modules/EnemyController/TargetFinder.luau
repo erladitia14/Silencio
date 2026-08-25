@@ -26,7 +26,7 @@ local SkinBinder      = require(script.Parent.SkinBinder)
 local TargetFinder = {}
 
 --- Cek apakah target berada dalam Field of View monster.
-function TargetFinder:_isInFieldOfView(monsterRoot: BasePart, targetPos: Vector3): boolean
+function TargetFinder:_isInFieldOfView(monsterModel: Model, monsterRoot: BasePart, targetPos: Vector3): boolean
 	local direction = (targetPos - monsterRoot.Position)
 	local lookDir = monsterRoot.CFrame.LookVector
 	local dirToTarget = direction.Unit
@@ -34,7 +34,7 @@ function TargetFinder:_isInFieldOfView(monsterRoot: BasePart, targetPos: Vector3
 	local dotProduct = math.clamp(lookDir:Dot(dirToTarget), -1, 1)
 	local angle = math.deg(math.acos(dotProduct))
 
-	return angle <= (Config.FieldOfView / 2)
+	return angle <= (Config.get(monsterModel, "FieldOfView") / 2)
 end
 
 --- Raycast dari monster ke target untuk memastikan tidak ada
@@ -48,12 +48,12 @@ function TargetFinder:_hasLineOfSight(monsterModel: Model, monsterRoot: BasePart
 	local direction = (targetRoot.Position - origin)
 
 	-- Distance check
-	if direction.Magnitude > Config.DetectionRadius then
+	if direction.Magnitude > Config.get(monsterModel, "DetectionRadius") then
 		return false
 	end
 
 	-- FOV check (dilewati saat ignoreFOV = true)
-	if not ignoreFOV and not self:_isInFieldOfView(monsterRoot, targetRoot.Position) then
+	if not ignoreFOV and not self:_isInFieldOfView(monsterModel, monsterRoot, targetRoot.Position) then
 		return false
 	end
 
@@ -111,7 +111,7 @@ function TargetFinder:findNearest(monsterModel: Model, ignoreFOV: boolean?): (Pl
 		return nil, nil
 	end
 
-	local closestDist = Config.DetectionRadius
+	local closestDist = Config.get(monsterModel, "DetectionRadius")
 	local bestPlayer: Player? = nil
 	local bestChar: Model? = nil
 
@@ -143,7 +143,7 @@ function TargetFinder:isInChaseRange(monsterModel: Model, targetChar: Model): bo
 		return false
 	end
 
-	return (monsterRoot.Position - targetRoot.Position).Magnitude <= Config.LoseTargetRadius
+	return (monsterRoot.Position - targetRoot.Position).Magnitude <= Config.get(monsterModel, "LoseTargetRadius")
 end
 
 ---------------------------------------------------------------------
@@ -300,7 +300,7 @@ function TargetFinder:findItemHolder(monsterModel: Model, ignoreFOV: boolean?): 
 		return nil, nil
 	end
 
-	local closestDist = Config.DetectionRadius
+	local closestDist = Config.get(monsterModel, "DetectionRadius")
 	local bestPlayer: Player? = nil
 	local bestChar: Model? = nil
 

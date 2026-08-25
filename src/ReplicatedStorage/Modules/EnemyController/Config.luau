@@ -83,4 +83,78 @@ Config.PathTimeout      = 8     -- Timeout pathfinding (detik)
 -----------------------------------------------------------------
 Config.MonsterTag       = "Monster"  -- Tag untuk auto-assign AI ke monster
 
+-----------------------------------------------------------------
+-- OVERRIDE PER-NPC (Attribute di Model monster)
+-----------------------------------------------------------------
+--[[
+	Tiap NPC boleh punya spesifikasi berbeda TANPA mengubah script ini.
+	Caranya: tambah Attribute di Properties Model monster, NAMA-nya sama
+	persis dengan field di bawah, tipenya Number. Kalau Attribute tidak
+	diisi -> pakai default global di atas.
+
+	Contoh: monster bos ingin lebih cepat + lebih sakit ->
+	  di Properties Model: ChaseSpeed = 26, Damage = 40.
+	Monster lain tetap pakai default. Tidak perlu sentuh script apa pun.
+
+	Field yang bisa di-override (semua Number):
+	  PatrolSpeed, ChaseSpeed, DetectionRadius, LoseTargetRadius,
+	  FieldOfView, AttackCooldown, Damage, PatrolWaitTime
+
+	Catatan:
+	  - AttackRadius TIDAK di sini: sudah dihitung adaptif dari ukuran NPC
+	    (lihat TargetFinder.getAttackReach), Attribute "AttackRadius" tetap
+	    jadi override khusus jalur itu.
+	  - Nilai valid = number >= 0. Negatif / bukan number diabaikan (pakai
+	    default) dan dilaporkan sekali via validateOverrides saat init.
+--]]
+local OVERRIDABLE: { [string]: true } = {
+	PatrolSpeed      = true,
+	ChaseSpeed       = true,
+	DetectionRadius  = true,
+	LoseTargetRadius = true,
+	FieldOfView      = true,
+	AttackCooldown   = true,
+	Damage           = true,
+	PatrolWaitTime   = true,
+}
+
+--- Ambil nilai config untuk sebuah monster: Attribute per-NPC > default global.
+--- Dipakai di hot loop, jadi SILENT (tidak warn). Validasi & laporan sekali
+--- dilakukan oleh validateOverrides() saat init.
+--- @param model  Model monster (boleh nil -> selalu default)
+--- @param key    Nama field Config
+function Config.get(model: Instance?, key: string): any
+	if model and OVERRIDABLE[key] then
+		local attr = model:GetAttribute(key)
+		-- number >= 0 dipakai; 0 sah (mis. Damage 0 = monster jinak).
+		if typeof(attr) == "number" and attr >= 0 then
+			return attr
+		end
+	end
+	return Config[key]
+end
+
+--- Validasi SEKALI (saat init) semua Attribute override sebuah monster.
+--- Melaporkan Attribute yang salah tipe / negatif lewat warn — supaya tim
+--- tahu kenapa override-nya "tidak berefek", tanpa spam warn tiap tick.
+--- Mengembalikan daftar pesan (kosong = semua benar / tidak ada override).
+function Config.validateOverrides(model: Instance): { string }
+	local problems = {}
+	for key in OVERRIDABLE do
+		local attr = model:GetAttribute(key)
+		if attr ~= nil then
+			if typeof(attr) ~= "number" then
+				table.insert(problems, string.format(
+					"Attribute '%s' bertipe %s (harus Number) -> diabaikan, pakai default %s",
+					key, typeof(attr), tostring(Config[key])))
+			elseif attr < 0 then
+				table.insert(problems, string.format(
+					"Attribute '%s' = %s (negatif) -> diabaikan, pakai default %s",
+					key, tostring(attr), tostring(Config[key])))
+			end
+		end
+	end
+	return problems
+end
+
 return Config

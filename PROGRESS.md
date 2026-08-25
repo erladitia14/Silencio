@@ -19,6 +19,31 @@
 
 ## 🗓️ Log Progress
 
+### Entri #4 — Spesifikasi per-NPC lewat Attribute (override Config)
+**Task terkait:** #10 NPC Monster Script.
+
+**Ringkasan:** Aer minta tiap NPC bisa punya spesifikasi berbeda (speed, damage, jarak deteksi) **tanpa mengubah script**. Sebelumnya `Config` itu satu tabel global — semua NPC pakai angka yang sama. Sekarang 8 knob bisa di-override per-NPC lewat Attribute di Properties Model, memakai pola yang sudah dipakai `ChaseMode`: **Attribute NPC menang, kalau kosong pakai default global.**
+
+**Yang dibangun:**
+- `Config.get(model, key)` — resolver: baca Attribute NPC dulu, fallback ke default. Silent, karena dipanggil tiap tick.
+- `Config.validateOverrides(model)` — dipanggil **sekali** saat init; melaporkan `warn` kalau Attribute salah tipe / negatif. Tanpa ini, salah ketik akan diam-diam diabaikan dan tim bingung kenapa "tidak ngefek".
+- Whitelist 8 knob (lihat tabel di bawah). Knob lain (`RetargetMinGap`, `PathTimeout`, `AgentRadius`, …) sengaja **tidak** bisa dioverride — itu tuning sistem, bukan spesifikasi karakter.
+- 12 titik pemakaian diganti ke resolver: `TargetFinder` (3× DetectionRadius, LoseTargetRadius, FieldOfView), `CombatManager` (Damage, AttackCooldown), `EnemyController` (4× PatrolSpeed, ChaseSpeed, PatrolWaitTime), `AnimationManager` (ambang walk→run).
+
+**Bug ikutan yang ketemu:** `AnimationManager` menentukan ambang walk→run dari `Config.PatrolSpeed` **global**. Kalau sebuah NPC di-override `PatrolSpeed = 20`, animasinya akan memutar "Run" padahal itu kecepatan patroli normalnya. Sekarang ambangnya relatif terhadap PatrolSpeed NPC itu sendiri.
+
+**Keputusan desain:** `0` dianggap nilai **sah** (mis. `Damage = 0` untuk monster yang cuma menakuti, `PatrolWaitTime = 0` untuk patroli tanpa henti). Yang ditolak hanya negatif dan salah tipe. Kalau `0` diperlakukan sebagai "kosong", knob-knob itu jadi tidak bisa dinolkan.
+
+**Tidak dikerjakan (atas keputusan Aer):** plugin Studio auto-fill Attribute. Konsekuensinya jujur: Attribute **tidak muncul sendiri** di Properties — tim harus menambahkannya manual (tabel referensi di bawah jadi rujukan nama). Ditolak karena menambah beban install plugin per anggota tim untuk kenyamanan kosmetik.
+
+**Verifikasi:** compile 11/11 di Studio; perilaku 19/19 (default, override, isolasi antar-NPC, batas `0`, tolak negatif/String/Bool, desimal, knob non-overridable tetap global, integrasi `CombatManager` termasuk damage nyata 100→60 dengan `Damage=40`); FOV & chase-range 13/13; statis+parity 54/54 dengan 3 kontrol negatif exit 1.
+
+**Koreksi diriku sendiri saat menguji:** satu FAIL awal ternyata **asersi tesku yang salah**, bukan bug — aku menaruh titik "depan" di `+Z` padahal `LookVector` root menghadap `−Z`, jadi titik itu justru 180° di belakang. Setelah titik uji dihitung dari `LookVector`, 13/13 lulus. Ini kekeliruan yang sama polanya dengan kasus auto-align: jangan berasumsi soal arah, hitung dari data.
+
+**Belum playtest:** perilaku override saat game jalan (monster dengan `ChaseSpeed` tinggi benar-benar lebih cepat, dst). Playtest = Aer.
+
+---
+
 ### Entri #3 — Animasi otomatis, pola "driver + skin", jangkauan serang adaptif
 **Commit:** `e3f4b2c` → `2182678` (auto-align, lihat #4b)
 **Task terkait:** #10 NPC Monster Script.
@@ -201,6 +226,27 @@ Sistem otomatis: weld ke `HumanoidRootPart`, matikan collision skin, luruskan or
 | `KeepSkinCollision` | Bool | jangan matikan collision skin |
 | `KeepSkinOrientation` | Bool | jangan luruskan orientasi skin |
 | `SkinYawOffset` | number | koreksi arah hadap skin, derajat (mis. 180 kalau mesh menghadap mundur, 90 kalau nyamping). Default 0 |
+
+### Spesifikasi per-NPC (semua Number, opsional)
+
+Isi hanya kalau NPC ini mau **beda** dari default. Nama Attribute = nama field Config, jadi tidak perlu hafal apa-apa. Tidak diisi → pakai default global.
+
+| Attribute | Default | Fungsi |
+|---|---|---|
+| `PatrolSpeed` | 10 | WalkSpeed saat patroli / idle |
+| `ChaseSpeed` | 18 | WalkSpeed saat mengejar |
+| `DetectionRadius` | 45 | Jarak maksimum melihat player (studs) |
+| `LoseTargetRadius` | 58 | Jarak target dianggap lepas (studs) |
+| `FieldOfView` | 160 | Sudut pandang (derajat); 360 = waspada segala arah |
+| `AttackCooldown` | 1.5 | Jeda antar serangan (detik) |
+| `Damage` | 25 | Damage per serangan; 0 = tidak melukai |
+| `PatrolWaitTime` | 2 | Lama diam di waypoint (detik) |
+
+Contoh monster bos: `ChaseSpeed = 26`, `Damage = 40`, `DetectionRadius = 80`. NPC lain **tidak terpengaruh**.
+
+Aturan nilai: Number **≥ 0**. `0` sah (mis. `Damage = 0` untuk monster jinak). Negatif atau salah tipe (String/Bool) **diabaikan** → pakai default, dan dilaporkan `warn` sekali saat NPC init supaya salah ketik tidak senyap.
+
+Di luar daftar ini nilainya tetap global (`RetargetMinGap`, `PathTimeout`, `AgentRadius`, dst) — diubah di `Config.luau` kalau perlu. `AttackRadius` beda jalur: sudah adaptif dari ukuran NPC, Attribute-nya mengunci hasil hitungan itu.
 
 **Jebakan yang sudah kena sekali** (cek ini dulu kalau NPC aneh):
 - `MaxHealth`/`Health` = 0 → NPC **diam total tanpa error**. Sudah ada guard + `warn`.
