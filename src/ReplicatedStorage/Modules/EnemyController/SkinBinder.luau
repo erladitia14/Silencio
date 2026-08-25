@@ -20,9 +20,9 @@
 	  3. Rig: semua part jadi Transparency = 1 (kerangka jadi tak terlihat)
 	  4. Matikan script animasi lama di skin yang berebut Animator
 	     (hanya SATU pihak boleh menyetir animasi)
-	  5. Luruskan arah hadap skin ke rig sebelum weld (mesh import sering
-	     melenceng 90 derajat; kalau dibiarkan, NPC jalan maju tapi badannya
-	     menyamping karena weld membekukan selisih itu)
+	  5. Luruskan arah hadap skin (MeshPart) ke rig sebelum weld (mesh import
+	     sering melenceng; kalau dibiarkan, badan NPC menyamping saat jalan
+	     karena weld membekukan selisih itu). Koreksi manual: SkinYawOffset.
 	  6. Pasang SkinAnimator supaya animasi skin mengikuti AIState rig
 
 	PASANGAN DITENTUKAN DARI PARENT YANG SAMA. Jadi satu folder = satu NPC.
@@ -34,10 +34,12 @@
 	file place dan rig hilang selamanya dari viewport — padahal di edit mode rig
 	perlu terlihat untuk diposisikan/di-skala.
 
-	OPT-OUT:
-	  - Attribute "KeepRigVisible" = true pada rig  -> jangan sembunyikan rig
-	  - Attribute "KeepSkinCollision" = true pada rig -> jangan sentuh CanCollide skin
-	  - Attribute "KeepSkinOrientation" = true pada rig -> jangan putar skin
+	OPT-OUT / TUNING (Attribute pada rig):
+	  - "KeepRigVisible" = true     -> jangan sembunyikan rig
+	  - "KeepSkinCollision" = true  -> jangan sentuh CanCollide skin
+	  - "KeepSkinOrientation" = true -> jangan putar skin sama sekali
+	  - "SkinYawOffset" = <derajat> -> koreksi arah hadap skin (mis. 180 kalau
+	    mesh menghadap mundur, 90 kalau nyamping). Default 0.
 --]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -171,24 +173,14 @@ end
 --- Toleransi selisih sudut hadap yang dianggap "sudah lurus" (derajat).
 local ALIGN_TOLERANCE_DEG = 1.0
 
---- Cari acuan orientasi skin. Bone diutamakan karena SKELETON-lah yang
---- menentukan arah animasi, bukan CFrame MeshPart: mesh bisa tampak lurus
---- sementara tulangnya menghadap ke samping, sehingga animasinya menyamping.
-local function findPivot(skin: Instance): (BasePart | Bone)?
-	for _, d in skin:GetDescendants() do
-		if d:IsA("Bone") then
-			local n = string.lower(d.Name)
-			if string.find(n, "hips") or string.find(n, "root") or string.find(n, "pelvis") then
-				return d
-			end
-		end
-	end
-
-	local bone = skin:FindFirstChildWhichIsA("Bone", true)
-	if bone then
-		return bone
-	end
-
+--- Cari acuan orientasi skin = GEOMETRI (MeshPart), bukan bone.
+---
+--- Kenapa MeshPart, bukan bone: saat NPC berjalan, yang memutar badan ke arah
+--- gerak adalah root rig, dan mesh mengikutinya lewat weld dengan offset tetap.
+--- Animasi walk cuma menggerakkan kaki di tempat -- ia TIDAK mengubah arah
+--- hadap badan. Jadi arah badan saat jalan = arah MeshPart, bukan arah bone.
+--- Meluruskan bone (percobaan lama) malah membiarkan mesh menyamping.
+local function findPivot(skin: Instance): BasePart?
 	if skin:IsA("BasePart") then
 		return skin
 	elseif skin:IsA("Model") and skin.PrimaryPart then
@@ -197,26 +189,27 @@ local function findPivot(skin: Instance): (BasePart | Bone)?
 	return skin:FindFirstChildWhichIsA("BasePart", true)
 end
 
---- Orientasi pivot di ruang DUNIA.
---- Bone turunan Attachment: `Bone.CFrame` RELATIF PARENT, `WorldCFrame` yang
---- di ruang dunia. Mencampur keduanya menghasilkan sudut ngawur.
-local function pivotWorldCFrame(pivot: BasePart | Bone): CFrame
-	return if pivot:IsA("Bone") then pivot.WorldCFrame else pivot.CFrame
+--- CFrame arah yang harus dihadapi skin = orientasi rig + koreksi yaw manual.
+--- SkinYawOffset (derajat) untuk aset yang "depan"-nya tidak sejajar sumbu
+--- Roblox (mesh Mixamo sering kebalik 180 atau nyamping 90). Default 0.
+local function targetRotation(rig: Model, root: BasePart): CFrame
+	local yaw = tonumber(rig:GetAttribute("SkinYawOffset")) or 0
+	return root.CFrame.Rotation * CFrame.Angles(0, math.rad(yaw), 0)
 end
 
 --- Apakah skin perlu diluruskan? Dipisah supaya bisa diputuskan SEBELUM weld
 --- dibongkar (mesh yang masih ter-weld ke root anchored tidak bisa diputar —
 --- weld langsung menariknya balik, jadi rotasi terlihat "tidak berefek").
-local function needsAlign(skin: Instance, root: BasePart): boolean
+local function needsAlign(skin: Instance, rig: Model, root: BasePart): boolean
 	local pivot = findPivot(skin)
 	if not pivot then
 		return false
 	end
-	local dot = math.clamp(root.CFrame.LookVector:Dot(pivotWorldCFrame(pivot).LookVector), -1, 1)
+	local dot = math.clamp(targetRotation(rig, root).LookVector:Dot(pivot.CFrame.LookVector), -1, 1)
 	return math.deg(math.acos(dot)) > ALIGN_TOLERANCE_DEG
 end
 
---- Luruskan arah hadap skin agar sama dengan rig, TANPA memindahkan posisinya.
+--- Luruskan arah hadap skin ke rig (+ SkinYawOffset), TANPA memindahkan posisi.
 --- Mengembalikan jumlah part yang diputar (0 bila sudah lurus / tak ada acuan).
 ---
 --- Kenapa perlu: WeldConstraint membekukan offset relatif saat dibuat. Mesh
@@ -225,24 +218,24 @@ end
 ---
 --- WAJIB dipanggil SETELAH weld skin<->rig dibongkar, kalau tidak rotasinya
 --- tidak berefek (lihat catatan di needsAlign).
-local function alignSkinToRig(skin: Instance, root: BasePart): number
+local function alignSkinToRig(skin: Instance, rig: Model, root: BasePart): number
 	local pivot = findPivot(skin)
 	if not pivot then
 		return 0
 	end
 
-	local pivotWorld = pivotWorldCFrame(pivot)
+	local target = targetRotation(rig, root)
 
 	-- Sudah lurus? Jangan disentuh (hindari jitter presisi float).
-	local dot = math.clamp(root.CFrame.LookVector:Dot(pivotWorld.LookVector), -1, 1)
+	local dot = math.clamp(target.LookVector:Dot(pivot.CFrame.LookVector), -1, 1)
 	if math.deg(math.acos(dot)) <= ALIGN_TOLERANCE_DEG then
 		return 0
 	end
 
-	-- Rotasi yang membawa orientasi pivot ke orientasi rig. Diterapkan sebagai
-	-- delta DUNIA (dikali dari kiri) sehingga berlaku sama untuk semua part —
-	-- termasuk saat pivot-nya bone yang tidak sejajar dengan mesh induknya.
-	local delta = root.CFrame.Rotation * pivotWorld.Rotation:Inverse()
+	-- Rotasi yang membawa orientasi pivot ke orientasi target. Diterapkan
+	-- sebagai delta DUNIA (dikali dari kiri) supaya berlaku sama untuk semua
+	-- part, menjaga posisi relatif antar-part skin.
+	local delta = target * pivot.CFrame.Rotation:Inverse()
 
 	local n = 0
 	for _, part in collectParts(skin) do
@@ -309,9 +302,9 @@ function SkinBinder:bind(rig: Model): { [string]: any }
 		-- URUTAN PENTING: cek dulu (needsAlign), bongkar weld, BARU putar.
 		-- Mesh yang masih ter-weld ke root anchored tidak bisa diputar — weld
 		-- langsung menariknya balik sehingga set CFrame tampak tidak berefek.
-		if not keepOrientation and needsAlign(skin, root) then
+		if not keepOrientation and needsAlign(skin, rig, root) then
 			result.reWelded = removeSkinWelds(skin, root)
-			result.aligned += alignSkinToRig(skin, root)
+			result.aligned += alignSkinToRig(skin, rig, root)
 		end
 
 		for _, part in collectParts(skin) do
