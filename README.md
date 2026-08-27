@@ -2,52 +2,47 @@
 
 Game horror co-op escape di karnaval terbengkalai, dibuat dengan Roblox Studio.
 
-**Chapter 1: The Mask Maze** — puzzle trivia + topeng & lukisan, dijaga monster.
+| Sistem | Dokumen |
+|---|---|
+| **Enemy AI** — NPC monster: patrol, chase, attack, animasi | [`ENEMY_AI.md`](ENEMY_AI.md) |
+| **Key System** — kunci → pintu → power switch → lampu | [`KEY_SYSTEM.md`](KEY_SYSTEM.md) |
 
 ---
 
-## 📚 Dokumentasi Sistem
+## Cara Pakai
 
-| Sistem | Dokumen | Isi singkat |
-|---|---|---|
-| **Enemy AI** | [`ENEMY_AI.md`](ENEMY_AI.md) | NPC monster FSM: patrol, chase, attack, animasi otomatis, pola driver+skin untuk mesh import |
-| **Key System** | [`KEY_SYSTEM.md`](KEY_SYSTEM.md) | Progresi kunci → pintu → power switch → lampu carnival |
+Kedua sistem digerakkan **tag**. Kamu **tidak perlu menempel script** ke objek apa pun.
 
-Riwayat perubahan & hasil verifikasi tiap sistem: [`PROGRESS.md`](PROGRESS.md).
+1. Buka **View → Tag Editor**
+2. Pilih objek di Explorer
+3. Tempel tag sesuai tabel di bawah
+4. **Play**
 
----
+Objek yang di-tag saat game sedang jalan juga langsung ikut terdaftar.
 
-## 🗂️ Struktur Kode
+### Enemy AI
 
-```
-src/
-├── ServerScriptService/                 ← Script (server, jalan otomatis)
-│   ├── EnemyController.server.luau      ← orchestrator Enemy AI
-│   └── KeySystemController.server.luau  ← orchestrator Key System
-├── ReplicatedStorage/Modules/           ← ModuleScript (logika, di-require)
-│   ├── EnemyController/                 ← 10 module Enemy AI
-│   └── KeySystem/                       ← 8 module Key System
-└── ServerStorage/
-    └── NPCAnimationTemplate.server.luau ← contoh opsional animasi berlogika
-```
+Tempel **`Monster`** pada Model NPC. Selesai — patrol, chase, attack, dan animasi jalan otomatis.
 
-**Pola yang dipakai kedua sistem sama:** satu `Script` orchestrator di `ServerScriptService`
-yang me-`require` folder ModuleScript-nya di `ReplicatedStorage/Modules/`.
+Syarat Model: punya `Humanoid` + `HumanoidRootPart`, dan `Health` lebih dari 0.
 
-Kenapa `Script`-nya harus di `ServerScriptService`: `Script` di `ReplicatedStorage` tidak
-dijalankan engine. Kenapa modulnya di `ReplicatedStorage`: satu tempat berkumpul untuk semua
-module, dan client bisa me-`require` kalau nanti ada kebutuhan UI.
+Untuk karakter mesh import (Mixamo dsb) yang tidak bisa jadi rig R15, pakai dua Model dalam satu
+folder: rig ber-tag `Monster` sebagai penggerak, mesh ber-tag `MonsterSkin` sebagai tampilan.
 
-> **Konsekuensi:** isi `ReplicatedStorage` **terbaca player**. Source module jadi bisa diintip
-> (nama tag, nilai default). Bukan celah exploit — semua state & keputusan hidup di server —
-> tapi kalau ada sistem yang isinya harus benar-benar rahasia, taruh di `ServerStorage`.
+→ Atribut per-NPC, animasi per-state, mode chase: [`ENEMY_AI.md`](ENEMY_AI.md)
+
+### Key System
+
+Tempel keempat tag ini, lalu Play — tanpa mengisi Attribute apa pun sudah nyambung jadi satu
+rantai puzzle (semua id default `"control_room"`):
+
+`KeyPickup` → `LockedDoor` → `PowerSwitch` → `CarnivalLight`
+
+→ Atribut, multi-puzzle, master key: [`KEY_SYSTEM.md`](KEY_SYSTEM.md)
 
 ---
 
-## 🏷️ Semua Tag dalam Satu Tabel
-
-Kedua sistem digerakkan **CollectionService tag** — tempel di View → **Tag Editor**,
-tanpa menempel script.
+## Daftar Tag
 
 | Tag | Sistem | Ditempel pada |
 |---|---|---|
@@ -59,40 +54,23 @@ tanpa menempel script.
 | `PowerSwitch` | Key System | Tuas/tombol power |
 | `CarnivalLight` | Key System | Lampu yang menyala saat power on |
 
-Detail Attribute per tag ada di dokumen sistem masing-masing.
+Attribute opsional per tag ada di dokumen sistem masing-masing.
 
 ---
 
-## 🔄 Alur Lokal → Studio
+## Letak Kode
 
-**Folder lokal ini = source of truth.** Rojo **tidak dipakai lagi**; sinkronisasi ke Studio
-dilakukan lewat MCP Roblox Studio (`set_script_source`).
+```
+src/
+├── ServerScriptService/                 ← Script orchestrator (jalan otomatis)
+│   ├── EnemyController.server.luau
+│   └── KeySystemController.server.luau
+├── ReplicatedStorage/Modules/           ← ModuleScript (logika)
+│   ├── EnemyController/
+│   └── KeySystem/
+└── ServerStorage/
+    └── NPCAnimationTemplate.server.luau ← contoh opsional
+```
 
-Artinya: kalau kamu mengedit script langsung di Studio, **salin balik ke folder ini**, atau
-perubahanmu akan tertimpa pada push berikutnya.
-
-`default.project.json` dan `aftman.toml` masih ada di repo sebagai artefak Rojo lama — sudah
-tidak dipakai, jangan dijadikan acuan.
-
----
-
-## ✅ Status
-
-| Sistem | Kode | Di Studio | Verifikasi statis | Playtest |
-|---|---|---|---|---|
-| Enemy AI | ✅ | ✅ | ✅ | sebagian (lihat PROGRESS.md) |
-| Key System | ✅ | ✅ | ✅ | ❌ belum |
-
-**Belum ada di kedua sistem:** suara, GUI/notifikasi, dan persistensi DataStore
-(progresi hilang saat server restart).
-
----
-
-## 🐛 Jebakan Lintas Sistem
-
-- **`require` di-cache per sesi Play.** Mengubah ModuleScript saat sesi Play sedang jalan tidak
-  berefek. Stop dulu, lalu Play ulang.
-- **Objek ber-tag tanpa BasePart** (Folder / Model kosong) di-skip dengan `warn` di Output,
-  bukan error. Kalau ada objek yang tidak bereaksi, cek Output dulu sebelum menyalahkan script.
-- **Prinsip "satu penyetir".** Hanya satu sistem yang boleh menyetir `Animator`/`Humanoid`
-  sebuah NPC. Dua penyetir = animasi kejang. Ini akar beberapa bug lama.
+**Jangan pindahkan** Script orchestrator keluar dari `ServerScriptService` — Script di
+`ReplicatedStorage` tidak dijalankan engine, sistemnya akan mati tanpa error.
