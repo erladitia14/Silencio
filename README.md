@@ -28,7 +28,7 @@ ServerStorage/
 └── NPCAnimationTemplate     ← Contoh untuk tim yang mau animasi berlogika sendiri
 ```
 
-Task #16 (Key System) berada di `ServerScriptService/KeySystem/` — di luar cakupan dokumen ini.
+Task #16 (Key System) berada di `ReplicatedStorage/Modules/KeySystem/` — lihat [`KEY_SYSTEM.md`](KEY_SYSTEM.md).
 
 ---
 
