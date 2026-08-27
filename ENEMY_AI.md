@@ -31,7 +31,7 @@ ServerStorage/
 └── NPCAnimationTemplate     ← Contoh untuk tim yang mau animasi berlogika sendiri
 ```
 
-Task #16 (Key System) — sistem terpisah, lihat [`KEY_SYSTEM.md`](KEY_SYSTEM.md).
+Key System — sistem terpisah, lihat [`KEY_SYSTEM.md`](KEY_SYSTEM.md).
 
 ---
 

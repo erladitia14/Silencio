@@ -1,21 +1,19 @@
 # Silencio — The Dark Story
 
-Game horror co-op escape di karnaval terbengkalai. Roblox.
-Kolaborasi **KARIS Studio × OnBlox Studio** — target rilis akhir September 2026.
+Game horror co-op escape di karnaval terbengkalai, dibuat dengan Roblox Studio.
 
-**Chapter 1: The Mask Maze** — puzzle Wheel of Fate (trivia) + topeng & lukisan, dijaga monster.
+**Chapter 1: The Mask Maze** — puzzle trivia + topeng & lukisan, dijaga monster.
 
 ---
 
 ## 📚 Dokumentasi Sistem
 
-| Sistem | Task | Dokumen | Isi singkat |
-|---|---|---|---|
-| **Enemy AI** | #10 | [`ENEMY_AI.md`](ENEMY_AI.md) | NPC monster FSM: patrol, chase, attack, animasi otomatis, pola driver+skin untuk mesh import |
-| **Key System** | #16 | [`KEY_SYSTEM.md`](KEY_SYSTEM.md) | Progresi kunci → pintu → power switch → lampu carnival |
+| Sistem | Dokumen | Isi singkat |
+|---|---|---|
+| **Enemy AI** | [`ENEMY_AI.md`](ENEMY_AI.md) | NPC monster FSM: patrol, chase, attack, animasi otomatis, pola driver+skin untuk mesh import |
+| **Key System** | [`KEY_SYSTEM.md`](KEY_SYSTEM.md) | Progresi kunci → pintu → power switch → lampu carnival |
 
 Riwayat perubahan & hasil verifikasi tiap sistem: [`PROGRESS.md`](PROGRESS.md).
-Aturan desain game & konteks proyek: [`AGENTS.md`](AGENTS.md).
 
 ---
 
@@ -65,7 +63,7 @@ Detail Attribute per tag ada di dokumen sistem masing-masing.
 
 ---
 
-## 🔄 Cara Kerja (Alur Lokal → Studio)
+## 🔄 Alur Lokal → Studio
 
 **Folder lokal ini = source of truth.** Rojo **tidak dipakai lagi**; sinkronisasi ke Studio
 dilakukan lewat MCP Roblox Studio (`set_script_source`).

@@ -36,7 +36,7 @@ tidak dijalankan engine. Yang ada di ReplicatedStorage hanya ModuleScript.
 > `ProximityPrompt.Triggered` yang divalidasi server. Kalau ingin benar-benar tersembunyi,
 > pindahkan folder `KeySystem` ke `ServerStorage`.
 
-Task #10 (Enemy AI) ada di `ReplicatedStorage/Modules/EnemyController/` — lihat [`ENEMY_AI.md`](ENEMY_AI.md).
+Enemy AI ada di `ReplicatedStorage/Modules/EnemyController/` — lihat [`ENEMY_AI.md`](ENEMY_AI.md).
 
 ---
 
