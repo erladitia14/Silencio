@@ -5,6 +5,9 @@ Sistem progresi Chapter 1: **kunci → pintu ruang kontrol → power switch → 
 **Prinsip desain: versatile.** Tim cukup memberi **tag** (+ Attribute opsional) pada objek di
 Studio. **Tidak perlu menempel script** dan **tidak perlu mengubah script inti.**
 
+> Bagian dari **Silencio – The Dark Story**. Indeks semua sistem: [`README.md`](README.md).
+> Sistem lain: [`ENEMY_AI.md`](ENEMY_AI.md).
+
 ---
 
 ## 📐 Arsitektur
@@ -33,7 +36,7 @@ tidak dijalankan engine. Yang ada di ReplicatedStorage hanya ModuleScript.
 > `ProximityPrompt.Triggered` yang divalidasi server. Kalau ingin benar-benar tersembunyi,
 > pindahkan folder `KeySystem` ke `ServerStorage`.
 
-Task #10 (Monster AI) ada di `ReplicatedStorage/Modules/EnemyController/` — lihat [`README.md`](README.md).
+Task #10 (Enemy AI) ada di `ReplicatedStorage/Modules/EnemyController/` — lihat [`ENEMY_AI.md`](ENEMY_AI.md).
 
 ---
 

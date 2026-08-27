@@ -1,233 +1,100 @@
-# Silencio — Monster AI System
+# Silencio — The Dark Story
 
-Sistem NPC Monster AI modular untuk Roblox Studio, pola **Finite State Machine (FSM)**.
+Game horror co-op escape di karnaval terbengkalai. Roblox.
+Kolaborasi **KARIS Studio × OnBlox Studio** — target rilis akhir September 2026.
 
-**Prinsip desain: versatile.** Tim cukup memberi **tag** (+ Attribute opsional) pada Model NPC —
-patrol, chase, idle, damage, dan **animasi** langsung jalan. **Tidak perlu mengubah script AI.**
-
----
-
-## 📐 Arsitektur
-
-```
-ServerScriptService/
-├── EnemyController          ← Script utama (orchestrator)
-ReplicatedStorage/Modules/
-└── EnemyController/         ← Semua module
-    ├── Config               ← Default global + resolver override per-NPC
-    ├── StateMachine         ← FSM generik & reusable
-    ├── SafeZoneManager      ← Deteksi area aman (OBB check)
-    ├── TargetFinder         ← Pencarian target (FOV, LOS, range) + jangkauan adaptif
-    ├── NavigationManager    ← Pathfinding & navigasi
-    ├── CombatManager        ← Serangan, damage, cooldown
-    ├── PatrolManager        ← Waypoint patrol system
-    ├── AnimationManager     ← Animasi otomatis via Humanoid (rig)
-    ├── SkinBinder           ← Pasangkan rig + mesh visual (pola driver+skin)
-    └── SkinAnimator         ← Animasi mesh visual via AnimationController
-ServerStorage/
-└── NPCAnimationTemplate     ← Contoh untuk tim yang mau animasi berlogika sendiri
-```
-
-Task #16 (Key System) berada di `ReplicatedStorage/Modules/KeySystem/` — lihat [`KEY_SYSTEM.md`](KEY_SYSTEM.md).
+**Chapter 1: The Mask Maze** — puzzle Wheel of Fate (trivia) + topeng & lukisan, dijaga monster.
 
 ---
 
-## ⚙️ Setup Cepat
+## 📚 Dokumentasi Sistem
 
-### NPC biasa (satu Model ber-Humanoid)
-
-Beri tag **`Monster`** pada Model (View → Tag Editor). Selesai — AI + animasi jalan otomatis,
-termasuk untuk NPC yang di-spawn saat runtime.
-
-Syarat Model: punya `Humanoid` + `HumanoidRootPart`, dan `Health > 0`.
-
-### NPC pola "driver + skin" (mesh import, mis. Mixamo)
-
-Untuk karakter yang tidak bisa jadi rig R15 (mesh ber-tulang sendiri): pakai **dua** Model
-di **folder yang sama** — rig yang menyetir, mesh yang menempel.
-
-```
-Folder induk (mis. "Clown")
-├── Hitbox   ← tag "Monster"      : rig R15 + Humanoid. Jalan, damage, tabrakan.
-└── Clown    ← tag "MonsterSkin"  : mesh visual + animasi. Cuma tampilan.
-```
-
-`SkinBinder` otomatis: weld skin ke rig, matikan collision skin, **luruskan arah hadap skin**,
-sembunyikan rig **saat Play**, matikan script animasi lama yang bentrok, dan pasang `SkinAnimator`.
-
-### (Opsional) Waypoint patroli
-
-`Folder` bernama **`Waypoints`** di `Workspace` atau di dalam Model monster; isi Part
-(`Waypoint1`, `Waypoint2`, …). Tanpa waypoint, NPC memakai pola patrol otomatis.
-
-### (Opsional) Safe Zone
-
-Tag **`SafeZone`** pada Part, atau `Folder` **`SafeZones`** di `Workspace`.
-Player di dalamnya tidak akan ditarget.
-
----
-
-## 🎮 State Flow
-
-```
-┌──────┐     target found     ┌─────────┐
-│ IDLE │ ──────────────────► │ CHASING │
-└──┬───┘                      └────┬────┘
-   │ wait done                     │ in range
-   ▼                               ▼
-┌────────┐    target found   ┌───────────┐
-│ PATROL │ ────────────────► │ ATTACKING │
-└────────┘                   └───────────┘
-   ▲                               │
-   │    target lost / safe zone    │
-   └───────────────────────────────┘
-```
-
-Deteksi: akuisisi awal (IDLE/PATROL) menghormati FOV; begitu sudah mengejar → **360°**.
-
----
-
-## 🎬 Animasi
-
-Animasi **otomatis** — cukup tag. Sistem membaca ID animasi dari dalam Model itu sendiri:
-folder `Animations` → paket `Animate` milik rig → default Roblox.
-
-### Animasi per-state (opsional)
-
-Buat **folder bernama `Animations`**, isi `Animation` dengan nama berikut:
-
-| Nama Animation | Dipakai saat |
-|---|---|
-| `Idle` | state `IDLE` |
-| `Walk` | state `PATROL` |
-| `Run` | state `CHASING` |
-| `Attack` | event serangan (diputar sekali, tidak loop) |
-| `Death` | NPC mati |
-
-Nama folder & animasi **tidak case-sensitive** (`animations/idle` juga kebaca).
-Isi sebagian saja boleh — nama yang tidak ada jatuh ke fallback, tidak error.
-
-**Letak folder menentukan siapa yang memutar:**
-
-| Jenis NPC | Folder `Animations` ditaruh di | Diputar oleh |
-|---|---|---|
-| Model biasa (rig ber-Humanoid) | Model itu sendiri | `AnimationManager` |
-| Pola driver + skin | **Model skin** (ber-tag `MonsterSkin`) | `SkinAnimator` |
-
-```
-workspace.Clown
-├── Hitbox          ← tag "Monster"      (folder animasi TIDAK di sini)
-└── Clown           ← tag "MonsterSkin"
-    └── Animations  ← folder di SKIN
-        ├── Idle    (Animation → isi AnimationId)
-        ├── Walk
-        ├── Run
-        ├── Attack
-        └── Death
-```
-
-> **Jebakan:** me-*rename* `Animation` yang sudah ada (mis. yang nempel di dalam script `Anim`)
-> menjadi `Idle` **tidak cukup**. Resolver mencari **folder** `Animations` sebagai anak Model;
-> Animation di luar folder itu hanya kepungut sebagai *fallback tunggal*, sehingga semua state
-> memakai animasi yang sama. Foldernya wajib ada.
-
-> **Aset skinned mesh:** animasi R15 Roblox **tidak cocok** untuk mesh ber-tulang sendiri
-> (mis. `mixamorig:*`). Animasi harus di-publish terhadap rig mesh itu, dan di-upload oleh
-> akun/grup yang sama dengan tempat game berjalan.
-
-### Tim mau animasi berlogika sendiri
-
-Set Attribute `NoAutoAnimations = true`, lalu ikuti kanal yang disiarkan core AI:
-
-- **Attribute `AIState`** → `IDLE` / `PATROL` / `CHASING` / `ATTACKING` / `DEAD` (keadaan)
-- **BindableEvent `AISignal`** → `Attack`, `TargetAcquired`, `TargetLost`, `Died` (kejadian)
-
-Contoh siap pakai: `ServerStorage/NPCAnimationTemplate`. **Jangan ubah `EnemyController`.**
-
----
-
-## 🔧 Konfigurasi
-
-### Default global (`Config` module)
-
-```lua
-Config.PatrolSpeed      = 10    -- Kecepatan patroli
-Config.ChaseSpeed       = 18    -- Kecepatan mengejar
-Config.DetectionRadius  = 45    -- Jarak deteksi (studs)
-Config.LoseTargetRadius = 58    -- Jarak kehilangan target
-Config.FieldOfView      = 160   -- Sudut pandang (derajat)
-Config.AttackRadius     = 4     -- Jangkauan serang minimum (studs)
-Config.AttackCooldown   = 1.5   -- Cooldown serang (detik)
-Config.Damage           = 25    -- Damage per serangan
-Config.PatrolWaitTime   = 2     -- Waktu idle di waypoint (detik)
-Config.MonsterTag       = "Monster"
-```
-
-### Spesifikasi per-NPC (Attribute pada Model)
-
-Nilai di atas adalah **default**. Kalau sebuah NPC mau berbeda, **tambahkan Attribute** di
-Properties Model NPC tersebut — nama Attribute sama dengan nama field Config.
-**Tidak perlu mengubah script**, dan NPC lain tidak terpengaruh.
-
-| Attribute | Tipe | Default | Fungsi |
+| Sistem | Task | Dokumen | Isi singkat |
 |---|---|---|---|
-| `PatrolSpeed` | Number | 10 | WalkSpeed saat patroli / idle |
-| `ChaseSpeed` | Number | 18 | WalkSpeed saat mengejar |
-| `DetectionRadius` | Number | 45 | Jarak maksimum melihat player |
-| `LoseTargetRadius` | Number | 58 | Jarak target dianggap lepas |
-| `FieldOfView` | Number | 160 | Sudut pandang; `360` = waspada segala arah |
-| `AttackCooldown` | Number | 1.5 | Jeda antar serangan (detik) |
-| `Damage` | Number | 25 | Damage per serangan; `0` = tidak melukai |
-| `PatrolWaitTime` | Number | 2 | Lama diam di waypoint (detik) |
+| **Enemy AI** | #10 | [`ENEMY_AI.md`](ENEMY_AI.md) | NPC monster FSM: patrol, chase, attack, animasi otomatis, pola driver+skin untuk mesh import |
+| **Key System** | #16 | [`KEY_SYSTEM.md`](KEY_SYSTEM.md) | Progresi kunci → pintu → power switch → lampu carnival |
 
-Contoh monster bos: `ChaseSpeed = 26`, `Damage = 40`, `DetectionRadius = 80`.
+Riwayat perubahan & hasil verifikasi tiap sistem: [`PROGRESS.md`](PROGRESS.md).
+Aturan desain game & konteks proyek: [`AGENTS.md`](AGENTS.md).
 
-Aturan nilai: Number **≥ 0**. `0` sah (mis. `Damage = 0` untuk monster yang cuma menakuti).
-Negatif atau salah tipe **diabaikan** → pakai default, dan dilaporkan `warn` sekali saat init
-supaya salah ketik tidak senyap.
+---
 
-### Attribute perilaku lain
+## 🗂️ Struktur Kode
 
-| Attribute | Tipe | Fungsi |
+```
+src/
+├── ServerScriptService/                 ← Script (server, jalan otomatis)
+│   ├── EnemyController.server.luau      ← orchestrator Enemy AI
+│   └── KeySystemController.server.luau  ← orchestrator Key System
+├── ReplicatedStorage/Modules/           ← ModuleScript (logika, di-require)
+│   ├── EnemyController/                 ← 10 module Enemy AI
+│   └── KeySystem/                       ← 8 module Key System
+└── ServerStorage/
+    └── NPCAnimationTemplate.server.luau ← contoh opsional animasi berlogika
+```
+
+**Pola yang dipakai kedua sistem sama:** satu `Script` orchestrator di `ServerScriptService`
+yang me-`require` folder ModuleScript-nya di `ReplicatedStorage/Modules/`.
+
+Kenapa `Script`-nya harus di `ServerScriptService`: `Script` di `ReplicatedStorage` tidak
+dijalankan engine. Kenapa modulnya di `ReplicatedStorage`: satu tempat berkumpul untuk semua
+module, dan client bisa me-`require` kalau nanti ada kebutuhan UI.
+
+> **Konsekuensi:** isi `ReplicatedStorage` **terbaca player**. Source module jadi bisa diintip
+> (nama tag, nilai default). Bukan celah exploit — semua state & keputusan hidup di server —
+> tapi kalau ada sistem yang isinya harus benar-benar rahasia, taruh di `ServerStorage`.
+
+---
+
+## 🏷️ Semua Tag dalam Satu Tabel
+
+Kedua sistem digerakkan **CollectionService tag** — tempel di View → **Tag Editor**,
+tanpa menempel script.
+
+| Tag | Sistem | Ditempel pada |
 |---|---|---|
-| `ChaseMode` | String | `PERSISTENT` / `NEAREST` / `ITEM_HOLDER` |
-| `AttackRadius` | Number | Kunci jangkauan serang (default: dihitung dari ukuran NPC) |
-| `NoAutoAnimations` | Bool | Animasi diurus script NPC sendiri |
-| `KeepRigVisible` | Bool | Rig tetap tampak saat Play |
-| `KeepSkinCollision` | Bool | Jangan matikan collision skin |
-| `KeepSkinOrientation` | Bool | Jangan luruskan orientasi skin |
-| `SkinYawOffset` | Number | Koreksi arah hadap skin, derajat (mis. `180` kalau mesh menghadap mundur) |
+| `Monster` | Enemy AI | Model NPC (rig ber-`Humanoid`) |
+| `MonsterSkin` | Enemy AI | Model mesh visual (pola driver+skin) |
+| `SafeZone` | Enemy AI | Part area aman; player di dalamnya tidak ditarget |
+| `KeyPickup` | Key System | Kunci yang bisa diambil |
+| `LockedDoor` | Key System | Pintu yang butuh kunci |
+| `PowerSwitch` | Key System | Tuas/tombol power |
+| `CarnivalLight` | Key System | Lampu yang menyala saat power on |
 
-**Mode `ITEM_HOLDER`:** monster memprioritaskan player yang membawa `Tool` ber-Attribute
-`MonsterBait` = `true` (Bool). Nama Tool bebas dan boleh banyak item sekaligus; kalau tidak ada
-pemegang, monster jatuh ke target terdekat.
-
-**Jangkauan serang adaptif:** `AttackRadius` dihitung otomatis dari ukuran NPC, jadi monster
-raksasa tetap bisa memukul tanpa tuning manual. Attribute `AttackRadius` mengunci nilainya.
-
-Knob tuning sistem (`RetargetMinGap`, `PathTimeout`, `AgentRadius`, dst) **tidak** bisa
-di-override per-NPC — ubah di `Config.luau` bila perlu.
+Detail Attribute per tag ada di dokumen sistem masing-masing.
 
 ---
 
-## 🧩 Prinsip "satu penyetir"
+## 🔄 Cara Kerja (Alur Lokal → Studio)
 
-Hanya **satu** sistem yang boleh menyetir `Animator`/`Humanoid` sebuah NPC. Dua penyetir pada
-Animator yang sama = animasi kejang. Karena itu `SkinBinder` otomatis mematikan script animasi
-lama di skin (mis. `Anim`, `Animate`) saat memasang skin.
+**Folder lokal ini = source of truth.** Rojo **tidak dipakai lagi**; sinkronisasi ke Studio
+dilakukan lewat MCP Roblox Studio (`set_script_source`).
+
+Artinya: kalau kamu mengedit script langsung di Studio, **salin balik ke folder ini**, atau
+perubahanmu akan tertimpa pada push berikutnya.
+
+`default.project.json` dan `aftman.toml` masih ada di repo sebagai artefak Rojo lama — sudah
+tidak dipakai, jangan dijadikan acuan.
 
 ---
 
-## 🐛 Jebakan yang sudah pernah kena
+## ✅ Status
 
-- **`MaxHealth`/`Health` = 0** → NPC diam total **tanpa error**, karena main loop `while Health > 0`
-  tidak pernah jalan. Sudah ada guard + `warn` + perbaikan otomatis.
-- **Monster raksasa tak bisa memukul** → jangkauan sekarang proporsional terhadap ukuran NPC.
-- **Monster buta permanen** → raycast LOS dulu hanya memfilter rig, padahal skin adalah *sibling*
-  di luar Model rig, jadi ray menabrak badan sendiri. `SkinBinder:getIgnoreList()` memfilter keduanya.
-- **Badut jalan menyamping** → `WeldConstraint` membekukan offset saat dibuat; orientasi skin
-  sekarang diluruskan **sebelum** weld. Kalau "depan" mesh kebalik, pakai `SkinYawOffset`.
-- **Perubahan ModuleScript tidak berlaku pada sesi Play yang sudah jalan** (`require` di-cache) —
-  Stop dulu, lalu Play ulang.
+| Sistem | Kode | Di Studio | Verifikasi statis | Playtest |
+|---|---|---|---|---|
+| Enemy AI | ✅ | ✅ | ✅ | sebagian (lihat PROGRESS.md) |
+| Key System | ✅ | ✅ | ✅ | ❌ belum |
 
-Detail riwayat perubahan & hasil verifikasi: lihat [`PROGRESS.md`](PROGRESS.md).
+**Belum ada di kedua sistem:** suara, GUI/notifikasi, dan persistensi DataStore
+(progresi hilang saat server restart).
+
+---
+
+## 🐛 Jebakan Lintas Sistem
+
+- **`require` di-cache per sesi Play.** Mengubah ModuleScript saat sesi Play sedang jalan tidak
+  berefek. Stop dulu, lalu Play ulang.
+- **Objek ber-tag tanpa BasePart** (Folder / Model kosong) di-skip dengan `warn` di Output,
+  bukan error. Kalau ada objek yang tidak bereaksi, cek Output dulu sebelum menyalahkan script.
+- **Prinsip "satu penyetir".** Hanya satu sistem yang boleh menyetir `Animator`/`Humanoid`
+  sebuah NPC. Dua penyetir = animasi kejang. Ini akar beberapa bug lama.
