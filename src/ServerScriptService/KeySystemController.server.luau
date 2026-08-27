@@ -14,7 +14,7 @@
 
 	SETUP:
 	  - Letakkan script ini di ServerScriptService
-	  - Folder "KeySystem" (berisi ModuleScript) sebagai sibling
+	  - Folder "KeySystem" (berisi ModuleScript) di ReplicatedStorage/Modules
 	  - Tag objek di Studio:
 	      KeyPickup     -> kunci (attr: KeyId, default "control_room")
 	      LockedDoor    -> pintu (attr: DoorId/RequiredKey, default "control_room")
@@ -28,10 +28,11 @@
 	  - Spawn beberapa Part, tag "CarnivalLight"
 --]]
 
-local modulesFolder = script.Parent:FindFirstChild("KeySystem")
-	or script.Parent:WaitForChild("KeySystem", 10)
+local modulesFolder = game:GetService("ReplicatedStorage")
+	:WaitForChild("Modules", 10)
+	:WaitForChild("KeySystem", 10)
 
-assert(modulesFolder, "[KeySystem] Folder 'KeySystem' tidak ditemukan di ServerScriptService!")
+assert(modulesFolder, "[KeySystem] Folder 'KeySystem' tidak ditemukan di ReplicatedStorage.Modules!")
 
 local KeyService       = require(modulesFolder:WaitForChild("KeyService"))
 local PowerService     = require(modulesFolder:WaitForChild("PowerService"))
