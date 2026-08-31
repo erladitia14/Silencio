@@ -97,6 +97,9 @@ Semua Attribute di bawah ditaruh di **Properties objek ber-tag**, bukan di scrip
 | Attribute | Tipe | Default | Fungsi |
 |---|---|---|---|
 | `KeyId` | String | `"control_room"` | Identitas kunci; harus cocok dengan `RequiredKey` pintunya |
+| `KeepInWorld` | Bool | `false` | Kunci tidak disentuh setelah diambil — tetap di tempatnya, pemain lain masih bisa ambil |
+
+Objek kunci boleh berupa **Tool**, **Part**, atau **Model**.
 
 ### `LockedDoor`
 
@@ -151,8 +154,21 @@ dibuka oleh kunci yang sama.
 bisa membuka pintunya, dan kunci tetap dimiliki walau player itu keluar dari game. Ini sengaja
 — game-nya co-op. Ubah `KeyService` kalau mau per-player.
 
-**Objek `KeyPickup` di-`Destroy()` setelah diambil.** Kunci hilang dari dunia untuk semua
-player, jadi tidak bisa diambil dua kali.
+**Kunci berupa Tool masuk ke Backpack pemain — tidak hilang.** Kunci muncul di hotbar dan
+bisa dipegang. Kunci berupa Part/Model tetap dihapus dari dunia (tidak ada tempat menyimpannya).
+Kalau mau semua kunci dihapus seperti dulu, set `Config.KeyToolToBackpack = false`.
+Kalau mau kunci tetap di dunia dan bisa diambil pemain lain, pakai Attribute `KeepInWorld`.
+
+**Kunci Tool yang juga ber-Attribute `MonsterBait = true` tetap memancing monster** selama
+ada di Backpack atau tangan pemain — mode `ITEM_HOLDER` di Enemy AI membacanya dari kedua
+tempat itu. Jadi memegang kunci = jadi target prioritas.
+
+**`Handle.CanTouch` dimatikan otomatis pada kunci Tool.** Sebabnya: engine Roblox memasukkan
+Tool ke Backpack begitu karakter menyentuhnya, dan jalur itu **melewati prompt** — kunci masuk
+inventori tapi `KeyService` tidak tahu, jadi pintunya tetap bilang "Terkunci" padahal kuncinya
+di tangan. Dengan `CanTouch = false`, prompt jadi satu-satunya jalur masuk. Ada pengaman kedua
+(`AncestryChanged`): kalau Tool tetap sampai ke pemain lewat jalur lain, `KeyId` dicatat juga.
+Set `Config.KeyToolBlockTouchPickup = false` untuk membiarkan auto-pickup engine.
 
 **"Membuka pintu" = `Transparency = 1` + `CanCollide = false`.** Belum ada animasi pintu
 berputar. Nilainya bisa diubah di `Config.DoorOpenTransparency` / `Config.DoorOpenCanCollide`.
@@ -201,6 +217,12 @@ Semua ini bisa ditambah tanpa menyentuh modul lain: subscribe `PowerService.Powe
   (sistem tidak bisa tahu KeyId mana yang "valid"). Cocokkan persis dengan `KeyId` kuncinya.
 - **`RequiresDoorOpen` mengacu `DoorId`, bukan nama objek.** Kalau switch tidak pernah unlock,
   cek `GateDoorId` switch == `DoorId` pintu.
+- **Kunci Tool wajib punya `Handle`.** Tool tanpa BasePart bernama apa pun akan di-skip dengan
+  `warn`. Prompt dipasang di `Handle` (atau BasePart pertama), jadi tanpa itu tidak ada yang
+  bisa di-trigger.
+- **Kunci Tool tidak bisa diambil dua kali.** Setelah masuk Backpack, prompt-nya dibuang; kalau
+  tidak, meng-*equip* kunci memindahkan `Handle` ke Character (di Workspace) dan prompt lamanya
+  akan muncul lagi.
 - **Perubahan ModuleScript tidak berlaku pada sesi Play yang sudah jalan** (`require` di-cache) —
   Stop dulu, lalu Play ulang.
 
@@ -208,15 +230,21 @@ Semua ini bisa ditambah tanpa menyentuh modul lain: subscribe `PowerService.Powe
 
 ## ✅ Status verifikasi
 
-Diverifikasi statis di Studio (edit mode) pada 27 Agustus 2026:
+Diverifikasi statis di Studio (edit mode), terakhir 1 September 2026 setelah kunci Tool
+diubah agar masuk Backpack:
 
-- 9/9 source di Studio **identik byte-per-byte** dengan file lokal
-- 8/8 modul lolos `pcall(require)` dari path `ReplicatedStorage.Modules.KeySystem`
-- 29/29 behavioral test standalone: resolusi BasePart/Model/PrimaryPart, fallback tiap
-  Attribute, alur penuh kunci→pintu→switch→power, penanganan child `Light` vs non-`Light`
-- 54/54 cek struktural lokal (balance Lua, path require, nol referensi service hardcode)
+- 9/9 source di Studio **identik teks** dengan file lokal
+- 8/8 modul lolos `loadstring` fresh (bypass cache `require`) + `pcall(require)`
+- 23/23 behavioral test standalone untuk kunci Tool: `resolvePart` pada Tool → `Handle`,
+  keputusan Tool-vs-Part, prompt dibuang sebelum masuk Backpack, Tool **tidak** di-`Destroy`,
+  `CanTouch` dimatikan, `ownerOf` pada Backpack tanpa Player, guard ambil-2x, deteksi
+  `MonsterBait` di Backpack
+- 29/29 behavioral test alur dasar: fallback tiap Attribute, kunci→pintu→switch→power,
+  `Light` vs non-`Light`
+- 63/63 cek struktural lokal (balance Lua, sibling require, nol referensi service hardcode)
 
-**Belum playtest** — perilaku runtime `ProximityPrompt` (jarak aktivasi, hold duration,
-`Triggered` di multiplayer) harus dicek dengan Play.
+**Belum playtest** — yang harus dicek dengan Play: kunci benar-benar muncul di hotbar,
+prompt tidak muncul lagi setelah diambil, pintu terbuka setelah pegang kunci, dan monster
+mode `ITEM_HOLDER` mengejar pembawa kunci.
 
 Riwayat perubahan: lihat [`PROGRESS.md`](PROGRESS.md).
