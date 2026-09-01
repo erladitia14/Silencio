@@ -119,10 +119,15 @@ Objek kunci boleh berupa **Tool**, **Part**, atau **Model**.
 
 ### `CarnivalLight`
 
+Tempel tag pada **Part / Model / MeshPart** lampu yang sudah dibangun tim. Sistem mencari
+objek `Light` (`PointLight`/`SpotLight`/`SurfaceLight`) di **seluruh keturunan** objek itu,
+sedalam apa pun — tidak peduli namanya apa.
+
 | Attribute | Tipe | Default | Fungsi |
 |---|---|---|---|
-| `OnBrightness` | Number | `2` | Brightness saat menyala |
-| `OffBrightness` | Number | `0` | Brightness saat mati |
+| `OnBrightness` | Number | *(nilai asli)* | Timpa brightness saat nyala. Kosongkan supaya pakai nilai yang sudah di-set tim |
+| `OffBrightness` | Number | `0` | `> 0` = lampu **diredupkan**, bukan mati total. Kosong/0 = `Enabled = false` |
+| `KeepMaterial` | Bool | `false` | Jangan Neon-kan part yang tidak punya objek `Light` di dalamnya |
 
 ### Contoh: dua puzzle terpisah
 
@@ -184,10 +189,22 @@ tujuan, bukan dekorasi.
 **Power tidak bisa dimatikan lagi lewat switch.** Setelah `PowerChanged(true)`, prompt switch
 di-disable permanen. Kalau butuh switch on/off, tambahkan cabang toggle di `SwitchManager`.
 
-**`CarnivalLight` menangani dua bentuk objek.** Kalau yang di-tag adalah objek `Light`
-(`PointLight`/`SpotLight`/`SurfaceLight`) → `Enabled` + `Brightness` diatur langsung. Kalau
-`BasePart` → semua child `Light`-nya diatur, **dan** part-nya jadi `Neon` + warna hangat
-(`Config.LightOnColor`) saat nyala, lalu kembali ke Material/Color asli saat mati.
+**`CarnivalLight` menghormati nilai buatan tim.** Sistem mencari objek `Light` di seluruh
+keturunan objek ber-tag (Model → MeshPart → PointLight tetap ketemu). Brightness asli tiap
+Light disimpan saat pertama didaftarkan, lalu **dipulihkan** saat power menyala — jadi "nyala"
+= persis seperti yang tim setel, bukan angka karangan sistem. Material dan warna mesh **tidak
+disentuh** selama objek itu punya `Light` di dalamnya, supaya tekstur tim tetap utuh.
+
+Fallback Neon hanya jalan untuk objek ber-tag yang **sama sekali tidak punya** objek `Light`
+(mis. Part polos) — tanpa itu, part polos tidak menunjukkan perubahan apa pun saat power nyala.
+Matikan fallback dengan Attribute `KeepMaterial = true`.
+
+`Light` yang ditambahkan tim **setelah** tag ditempel tetap ikut, karena keturunan objek
+di-scan ulang setiap kali power berubah.
+
+**Attribute salah tipe diabaikan, bukan error.** `OnBrightness` diisi teks atau angka negatif
+→ diabaikan + `warn` sekali di Output, sistem lampu tetap jalan. Script ini dipakai tim lain,
+jadi salah ketik satu Attribute tidak boleh menjatuhkan semua lampu.
 
 ---
 
@@ -225,19 +242,24 @@ Semua ini bisa ditambah tanpa menyentuh modul lain: subscribe `PowerService.Powe
   akan muncul lagi.
 - **Perubahan ModuleScript tidak berlaku pada sesi Play yang sudah jalan** (`require` di-cache) —
   Stop dulu, lalu Play ulang.
+- **Lampu tetap menyala saat kamu membangun di edit mode.** Script server tidak berjalan di edit
+  mode, jadi lampu baru dimatikan begitu Play dimulai. Ini normal, bukan tag yang gagal.
 
 ---
 
 ## ✅ Status verifikasi
 
-Diverifikasi statis di Studio (edit mode), terakhir 1 September 2026 setelah kunci Tool
-diubah agar masuk Backpack:
+Diverifikasi statis di Studio (edit mode), terakhir 2 September 2026 setelah `LightManager`
+diubah agar menghormati nilai lampu buatan tim:
 
 - 9/9 source di Studio **identik teks** dengan file lokal
 - 8/8 modul lolos `loadstring` fresh (bypass cache `require`) + `pcall(require)`
-- 23/23 behavioral test standalone untuk kunci Tool: `resolvePart` pada Tool → `Handle`,
-  keputusan Tool-vs-Part, prompt dibuang sebelum masuk Backpack, Tool **tidak** di-`Destroy`,
-  `CanTouch` dimatikan, `ownerOf` pada Backpack tanpa Player, guard ambil-2x, deteksi
+- 34/34 behavioral test lampu: `Light` tersembunyi 3 level dalam Model ditemukan, brightness
+  asli tim (7.5 / 3.25) dipulihkan saat nyala, material & warna mesh tidak disentuh, fallback
+  Neon hanya untuk part tanpa `Light`, `KeepMaterial` opt-out, `OffBrightness` meredupkan,
+  `Light` yang ditambah setelah tag tetap ikut, Attribute salah tipe ditolak
+- 23/23 behavioral test kunci Tool: `resolvePart` pada Tool → `Handle`, prompt dibuang sebelum
+  masuk Backpack, Tool **tidak** di-`Destroy`, `CanTouch` dimatikan, guard ambil-2x, deteksi
   `MonsterBait` di Backpack
 - 29/29 behavioral test alur dasar: fallback tiap Attribute, kunci→pintu→switch→power,
   `Light` vs non-`Light`

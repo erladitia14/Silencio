@@ -35,7 +35,11 @@ Config.CarnivalLightTag = "CarnivalLight" -- Semua lampu carnival
 --   RequiresDoorOpen (bool) -> butuh pintu kebuka dulu, default true
 --   GateDoorId (string)     -> DoorId yang harus kebuka, default "control_room"
 -- CarnivalLight:
---   OnBrightness / OffBrightness (num) -> level cahaya on/off
+--   OnBrightness (num)   -> OVERRIDE brightness saat nyala; kosong = pakai
+--                           nilai asli yang sudah di-set tim (dianjurkan)
+--   OffBrightness (num)  -> > 0 = lampu diredupkan, bukan dimatikan total;
+--                           kosong/0 = Light.Enabled = false
+--   KeepMaterial (bool)  -> jangan Neon-kan part yang tidak punya objek Light
 
 -----------------------------------------------------------------
 -- DEFAULTS
@@ -62,8 +66,11 @@ Config.KeyToolToBackpack     = true
 Config.KeyToolBlockTouchPickup = true
 
 -- Lampu
-Config.DefaultOnBrightness   = 2
-Config.DefaultOffBrightness  = 0
+-- CATATAN: brightness lampu TIDAK dipaksa dari sini. LightManager memakai
+-- nilai Brightness asli yang sudah di-set tim, jadi "nyala" = seperti niat
+-- mereka. Attribute OnBrightness/OffBrightness per-objek untuk menimpanya.
+-- LightOnColor hanya dipakai pada fallback Neon (objek ber-tag yang sama
+-- sekali tidak punya objek Light di dalamnya).
 Config.LightOnColor          = Color3.fromRGB(255, 236, 190) -- warna hangat carnival
 
 -----------------------------------------------------------------
