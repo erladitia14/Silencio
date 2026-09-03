@@ -29,6 +29,10 @@ Syarat Model: punya `Humanoid` + `HumanoidRootPart`, dan `Health` lebih dari 0.
 Untuk karakter mesh import (Mixamo dsb) yang tidak bisa jadi rig R15, pakai dua Model dalam satu
 folder: rig ber-tag `Monster` sebagai penggerak, mesh ber-tag `MonsterSkin` sebagai tampilan.
 
+**Banyak monster:** satu player hanya dikejar **satu** monster (target eksklusif, aktif secara
+default). Monster lain mencari korban lain; kalau kehabisan korban, mereka tetap patroli.
+Bos yang harus selalu mengejar: Attribute `ShareTarget = true`.
+
 → Atribut per-NPC, animasi per-state, mode chase: [`ENEMY_AI.md`](ENEMY_AI.md)
 
 ### Key System

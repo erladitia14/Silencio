@@ -30,6 +30,7 @@
 --]]
 
 local CollectionService = game:GetService("CollectionService")
+local Players           = game:GetService("Players")
 
 ---------------------------------------------------------------------
 -- REQUIRE MODULES
@@ -49,6 +50,7 @@ local CombatManager     = require(modulesFolder:WaitForChild("CombatManager"))
 local PatrolManager     = require(modulesFolder:WaitForChild("PatrolManager"))
 local AnimationManager  = require(modulesFolder:WaitForChild("AnimationManager"))
 local SkinBinder        = require(modulesFolder:WaitForChild("SkinBinder"))
+local TargetClaims      = require(modulesFolder:WaitForChild("TargetClaims"))
 
 ---------------------------------------------------------------------
 -- TYPES
@@ -120,6 +122,8 @@ local function publishState(ctx: MonsterContext, stateName: string)
 end
 
 --- Helper: catat lock target baru (reset timer commit & give-up).
+--- Sekaligus MENCATAT KLAIM di TargetClaims supaya monster lain tidak
+--- mengejar player yang sama (lihat Config.ExclusiveTargets).
 local function lockTarget(ctx: MonsterContext, player: Player?, char: Model?)
 	local isNewTarget = (char ~= nil and char ~= ctx.targetChar)
 
@@ -129,16 +133,24 @@ local function lockTarget(ctx: MonsterContext, player: Player?, char: Model?)
 	ctx.lastRetarget = tick()
 	ctx.unreachSince = 0
 
+	if player then
+		TargetClaims:claim(ctx.model, player, ctx.chaseMode)
+	else
+		TargetClaims:releaseMonster(ctx.model)
+	end
+
 	if isNewTarget then
 		emit(ctx, "TargetAcquired", char)
 	end
 end
 
 --- Helper: lepas target + kabari NPC (supaya animasi bisa turun ke idle/walk).
+--- Klaim atas player dilepas agar monster lain boleh mengejarnya.
 local function clearTarget(ctx: MonsterContext)
 	local had = ctx.targetChar ~= nil
 	ctx.targetPlayer = nil
 	ctx.targetChar = nil
+	TargetClaims:releaseMonster(ctx.model)
 	if had then
 		emit(ctx, "TargetLost")
 	end
@@ -358,6 +370,16 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 				return
 			end
 
+			-- Klaim direbut monster lain (mode target eksklusif):
+			-- monster yang jauh lebih dekat boleh menyambar korban ini.
+			-- Jangan berebut — cari korban lain seketika (360 derajat).
+			if not TargetClaims:holds(ctx.model, ctx.targetPlayer) then
+				print("[MonsterAI] " .. ctx.model.Name .. ": Korban diambil monster lain -> cari korban lain.")
+				clearTarget(ctx)
+				reacquireOrPatrol(fsm, ctx)
+				return
+			end
+
 			-- Cek jangkauan serang
 			if TargetFinder:isInAttackRange(ctx.model, ctx.targetChar :: Model) then
 				fsm:setState("ATTACKING", ctx)
@@ -424,6 +446,16 @@ local function registerStates(fsm: any, ctx: MonsterContext)
 			if not TargetFinder:isValidTarget(ctx.targetChar) then
 				-- Fix jeda pasca-kill: target baru saja mati -> langsung cari
 				-- korban berikutnya (360 derajat) tanpa lewat patroli dulu.
+				reacquireOrPatrol(fsm, ctx)
+				return
+			end
+
+			-- Klaim direbut monster lain (praktis hanya terjadi lewat prioritas
+			-- item, karena perebutan biasa menuntut jarak jauh lebih dekat
+			-- daripada monster yang sudah menempel). Lepas, jangan berebut.
+			if not TargetClaims:holds(ctx.model, ctx.targetPlayer) then
+				print("[MonsterAI] " .. ctx.model.Name .. ": Korban diambil monster lain saat menyerang -> cari korban lain.")
+				clearTarget(ctx)
 				reacquireOrPatrol(fsm, ctx)
 				return
 			end
@@ -583,6 +615,9 @@ local function initializeMonster(monsterModel: Model)
 		publishState(ctx, "DEAD")
 		emit(ctx, "Died")
 
+		-- Lepas klaim korban supaya monster lain boleh mengejarnya lagi.
+		TargetClaims:releaseMonster(monsterModel)
+
 		if animManager then
 			animManager:destroy()
 		end
@@ -617,4 +652,33 @@ CollectionService:GetInstanceAddedSignal(Config.MonsterTag):Connect(function(ins
 	end
 end)
 
+-- Monster yang di-untag / dihapus saat runtime: lepas klaim korbannya supaya
+-- player itu tidak "terkunci" pada monster yang sudah tidak ada.
+CollectionService:GetInstanceRemovedSignal(Config.MonsterTag):Connect(function(instance)
+	if instance:IsA("Model") then
+		TargetClaims:releaseMonster(instance)
+	end
+end)
+
+-- Player keluar server: klaim atas dirinya dilepas.
+Players.PlayerRemoving:Connect(function(player)
+	TargetClaims:releasePlayer(player)
+end)
+
+-- Jaring pengaman: bersihkan klaim basi berkala (monster hancur tanpa lewat
+-- jalur mati/untag, player hilang, dll). Jalur normal sudah melepas sendiri.
+task.spawn(function()
+	while true do
+		task.wait(5)
+		TargetClaims:prune()
+	end
+end)
+
 print("[MonsterAI] Sistem siap. Beri tag '" .. Config.MonsterTag .. "' pada Model NPC untuk mengaktifkan AI.")
+print(string.format(
+	"[MonsterAI] Target eksklusif: %s (satu player = satu monster)%s",
+	Config.ExclusiveTargets and "AKTIF" or "nonaktif",
+	Config.ExclusiveTargets and (Config.AllowClaimSteal
+		and ", korban boleh direbut monster yang jauh lebih dekat"
+		or ", korban tidak bisa direbut") or ""
+))

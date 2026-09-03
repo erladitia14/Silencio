@@ -22,6 +22,7 @@ local Players = game:GetService("Players")
 local Config          = require(script.Parent.Config)
 local SafeZoneManager = require(script.Parent.SafeZoneManager)
 local SkinBinder      = require(script.Parent.SkinBinder)
+local TargetClaims    = require(script.Parent.TargetClaims)
 
 local TargetFinder = {}
 
@@ -105,6 +106,9 @@ end
 --- Mencari player terdekat yang valid sebagai target.
 --- Mengembalikan Player dan Character, atau nil jika tidak ditemukan.
 --- @param ignoreFOV  Jika true, deteksi 360 derajat (untuk mode berburu).
+---
+--- TARGET EKSKLUSIF: player yang sudah diklaim monster lain dilewati
+--- (kecuali monster ini boleh merebutnya — lihat TargetClaims:canTake).
 function TargetFinder:findNearest(monsterModel: Model, ignoreFOV: boolean?): (Player?, Model?)
 	local monsterRoot = monsterModel:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not monsterRoot then
@@ -121,7 +125,10 @@ function TargetFinder:findNearest(monsterModel: Model, ignoreFOV: boolean?): (Pl
 			local targetRoot = char:FindFirstChild("HumanoidRootPart") :: BasePart
 			local dist = (monsterRoot.Position - targetRoot.Position).Magnitude
 
-			if dist < closestDist and self:_hasLineOfSight(monsterModel, monsterRoot, char, ignoreFOV) then
+			if dist < closestDist
+				and TargetClaims:canTake(monsterModel, player, dist, false)
+				and self:_hasLineOfSight(monsterModel, monsterRoot, char, ignoreFOV)
+			then
 				closestDist = dist
 				bestPlayer = player
 				bestChar = char
@@ -294,6 +301,9 @@ end
 --- Mencari player pemegang item terdekat yang valid.
 --- Mengembalikan (Player?, Model?) - nil jika tidak ada holder yang terlihat.
 --- @param ignoreFOV  Jika true, deteksi 360 derajat (untuk mode berburu).
+---
+--- TARGET EKSKLUSIF: pembawa item dihitung sebagai kandidat PRIORITAS, jadi
+--- boleh disambar dari monster non-ITEM_HOLDER walau tidak lebih dekat.
 function TargetFinder:findItemHolder(monsterModel: Model, ignoreFOV: boolean?): (Player?, Model?)
 	local monsterRoot = monsterModel:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not monsterRoot then
@@ -310,7 +320,10 @@ function TargetFinder:findItemHolder(monsterModel: Model, ignoreFOV: boolean?): 
 			local targetRoot = char:FindFirstChild("HumanoidRootPart") :: BasePart
 			local dist = (monsterRoot.Position - targetRoot.Position).Magnitude
 
-			if dist < closestDist and self:_hasLineOfSight(monsterModel, monsterRoot, char, ignoreFOV) then
+			if dist < closestDist
+				and TargetClaims:canTake(monsterModel, player, dist, true)
+				and self:_hasLineOfSight(monsterModel, monsterRoot, char, ignoreFOV)
+			then
 				closestDist = dist
 				bestPlayer = player
 				bestChar = char

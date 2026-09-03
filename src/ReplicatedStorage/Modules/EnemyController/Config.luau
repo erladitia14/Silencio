@@ -40,6 +40,40 @@ Config.BaitAttribute    = "MonsterBait"  -- Nama Attribute (Bool) penanda item p
 Config.PersistentGiveUpTime = 0          -- detik (0 = tanpa give-up)
 
 -----------------------------------------------------------------
+-- TARGET EKSKLUSIF — "satu monster, satu korban"
+-----------------------------------------------------------------
+--[[
+	Dengan beberapa monster aktif sekaligus, semua monster memakai logika
+	yang sama sehingga cenderung MENUMPUK di satu player. Registry
+	TargetClaims mencegah itu: player yang sudah dikunci satu monster
+	dilewati oleh monster lain saat mencari target.
+
+	ExclusiveTargets = false -> perilaku lama (semua monster bebas
+	  mengejar player yang sama).
+
+	AllowClaimSteal = true -> monster lain masih boleh MEREBUT korban,
+	  tapi hanya kalau SIGNIFIKAN lebih dekat (memakai RetargetHysteresis /
+	  RetargetMinGap di bawah). Tanpa ini, monster yang berdiri tepat di
+	  sebelah player bisa mengabaikannya hanya karena monster jauh
+	  mengklaim lebih dulu — terlihat bodoh saat dimainkan.
+	  Pengecualian yang selalu berlaku:
+	    - klaim monster mode PERSISTENT tidak bisa direbut siapa pun;
+	    - monster mode ITEM_HOLDER selalu boleh menyambar pembawa
+	      Tool ber-Attribute MonsterBait dari monster non-ITEM_HOLDER.
+
+	OPT-OUT PER NPC: Attribute "ShareTarget" = true (Bool) pada Model
+	  monster -> monster itu bebas (tidak mencatat klaim & tidak
+	  menghormati klaim monster lain). Berguna untuk bos yang wajib
+	  selalu mengejar.
+
+	KONSEKUENSI YANG PERLU DISADARI: kalau jumlah monster lebih banyak
+	dari jumlah player, monster sisanya akan tetap patroli (tidak ikut
+	mengejar). Itu memang tujuan mode ini.
+--]]
+Config.ExclusiveTargets = true    -- true = satu player hanya dikejar satu monster
+Config.AllowClaimSteal  = true    -- true = boleh direbut bila jauh lebih dekat
+
+-----------------------------------------------------------------
 -- ANTI-THRASH (retargeting) — mencegah monster "di-main-mainin"
 -- oleh beberapa player yang gantian jadi umpan.
 -- Berlaku untuk mode NEAREST & ITEM_HOLDER (tidak untuk PERSISTENT).

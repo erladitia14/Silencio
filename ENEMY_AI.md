@@ -24,6 +24,7 @@ ReplicatedStorage/Modules/
     ├── NavigationManager    ← Pathfinding & navigasi
     ├── CombatManager        ← Serangan, damage, cooldown
     ├── PatrolManager        ← Waypoint patrol system
+    ├── TargetClaims         ← Registry "satu monster = satu korban"
     ├── AnimationManager     ← Animasi otomatis via Humanoid (rig)
     ├── SkinBinder           ← Pasangkan rig + mesh visual (pola driver+skin)
     └── SkinAnimator         ← Animasi mesh visual via AnimationController
@@ -194,6 +195,7 @@ supaya salah ketik tidak senyap.
 | Attribute | Tipe | Fungsi |
 |---|---|---|
 | `ChaseMode` | String | `PERSISTENT` / `NEAREST` / `ITEM_HOLDER` |
+| `ShareTarget` | Bool | Bebas dari sistem target eksklusif (boleh mengejar korban yang sudah dikejar monster lain) |
 | `AttackRadius` | Number | Kunci jangkauan serang (default: dihitung dari ukuran NPC) |
 | `NoAutoAnimations` | Bool | Animasi diurus script NPC sendiri |
 | `KeepRigVisible` | Bool | Rig tetap tampak saat Play |
@@ -207,6 +209,33 @@ pemegang, monster jatuh ke target terdekat.
 
 **Jangkauan serang adaptif:** `AttackRadius` dihitung otomatis dari ukuran NPC, jadi monster
 raksasa tetap bisa memukul tanpa tuning manual. Attribute `AttackRadius` mengunci nilainya.
+
+### Target eksklusif — satu monster, satu korban
+
+Dengan beberapa monster aktif, semuanya memakai logika yang sama sehingga cenderung
+**menumpuk di satu player**. Modul `TargetClaims` mencegah itu: player yang sudah dikunci
+satu monster **dilewati** monster lain saat mencari target.
+
+| Config | Default | Fungsi |
+|---|---|---|
+| `ExclusiveTargets` | `true` | `false` = perilaku lama (semua monster boleh mengejar player yang sama) |
+| `AllowClaimSteal` | `true` | `false` = korban tidak bisa direbut sama sekali |
+
+Aturan perebutan (kalau `AllowClaimSteal = true`):
+
+- korban hanya bisa direbut monster yang **signifikan lebih dekat** — memakai ambang
+  `RetargetHysteresis` (30%) / `RetargetMinGap` (8 studs) yang sama dengan anti-thrash;
+- klaim monster mode **`PERSISTENT` tidak bisa direbut** siapa pun;
+- monster mode **`ITEM_HOLDER` selalu boleh menyambar** pembawa `MonsterBait` dari monster
+  non-`ITEM_HOLDER`, seberapa jauh pun (prioritas item mutlak).
+
+Klaim dilepas otomatis saat: target mati/hilang/masuk Safe Zone, monster mati, monster
+di-untag, atau player keluar server. Ada juga pembersihan berkala tiap 5 detik sebagai
+jaring pengaman.
+
+**Konsekuensi yang perlu disadari:** kalau monster lebih banyak daripada player, monster
+sisanya tetap **patroli** — bukan bug, itu memang tujuan mode ini. Untuk bos yang wajib
+selalu mengejar, beri Attribute `ShareTarget = true` pada Model-nya.
 
 Knob tuning sistem (`RetargetMinGap`, `PathTimeout`, `AgentRadius`, dst) **tidak** bisa
 di-override per-NPC — ubah di `Config.luau` bila perlu.
