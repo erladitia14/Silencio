@@ -19,7 +19,7 @@ ReplicatedStorage/Modules/
 └── EnemyController/         ← Semua module
     ├── Config               ← Default global + resolver override per-NPC
     ├── StateMachine         ← FSM generik & reusable
-    ├── SafeZoneManager      ← Deteksi area aman (OBB check)
+    ├── SafeZoneManager      ← Jembatan ke sistem Safe Zone (SAFE_ZONE.md)
     ├── TargetFinder         ← Pencarian target (FOV, LOS, range) + jangkauan adaptif
     ├── NavigationManager    ← Pathfinding & navigasi
     ├── CombatManager        ← Serangan, damage, cooldown
@@ -67,7 +67,11 @@ sembunyikan rig **saat Play**, matikan script animasi lama yang bentrok, dan pas
 ### (Opsional) Safe Zone
 
 Tag **`SafeZone`** pada Part, atau `Folder` **`SafeZones`** di `Workspace`.
-Player di dalamnya tidak akan ditarget.
+Player yang **dilindungi** bilik tidak akan ditarget, dan monster ditahan di luar.
+
+Perlindungan itu **berbatas waktu** (default 20 detik, kapasitas 1 orang) — jadi berdiri di dalam
+Part tidak otomatis berarti aman. Sistemnya berdiri sendiri: [`SAFE_ZONE.md`](SAFE_ZONE.md).
+Untuk perilaku lama (aman selamanya), beri Attribute `NoBreath = true` pada Part-nya.
 
 ---
 

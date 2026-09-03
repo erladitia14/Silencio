@@ -6,6 +6,7 @@ Game horror co-op escape di karnaval terbengkalai, dibuat dengan Roblox Studio.
 |---|---|
 | **Enemy AI** — NPC monster: patrol, chase, attack, animasi | [`ENEMY_AI.md`](ENEMY_AI.md) |
 | **Key System** — kunci → pintu → power switch → lampu | [`KEY_SYSTEM.md`](KEY_SYSTEM.md) |
+| **Safe Zone** — bilik aman berbatas napas (toilet/lemari) | [`SAFE_ZONE.md`](SAFE_ZONE.md) |
 
 ---
 
@@ -44,6 +45,16 @@ rantai puzzle (semua id default `"control_room"`):
 
 → Atribut, multi-puzzle, master key: [`KEY_SYSTEM.md`](KEY_SYSTEM.md)
 
+### Safe Zone
+
+Tempel **`SafeZone`** pada Part bilik (toilet, lemari). Pemain di dalamnya tidak bisa ditarget
+**dan monster tidak bisa masuk** — tapi cuma **20 detik**, kapasitas **1 orang**, lalu bilik hangus
+15 detik. Bar napas muncul otomatis di layar pemain.
+
+Aman selamanya seperti perilaku lama: Attribute `NoBreath = true`.
+
+→ Siklus bilik, Attribute, tukar modul UI: [`SAFE_ZONE.md`](SAFE_ZONE.md)
+
 ---
 
 ## Daftar Tag
@@ -52,7 +63,7 @@ rantai puzzle (semua id default `"control_room"`):
 |---|---|---|
 | `Monster` | Enemy AI | Model NPC (rig ber-`Humanoid`) |
 | `MonsterSkin` | Enemy AI | Model mesh visual (pola driver+skin) |
-| `SafeZone` | Enemy AI | Part area aman; player di dalamnya tidak ditarget |
+| `SafeZone` | Safe Zone | Part bilik aman (napas 20s, 1 orang, monster ditahan) |
 | `KeyPickup` | Key System | Kunci yang bisa diambil |
 | `LockedDoor` | Key System | Pintu yang butuh kunci |
 | `PowerSwitch` | Key System | Tuas/tombol power |
@@ -66,6 +77,8 @@ dipakai untuk Enemy AI:
 | `ChaseMode` | Model `Monster` | `NEAREST` (default) / `PERSISTENT` / `ITEM_HOLDER` |
 | `ShareTarget` | Model `Monster` | Bebas dari aturan "satu monster satu korban" |
 | `MonsterBait` | `Tool` apa pun | Pembawanya diprioritaskan monster mode `ITEM_HOLDER` |
+| `BreathTime` | Part `SafeZone` | Lama bilik melindungi, detik (default 20) |
+| `NoBreath` | Part `SafeZone` | Bilik aman selamanya (tanpa timer napas) |
 | `KeyId` | Objek `KeyPickup` | Id kunci; harus cocok dengan `RequiredKey` pintu |
 
 ---
@@ -76,12 +89,17 @@ dipakai untuk Enemy AI:
 src/
 ├── ServerScriptService/                 ← Script orchestrator (jalan otomatis)
 │   ├── EnemyController.server.luau
-│   └── KeySystemController.server.luau
+│   ├── KeySystemController.server.luau
+│   └── SafeZoneController.server.luau
 ├── ReplicatedStorage/Modules/           ← ModuleScript (logika)
 │   ├── EnemyController/                 ← 11 modul Enemy AI
-│   └── KeySystem/                       ← 8 modul Key System
-├── StarterPlayer/StarterCharacterScripts/
-│   └── DamageEffect.client.luau         ← efek horor client (vignette + camera shake)
+│   ├── KeySystem/                       ← 8 modul Key System
+│   └── SafeZone/                        ← 7 modul Safe Zone
+├── StarterPlayer/
+│   ├── StarterCharacterScripts/
+│   │   └── DamageEffect.client.luau     ← efek horor client (vignette + camera shake)
+│   └── StarterPlayerScripts/
+│       └── SafeZoneUI.client.luau       ← bar napas Safe Zone
 └── ServerStorage/
     └── NPCAnimationTemplate.server.luau ← contoh opsional
 ```

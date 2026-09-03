@@ -316,4 +316,4 @@ Di luar daftar ini nilainya tetap global (`RetargetMinGap`, `PathTimeout`, `Agen
 
 ## 🐞 Catatan bug diketahui (harmless)
 
-- **Bug #6** — `SafeZoneManager` mutasi return API. Belum diubah, tapi harmless (`GetTagged` return array baru + guard `table.find`).
+- **Bug #6** — `SafeZoneManager` mutasi return API. **SUDAH DIPERBAIKI** (4 Sep 2026, sistem Safe Zone): `_gatherZoneParts` sekarang membangun tabel baru + set `seen`, tidak lagi menyisipkan ke hasil `GetTagged`.
