@@ -58,7 +58,15 @@ rantai puzzle (semua id default `"control_room"`):
 | `PowerSwitch` | Key System | Tuas/tombol power |
 | `CarnivalLight` | Key System | Lampu yang menyala saat power on |
 
-Attribute opsional per tag ada di dokumen sistem masing-masing.
+Attribute opsional per tag ada di dokumen sistem masing-masing. Attribute yang paling sering
+dipakai untuk Enemy AI:
+
+| Attribute | Pada | Fungsi singkat |
+|---|---|---|
+| `ChaseMode` | Model `Monster` | `NEAREST` (default) / `PERSISTENT` / `ITEM_HOLDER` |
+| `ShareTarget` | Model `Monster` | Bebas dari aturan "satu monster satu korban" |
+| `MonsterBait` | `Tool` apa pun | Pembawanya diprioritaskan monster mode `ITEM_HOLDER` |
+| `KeyId` | Objek `KeyPickup` | Id kunci; harus cocok dengan `RequiredKey` pintu |
 
 ---
 
@@ -70,11 +78,15 @@ src/
 │   ├── EnemyController.server.luau
 │   └── KeySystemController.server.luau
 ├── ReplicatedStorage/Modules/           ← ModuleScript (logika)
-│   ├── EnemyController/
-│   └── KeySystem/
+│   ├── EnemyController/                 ← 11 modul Enemy AI
+│   └── KeySystem/                       ← 8 modul Key System
+├── StarterPlayer/StarterCharacterScripts/
+│   └── DamageEffect.client.luau         ← efek horor client (vignette + camera shake)
 └── ServerStorage/
     └── NPCAnimationTemplate.server.luau ← contoh opsional
 ```
 
 **Jangan pindahkan** Script orchestrator keluar dari `ServerScriptService` — Script di
 `ReplicatedStorage` tidak dijalankan engine, sistemnya akan mati tanpa error.
+
+Folder lokal ini adalah **sumber kebenaran**; perubahan didorong ke Studio, bukan sebaliknya.
