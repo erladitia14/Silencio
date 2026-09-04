@@ -27,14 +27,16 @@ local Lighting          = game:GetService("Lighting")
 -- SETELAN (tuning efek horor)
 -----------------------------------------------------------------
 local MONSTER_TAG     = "Monster"
-local START_DIST      = 26    -- jarak mulai terasa getaran & bayangan (studs)
-local PULSE_DIST      = 14    -- jarak mulai berdenyut jantung (studs)
-local BLUR_DIST       = 9     -- jarak penglihatan mengabur (studs)
+local START_DIST      = 22    -- jarak mulai terasa bayangan & getar halus (studs)
+local PULSE_DIST      = 13    -- jarak mulai berdenyut jantung (studs)
+local BLUR_DIST       = 8     -- jarak penglihatan mengabur (studs)
 
-local MAX_SHAKE       = 0.5   -- guncangan kamera maksimum (radians)
-local SHAKE_SPEED     = 20    -- frekuensi getar
-local MAX_VIGNETTE    = 0.85  -- kepekatan maksimum vignette di tepi layar (0..1)
-local MAX_BLUR        = 14    -- tingkat blur maksimum saat monster menempel
+-- Shake dikalibrasi agar menegangkan tapi TIDAK pusing / mual:
+-- Max shake 0.12 rad (~3.4 derajat), roll Z ditiadakan agar horizon stabil.
+local MAX_SHAKE       = 0.11  -- guncangan maksimum halus (radians)
+local SHAKE_SPEED     = 11    -- frekuensi getar mengalir (bukan bor getar)
+local MAX_VIGNETTE    = 0.82  -- kepekatan maksimum vignette di tepi layar (0..1)
+local MAX_BLUR        = 10    -- tingkat blur saat monster menempel
 local SCAN_INTERVAL   = 0.1   -- detik; scan monster terdekat 10x/detik
 
 local RENDER_NAME     = "SilencioHorrorCinematic"
@@ -224,16 +226,15 @@ local function onRender(dt: number)
 		end
 	end
 
-	-- 6. Camera Shake Procedural
+	-- 6. Camera Shake Procedural Halus (Bebas Pusing/Motion Sickness)
+	-- Roll Z ditiadakan agar garis horizon tetap lurus stabil.
+	-- Jitter hanya di Pitch (naik-turun) dan Yaw (lirik mikro).
 	local camera = workspace.CurrentCamera
 	if camera then
-		local shakeAmount = MAX_SHAKE * (intensity ^ 1.3) * pulseMultiplier
-		camera.CFrame = camera.CFrame
-			* CFrame.Angles(
-				math.noise(tickWaktu, 0, 0) * shakeAmount,
-				math.noise(0, tickWaktu, 0) * (shakeAmount * 1.1),
-				math.noise(0, 0, tickWaktu) * (shakeAmount * 0.4)
-			)
+		local shakeAmount = MAX_SHAKE * (intensity ^ 1.5) * math.min(1.15, pulseMultiplier)
+		local pitchShake = math.noise(tickWaktu, 0, 0) * shakeAmount
+		local yawShake   = math.noise(0, tickWaktu, 0) * (shakeAmount * 0.8)
+		camera.CFrame = camera.CFrame * CFrame.Angles(pitchShake, yawShake, 0)
 	end
 end
 
