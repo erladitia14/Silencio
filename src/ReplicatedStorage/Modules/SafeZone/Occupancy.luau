@@ -90,10 +90,31 @@ function Occupancy.enter(player: any, character: Model, zonePart: BasePart): (bo
 	character:PivotTo(target)
 
 	if humanoid then
+		-- Hentikan pergerakan aktif agar script Animate tahu karakter berhenti
+		pcall(function()
+			humanoid:Move(Vector3.zero)
+		end)
+
 		humanoid.WalkSpeed = 0
 		humanoid.JumpPower = 0
 		humanoid.JumpHeight = 0
 		humanoid.AutoRotate = false
+
+		-- Hentikan semua animasi lari/jalan yang sedang nyangkut (bug playtest Aer)
+		local animator = humanoid:FindFirstChildOfClass("Animator")
+		if animator then
+			for _, track in animator:GetPlayingAnimationTracks() do
+				local name = track.Name:lower()
+				local anim = track.Animation
+				local animName = anim and anim.Name:lower() or ""
+				-- Hentikan animasi gerakan (run, walk, sprint, jump, fall)
+				if name:find("run") or name:find("walk") or name:find("sprint")
+					or animName:find("run") or animName:find("walk")
+					or track.Priority == Enum.AnimationPriority.Movement then
+					track:Stop(0.15)
+				end
+			end
+		end
 	end
 	if Config.HideAnchor then
 		root.Anchored = true

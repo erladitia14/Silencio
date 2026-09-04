@@ -190,6 +190,23 @@ function PeekCamera:_attach(peekCF: CFrame)
 		self.exitHint.Visible = true
 	end
 
+	-- Hentikan animasi lari/jalan client secara instan (bug playtest Aer)
+	local char = self.player.Character
+	local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+	local animator = humanoid and humanoid:FindFirstChildOfClass("Animator")
+	if animator then
+		for _, track in animator:GetPlayingAnimationTracks() do
+			local name = track.Name:lower()
+			local anim = track.Animation
+			local animName = anim and anim.Name:lower() or ""
+			if name:find("run") or name:find("walk") or name:find("sprint")
+				or animName:find("run") or animName:find("walk")
+				or track.Priority == Enum.AnimationPriority.Movement then
+				track:Stop(0.1)
+			end
+		end
+	end
+
 	-- RenderStep Loop: Update rotasi kamera, mouse delta, & suffocation shake
 	RunService:BindToRenderStep(BIND_NAME, Enum.RenderPriority.Camera.Value + 1, function(dt)
 		if not self.active then
