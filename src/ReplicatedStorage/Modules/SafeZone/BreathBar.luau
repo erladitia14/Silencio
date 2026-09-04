@@ -1,18 +1,17 @@
 --[[
 	BreathBar.luau
 	--------------
-	UI Horror Safe Zone "Breath Meter" — Gaya Silencio Carnival Horror.
+	UI Horror Safe Zone "Breath Meter" — Silencio Carnival Horror.
 
-	Desain:
-	  1. Font: `Enum.Font.Creepster` untuk headline status, `SpecialElite` untuk countdown.
-	  2. Atmospheric Vignette: tepi layar menggelap dengan bayangan hitam/merah
-	     darah yang bernapas dan semakin pekat saat napas kritis.
-	  3. Bar Daging & Tulang: bingkai tebal gelap karat dengan gradien merah darah
-	     pekat, dihiasi garis rusuk dan deretan 20 goresan kuku yang hangus per detik.
-	  4. Jitter / Shaking: teks bergetar hebat saat panik (napas < 5s).
-	  5. Anti-Nyangkut: jika state `COOLDOWN` atau `BREACHED` muncul dari penolakan,
-	     UI otomatis pudar (fade out) dalam 1.8 detik jika tidak ada update baru.
-	     State `NONE` / nil langsung menutup bar secara instan.
+	Visual:
+	  1. Font: `Enum.Font.Creepster` untuk headline status, `SpecialElite` untuk countdown detik.
+	  2. Horror Vignette: 4-sisi bayangan hitam/merah darah pekat di sekeliling layar yang
+	     berdenyut kencang saat napas kritis.
+	  3. Bar Darah & Karat: Bar 20px dengan frame karat tebal, fill gradien merah darah pekat,
+	     garis tulang rusuk hitam, dan 20 goresan kuku yang padam satu per detik.
+	  4. Panic Shaking: Teks status bergetar saat napas < 25% ("CAN'T HOLD ON!").
+	  5. Anti-Nyangkut: State NONE / nil langsung menyembunyikan bar seketika. State penolakan
+	     (COOLDOWN/FULL) auto-fade dalam 1.6 detik.
 --]]
 
 local Players      = game:GetService("Players")
@@ -25,13 +24,12 @@ BreathBar.__index = BreathBar
 local GUI_NAME = "SafeZoneBreath"
 local MARKS    = 20
 
--- Warna tema darah karnaval
-local COLOR_BLOOD_BRIGHT = Color3.fromRGB(190, 25, 30)
-local COLOR_BLOOD_DARK   = Color3.fromRGB(50, 6, 8)
-local COLOR_WARN_GOLD    = Color3.fromRGB(215, 140, 45)
-local COLOR_RUST_BG      = Color3.fromRGB(15, 12, 14)
-local COLOR_TEXT_LIGHT   = Color3.fromRGB(230, 215, 210)
-local COLOR_TEXT_PANIC   = Color3.fromRGB(245, 45, 50)
+local COLOR_BLOOD_BRIGHT = Color3.fromRGB(195, 25, 30)
+local COLOR_BLOOD_DARK   = Color3.fromRGB(45, 5, 8)
+local COLOR_WARN_GOLD    = Color3.fromRGB(225, 150, 45)
+local COLOR_RUST_BG      = Color3.fromRGB(14, 10, 12)
+local COLOR_TEXT_LIGHT   = Color3.fromRGB(235, 220, 215)
+local COLOR_TEXT_PANIC   = Color3.fromRGB(250, 45, 50)
 
 local TEXT = {
 	OCCUPIED = "HOLDING BREATH",
@@ -71,27 +69,89 @@ function BreathBar.new()
 	})
 	screen:ClearAllChildren()
 
-	-- 1. Horror Vignette Overlay
-	local vignette = new("ImageLabel", {
+	-- 1. Horror Vignette: 4-sisi bayangan gelap/merah pekat tanpa dependensi asset id
+	local vignetteContainer = new("Frame", {
 		Name = "HorrorVignette",
 		Size = UDim2.fromScale(1, 1),
-		Position = UDim2.fromScale(0, 0),
 		BackgroundTransparency = 1,
-		Image = "rbxassetid://6578550186", -- Texture vignette radial halus Roblox
-		ImageColor3 = Color3.fromRGB(10, 0, 2),
-		ImageTransparency = 1,
-		ScaleType = Enum.ScaleType.Slice,
-		SliceCenter = Rect.new(100, 100, 100, 100),
 		Active = false,
 		Parent = screen,
 	})
 
-	-- 2. HUD Container di bagian bawah layar
+	local topVig = new("Frame", {
+		Size = UDim2.new(1, 0, 0.35, 0),
+		Position = UDim2.new(0, 0, 0, 0),
+		BackgroundColor3 = Color3.fromRGB(25, 0, 4),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Parent = vignetteContainer,
+	})
+	new("UIGradient", {
+		Rotation = 90,
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.15),
+			NumberSequenceKeypoint.new(1, 1)
+		}),
+		Parent = topVig,
+	})
+
+	local bottomVig = new("Frame", {
+		Size = UDim2.new(1, 0, 0.45, 0),
+		Position = UDim2.new(0, 0, 0.55, 0),
+		BackgroundColor3 = Color3.fromRGB(30, 0, 5),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Parent = vignetteContainer,
+	})
+	new("UIGradient", {
+		Rotation = -90,
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.1),
+			NumberSequenceKeypoint.new(1, 1)
+		}),
+		Parent = bottomVig,
+	})
+
+	local leftVig = new("Frame", {
+		Size = UDim2.new(0.3, 0, 1, 0),
+		Position = UDim2.new(0, 0, 0, 0),
+		BackgroundColor3 = Color3.fromRGB(20, 0, 3),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Parent = vignetteContainer,
+	})
+	new("UIGradient", {
+		Rotation = 0,
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.2),
+			NumberSequenceKeypoint.new(1, 1)
+		}),
+		Parent = leftVig,
+	})
+
+	local rightVig = new("Frame", {
+		Size = UDim2.new(0.3, 0, 1, 0),
+		Position = UDim2.new(0.7, 0, 0, 0),
+		BackgroundColor3 = Color3.fromRGB(20, 0, 3),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Parent = vignetteContainer,
+	})
+	new("UIGradient", {
+		Rotation = 180,
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.2),
+			NumberSequenceKeypoint.new(1, 1)
+		}),
+		Parent = rightVig,
+	})
+
+	-- 2. HUD Container
 	local holder = new("Frame", {
 		Name = "Holder",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -65),
-		Size = UDim2.new(0.32, 0, 0, 80),
+		Position = UDim2.new(0.5, 0, 1, -60),
+		Size = UDim2.new(0.34, 0, 0, 84),
 		BackgroundTransparency = 1,
 		Active = false,
 		Visible = false,
@@ -103,12 +163,12 @@ function BreathBar.new()
 		Name = "StatusLabel",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 0),
-		Size = UDim2.new(1, 0, 0, 28),
+		Size = UDim2.new(1, 0, 0, 30),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.Creepster,
-		TextSize = 26,
+		TextSize = 28,
 		TextColor3 = COLOR_TEXT_LIGHT,
-		TextStrokeColor3 = Color3.fromRGB(0, 0, 0),
+		TextStrokeColor3 = Color3.new(0, 0, 0),
 		TextStrokeTransparency = 0,
 		Text = "HOLDING BREATH",
 		Active = false,
@@ -119,14 +179,14 @@ function BreathBar.new()
 	local countdown = new("TextLabel", {
 		Name = "Countdown",
 		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -4, 1, -26),
-		Size = UDim2.new(0, 50, 0, 20),
+		Position = UDim2.new(1, -2, 1, -28),
+		Size = UDim2.new(0, 60, 0, 20),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.SpecialElite,
-		TextSize = 16,
+		TextSize = 18,
 		TextColor3 = COLOR_WARN_GOLD,
 		TextStrokeColor3 = Color3.new(0, 0, 0),
-		TextStrokeTransparency = 0.2,
+		TextStrokeTransparency = 0.1,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		Text = "20s",
 		Active = false,
@@ -137,8 +197,8 @@ function BreathBar.new()
 	local scratches = new("Frame", {
 		Name = "Scratches",
 		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 2, 1, -28),
-		Size = UDim2.new(1, -56, 0, 12),
+		Position = UDim2.new(0, 2, 1, -30),
+		Size = UDim2.new(1, -68, 0, 12),
 		BackgroundTransparency = 1,
 		Active = false,
 		Parent = holder,
@@ -155,8 +215,8 @@ function BreathBar.new()
 	for i = 1, MARKS do
 		marks[i] = new("Frame", {
 			Name = "Mark" .. i,
-			Size = UDim2.new(0, 3, 0, (i % 2 == 0) and 10 or 7),
-			BackgroundColor3 = Color3.fromRGB(160, 140, 130),
+			Size = UDim2.new(0, 3, 0, (i % 2 == 0) and 11 or 7),
+			BackgroundColor3 = Color3.fromRGB(170, 150, 140),
 			BorderSizePixel = 0,
 			Rotation = ((i * 7) % 15) - 7,
 			LayoutOrder = i,
@@ -165,22 +225,22 @@ function BreathBar.new()
 		})
 	end
 
-	-- 6. Frame Bar Luar (Karat & Darah)
+	-- 6. Frame Bar Luar
 	local track = new("Frame", {
 		Name = "Track",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, 0),
-		Size = UDim2.new(1, 0, 0, 18),
+		Size = UDim2.new(1, 0, 0, 20),
 		BackgroundColor3 = COLOR_RUST_BG,
 		BorderSizePixel = 0,
 		Active = false,
 		Parent = holder,
 	})
-	new("UICorner", { CornerRadius = UDim.new(0, 3), Parent = track })
+	new("UICorner", { CornerRadius = UDim.new(0, 4), Parent = track })
 	new("UIStroke", {
-		Color = Color3.fromRGB(70, 10, 15),
-		Thickness = 1.5,
-		Transparency = 0.2,
+		Color = Color3.fromRGB(80, 12, 18),
+		Thickness = 1.8,
+		Transparency = 0.15,
 		Parent = track,
 	})
 
@@ -194,7 +254,7 @@ function BreathBar.new()
 		Active = false,
 		Parent = track,
 	})
-	new("UICorner", { CornerRadius = UDim.new(0, 2), Parent = fill })
+	new("UICorner", { CornerRadius = UDim.new(0, 3), Parent = fill })
 
 	local bloodGradient = new("UIGradient", {
 		Color = ColorSequence.new(COLOR_BLOOD_BRIGHT, COLOR_BLOOD_DARK),
@@ -202,7 +262,7 @@ function BreathBar.new()
 		Parent = fill,
 	})
 
-	-- 8. Garis Tulang Rusuk di atas Fill
+	-- 8. Garis Tulang Rusuk
 	local ribs = new("Frame", {
 		Name = "Ribs",
 		Size = UDim2.fromScale(1, 1),
@@ -212,10 +272,10 @@ function BreathBar.new()
 	})
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
-		Padding = UDim.new(0, 10),
+		Padding = UDim.new(0, 11),
 		Parent = ribs,
 	})
-	for i = 1, 28 do
+	for i = 1, 30 do
 		new("Frame", {
 			Size = UDim2.new(0, 1.5, 1, 0),
 			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
@@ -227,7 +287,8 @@ function BreathBar.new()
 	end
 
 	self.screen = screen
-	self.vignette = vignette
+	self.vignetteContainer = vignetteContainer
+	self.vigFrames = { topVig, bottomVig, leftVig, rightVig }
 	self.holder = holder
 	self.label = label
 	self.countdown = countdown
@@ -237,8 +298,17 @@ function BreathBar.new()
 	self.bloodGradient = bloodGradient
 	self.autoHideToken = 0
 	self.pulseTween = nil
+	self.jitterConn = nil
 
 	return self
+end
+
+function BreathBar:_setVignetteAlpha(targetTransparency: number, duration: number)
+	for _, f in self.vigFrames do
+		TweenService:Create(f, TweenInfo.new(duration or 0.4), {
+			BackgroundTransparency = targetTransparency
+		}):Play()
+	end
 end
 
 function BreathBar:_startVignettePulse(speed: number, maxAlpha: number)
@@ -247,13 +317,14 @@ function BreathBar:_startVignettePulse(speed: number, maxAlpha: number)
 		self.pulseTween = nil
 	end
 
-	self.vignette.ImageColor3 = Color3.fromRGB(40, 0, 5)
-	self.pulseTween = TweenService:Create(
-		self.vignette,
-		TweenInfo.new(speed, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-		{ ImageTransparency = maxAlpha }
-	)
-	self.pulseTween:Play()
+	for _, f in self.vigFrames do
+		self.pulseTween = TweenService:Create(
+			f,
+			TweenInfo.new(speed, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+			{ BackgroundTransparency = maxAlpha }
+		)
+		self.pulseTween:Play()
+	end
 end
 
 function BreathBar:_stopVignette()
@@ -261,7 +332,25 @@ function BreathBar:_stopVignette()
 		self.pulseTween:Cancel()
 		self.pulseTween = nil
 	end
-	TweenService:Create(self.vignette, TweenInfo.new(0.4), { ImageTransparency = 1 }):Play()
+	self:_setVignetteAlpha(1, 0.35)
+end
+
+function BreathBar:_setJitter(enabled: boolean)
+	if enabled and not self.jitterConn then
+		self.jitterConn = RunService.RenderStepped:Connect(function()
+			if self.label and self.label.Parent then
+				local ox = (math.random() - 0.5) * 3
+				local oy = (math.random() - 0.5) * 2
+				self.label.Position = UDim2.new(0.5, ox, 0, oy)
+			end
+		end)
+	elseif not enabled and self.jitterConn then
+		self.jitterConn:Disconnect()
+		self.jitterConn = nil
+		if self.label then
+			self.label.Position = UDim2.new(0.5, 0, 0, 0)
+		end
+	end
 end
 
 function BreathBar:update(payload: { [string]: any }?)
@@ -273,11 +362,12 @@ function BreathBar:update(payload: { [string]: any }?)
 	if not payload or payload.state == nil or payload.state == "NONE" then
 		self.autoHideToken += 1
 		self:_stopVignette()
-		TweenService:Create(self.holder, TweenInfo.new(0.25), { Position = UDim2.new(0.5, 0, 1, -40) }):Play()
-		task.delay(0.25, function()
+		self:_setJitter(false)
+		TweenService:Create(self.holder, TweenInfo.new(0.2), { Position = UDim2.new(0.5, 0, 1, -30) }):Play()
+		task.delay(0.2, function()
 			if self.holder then
 				self.holder.Visible = false
-				self.holder.Position = UDim2.new(0.5, 0, 1, -65)
+				self.holder.Position = UDim2.new(0.5, 0, 1, -60)
 			end
 		end)
 		return
@@ -287,7 +377,6 @@ function BreathBar:update(payload: { [string]: any }?)
 	local fraction = math.clamp(tonumber(payload.fraction) or 0, 0, 1)
 	local breathSec = math.max(0, math.floor((tonumber(payload.breath) or 0) + 0.5))
 
-	-- Status teks & nuansa horor
 	local labelText = TEXT[state] or state
 	local labelColor = COLOR_TEXT_LIGHT
 
@@ -295,15 +384,18 @@ function BreathBar:update(payload: { [string]: any }?)
 		if fraction <= 0.25 then
 			labelText = STRAIN.panic
 			labelColor = COLOR_TEXT_PANIC
-			self:_startVignettePulse(0.5, 0.25) -- Vignette merah darah berdenyut cepat
+			self:_startVignettePulse(0.4, 0.2) -- Denyut merah cepat saat napas kritis
+			self:_setJitter(true)             -- Teks bergetar panik
 		elseif fraction <= 0.55 then
 			labelText = STRAIN.warn
 			labelColor = COLOR_WARN_GOLD
-			self:_startVignettePulse(1.0, 0.55) -- Denyut pelan
+			self:_startVignettePulse(0.9, 0.5) -- Denyut sedang
+			self:_setJitter(false)
 		else
 			labelText = TEXT.OCCUPIED
 			labelColor = COLOR_TEXT_LIGHT
-			self:_startVignettePulse(1.8, 0.75) -- Gelap samar di tepi
+			self:_setVignetteAlpha(0.65, 0.5) -- Gelap samar di tepi
+			self:_setJitter(false)
 		end
 		self.countdown.Text = string.format("%ds", breathSec)
 		self.countdown.Visible = true
@@ -312,11 +404,12 @@ function BreathBar:update(payload: { [string]: any }?)
 		self.countdown.Visible = false
 		labelColor = COLOR_TEXT_PANIC
 		self:_stopVignette()
+		self:_setJitter(false)
 
-		-- AUTO-HIDE ANTI-NYANGKUT: Jika menerima status penolakan, tampilkan sebentar lalu hilang sendiri!
+		-- AUTO-HIDE ANTI-NYANGKUT: Penolakan atau bilik spent auto-fade dalam 1.6s
 		self.autoHideToken += 1
 		local currentToken = self.autoHideToken
-		task.delay(1.8, function()
+		task.delay(1.6, function()
 			if self.autoHideToken == currentToken and self.holder then
 				self:update(nil)
 			end
@@ -337,11 +430,11 @@ function BreathBar:update(payload: { [string]: any }?)
 	local litCount = math.ceil(fraction * MARKS)
 	for i, mark in self.marks do
 		if i <= litCount then
-			mark.BackgroundColor3 = Color3.fromRGB(160, 140, 130)
-			mark.BackgroundTransparency = 0.2
+			mark.BackgroundColor3 = Color3.fromRGB(170, 150, 140)
+			mark.BackgroundTransparency = 0.15
 		else
-			mark.BackgroundColor3 = Color3.fromRGB(35, 8, 12)
-			mark.BackgroundTransparency = 0.8
+			mark.BackgroundColor3 = Color3.fromRGB(35, 6, 10)
+			mark.BackgroundTransparency = 0.85
 		end
 	end
 
@@ -350,6 +443,7 @@ end
 
 function BreathBar:destroy()
 	self:_stopVignette()
+	self:_setJitter(false)
 	if self.screen then
 		self.screen:Destroy()
 	end
@@ -357,7 +451,8 @@ function BreathBar:destroy()
 	self.holder = nil
 	self.label = nil
 	self.countdown = nil
-	self.vignette = nil
+	self.vignetteContainer = nil
+	self.vigFrames = nil
 	self.marks = nil
 end
 

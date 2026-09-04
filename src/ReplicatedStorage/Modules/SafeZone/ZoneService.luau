@@ -568,6 +568,13 @@ function ZoneService:start()
 			end
 		end
 	end)
+
+	-- Listener permintaan keluar manual dari Client (tekan E / klik tombol keluar kapan saja)
+	remote.OnServerEvent:Connect(function(player, req)
+		if typeof(req) == "table" and (req.action == "LEAVE" or req.action == "EXIT") then
+			self:leave(player, false)
+		end
+	end)
 end
 
 ---------------------------------------------------------------------

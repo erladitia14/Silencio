@@ -4,27 +4,30 @@
 	Kamera "mengintip dari balik pintu toilet" — modul CLIENT.
 
 	Fitur:
-	  1. Kamera Scriptable dipaku di titik `peekCF` bilik.
-	  2. Lirikan mouse & touch dibatasi 120° total (±60° kiri-kanan, ±25° atas-bawah).
-	  3. Mouse di-lock per frame di RenderStep agar GetMouseDelta() selalu terisi
-	     dan tidak ditimpa oleh CameraModule default Roblox.
-	  4. Rumus rotasi First-Person:
-	       CFrame.new(base.Position) * base.Rotation * CFrame.Angles(0, yaw, 0) * CFrame.Angles(pitch, 0, 0)
-	     Mencegah roll/miring aneh.
-	  5. Transisi fade hitam halus saat masuk dan keluar.
-	  6. Layar bebas dari layar hitam nyangkut (safety cleanup).
+	  1. Kamera Scriptable dipaku di titik `peekCF` bilik toilet.
+	  2. Lirikan mouse dibatasi 120° total (±60° kiri-kanan, ±25° atas-bawah).
+	  3. Kunci mouse per frame dengan LockCenter agar GetMouseDelta() selalu aktif.
+	  4. Keluar Manual: Pemain bisa tekan tombol [E] atau klik prompt layar kapan saja
+	     tanpa perlu menunggu oksigen habis!
+	  5. Efek Asfiksia / Kehabisan Oksigen:
+	     - Suffocation Camera Shake: kepala gemetar panik saat napas < 35%.
+	     - Suffocation Blur: pandangan mengabur (Lighting.BlurEffect) saat napas kritis.
+	  6. Transisi fade hitam halus saat masuk dan keluar.
 --]]
 
 local Players           = game:GetService("Players")
 local RunService        = game:GetService("RunService")
 local UserInputService  = game:GetService("UserInputService")
 local TweenService      = game:GetService("TweenService")
+local Lighting          = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local PeekCamera = {}
 PeekCamera.__index = PeekCamera
 
-local BIND_NAME = "SilencioSafeZonePeek"
-local GUI_NAME  = "SafeZoneFade"
+local BIND_NAME   = "SilencioSafeZonePeek"
+local GUI_NAME    = "SafeZoneFade"
+local BLUR_NAME   = "SafeZoneSuffocationBlur"
 
 function PeekCamera.new()
 	local self = setmetatable({}, PeekCamera)
@@ -35,15 +38,31 @@ function PeekCamera.new()
 	self.baseCF = nil :: CFrame?
 	self.yaw = 0
 	self.pitch = 0
-	self.yawLimit = 60       -- 60° kiri + 60° kanan = 120° total (permintaan Aer)
+	self.yawLimit = 60       -- 60° kiri + 60° kanan = 120° total
 	self.pitchLimit = 25     -- 25° atas + 25° bawah
 	self.sensitivity = 0.35
 	self.savedType = nil
 	self.savedSubject = nil
 	self.savedMouse = nil
 	self.inputConn = nil :: RBXScriptConnection?
+	self.keyConn = nil :: RBXScriptConnection?
 
-	-- Layar transisi hitam
+	-- Nilai kepanikan napas (0 = penuh, 1 = habis)
+	self.panicIntensity = 0
+	self.shakeTick = 0
+
+	-- Blur effect untuk efek kekurangan oksigen
+	local blur = Lighting:FindFirstChild(BLUR_NAME)
+	if not blur or not blur:IsA("BlurEffect") then
+		blur = Instance.new("BlurEffect")
+		blur.Name = BLUR_NAME
+		blur.Size = 0
+		blur.Enabled = true
+		blur.Parent = Lighting
+	end
+	self.blur = blur
+
+	-- ScreenGui untuk fade hitam & hint keluar
 	local playerGui = self.player:WaitForChild("PlayerGui")
 	local gui = playerGui:FindFirstChild(GUI_NAME) or Instance.new("ScreenGui")
 	gui.Name = GUI_NAME
@@ -63,8 +82,40 @@ function PeekCamera.new()
 	shade.Visible = false
 	shade.Parent = gui
 
+	-- Hint tombol keluar di pojok kiri atas
+	local exitHint = Instance.new("TextButton")
+	exitHint.Name = "ExitHint"
+	exitHint.AnchorPoint = Vector2.new(0, 0)
+	exitHint.Position = UDim2.new(0, 24, 0, 24)
+	exitHint.Size = UDim2.new(0, 160, 0, 36)
+	exitHint.BackgroundColor3 = Color3.fromRGB(20, 15, 18)
+	exitHint.BackgroundTransparency = 0.35
+	exitHint.BorderSizePixel = 0
+	exitHint.Font = Enum.Font.SpecialElite
+	exitHint.TextSize = 14
+	exitHint.TextColor3 = Color3.fromRGB(220, 200, 190)
+	exitHint.Text = "[E] LEAVE STALL"
+	exitHint.AutoButtonColor = true
+	exitHint.Visible = false
+	exitHint.Parent = gui
+
+	local hintCorner = Instance.new("UICorner")
+	hintCorner.CornerRadius = UDim.new(0, 4)
+	hintCorner.Parent = exitHint
+
+	local hintStroke = Instance.new("UIStroke")
+	hintStroke.Color = Color3.fromRGB(80, 20, 25)
+	hintStroke.Thickness = 1
+	hintStroke.Transparency = 0.3
+	hintStroke.Parent = exitHint
+
+	exitHint.MouseButton1Click:Connect(function()
+		self:requestExit()
+	end)
+
 	self.gui = gui
 	self.shade = shade
+	self.exitHint = exitHint
 
 	return self
 end
@@ -109,9 +160,7 @@ function PeekCamera:_look(dx: number, dy: number)
 	if dx == 0 and dy == 0 then
 		return
 	end
-	-- Mouse geser ke kanan (dx > 0) -> kamera belok ke kanan (yaw negatif di CFrame Y)
 	self.yaw = math.clamp(self.yaw - dx * self.sensitivity, -self.yawLimit, self.yawLimit)
-	-- Mouse geser ke atas (dy < 0) -> kamera mendongak ke atas (pitch positif di CFrame X)
 	self.pitch = math.clamp(self.pitch - dy * self.sensitivity, -self.pitchLimit, self.pitchLimit)
 end
 
@@ -129,14 +178,20 @@ function PeekCamera:_attach(peekCF: CFrame)
 	self.baseCF = peekCF
 	self.yaw = 0
 	self.pitch = 0
+	self.panicIntensity = 0
+	self.shakeTick = 0
 
-	-- Kunci mouse agar GetMouseDelta() terus membaca gerakan kursor
 	pcall(function()
 		UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
 	end)
 
-	-- RenderPriority.Camera.Value + 1: dieksekusi tepat setelah Camera default
-	RunService:BindToRenderStep(BIND_NAME, Enum.RenderPriority.Camera.Value + 1, function()
+	-- Tampilkan tombol keluar manual
+	if self.exitHint then
+		self.exitHint.Visible = true
+	end
+
+	-- RenderStep Loop: Update rotasi kamera, mouse delta, & suffocation shake
+	RunService:BindToRenderStep(BIND_NAME, Enum.RenderPriority.Camera.Value + 1, function(dt)
 		if not self.active then
 			return
 		end
@@ -147,28 +202,38 @@ function PeekCamera:_attach(peekCF: CFrame)
 			return
 		end
 
-		-- Jaga MouseBehavior tetap LockCenter setiap frame agar tidak di-reset CameraModule
 		if UserInputService.MouseBehavior ~= Enum.MouseBehavior.LockCenter then
 			pcall(function()
 				UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
 			end)
 		end
 
-		-- Baca pergerakan mouse delta frame ini
 		local delta = UserInputService:GetMouseDelta()
 		self:_look(delta.X, delta.Y)
 
-		-- Rumus rotasi First-Person yang bersih:
-		-- Rotasi dasar bilik -> rotasi Yaw (kiri-kanan) -> rotasi Pitch (atas-bawah)
+		-- Rotasi dasar bilik + Yaw + Pitch
 		local basePos = base.Position
 		local baseRot = base.Rotation
 		local yawRot = CFrame.Angles(0, math.rad(self.yaw), 0)
 		local pitchRot = CFrame.Angles(math.rad(self.pitch), 0, 0)
+		local finalCF = CFrame.new(basePos) * (baseRot * yawRot * pitchRot)
 
-		c.CFrame = CFrame.new(basePos) * (baseRot * yawRot * pitchRot)
+		-- Suffocation Camera Shake saat oksigen menipis
+		if self.panicIntensity > 0 then
+			self.shakeTick += dt * (12 + self.panicIntensity * 10)
+			local shakeAmount = math.rad(0.3 + self.panicIntensity * 2.2)
+			local shake = CFrame.Angles(
+				math.noise(self.shakeTick, 0, 0) * shakeAmount,
+				math.noise(0, self.shakeTick, 0) * shakeAmount,
+				math.noise(0, 0, self.shakeTick) * (shakeAmount * 0.5)
+			)
+			finalCF = finalCF * shake
+		end
+
+		c.CFrame = finalCF
 	end)
 
-	-- Listener Touch untuk perangkat Mobile
+	-- Listener Touch untuk Mobile
 	self.inputConn = UserInputService.InputChanged:Connect(function(input, processed)
 		if not self.active or processed then
 			return
@@ -178,21 +243,46 @@ function PeekCamera:_attach(peekCF: CFrame)
 		end
 	end)
 
+	-- Keybind Keluar Cepat: Tombol E atau Space
+	self.keyConn = UserInputService.InputBegan:Connect(function(input, processed)
+		if not self.active or processed then
+			return
+		end
+		if input.KeyCode == Enum.KeyCode.E or input.KeyCode == Enum.KeyCode.Space then
+			self:requestExit()
+		end
+	end)
+
 	self.active = true
 end
 
 function PeekCamera:_detach()
 	self.active = false
 	self.baseCF = nil
+	self.panicIntensity = 0
 
 	if self.inputConn then
 		self.inputConn:Disconnect()
 		self.inputConn = nil
 	end
 
+	if self.keyConn then
+		self.keyConn:Disconnect()
+		self.keyConn = nil
+	end
+
 	pcall(function()
 		RunService:UnbindFromRenderStep(BIND_NAME)
 	end)
+
+	if self.exitHint then
+		self.exitHint.Visible = false
+	end
+
+	-- Pulihkan Blur
+	if self.blur then
+		TweenService:Create(self.blur, TweenInfo.new(0.3), { Size = 0 }):Play()
+	end
 
 	-- Pulihkan MouseBehavior
 	pcall(function()
@@ -208,6 +298,47 @@ function PeekCamera:_detach()
 		cam.CameraSubject = self.savedSubject or humanoid
 	end
 	self.savedType, self.savedSubject, self.savedMouse = nil, nil, nil
+end
+
+---------------------------------------------------------------------
+-- KONTROL EFEK SUFFOCATION DARI LUAR (dipanggil saat breath berkurang)
+---------------------------------------------------------------------
+
+function PeekCamera:setBreathFraction(fraction: number)
+	if not self.active then
+		return
+	end
+
+	-- Efek asfiksia mulai muncul ketika napas < 45%
+	if fraction <= 0.45 then
+		-- Intensity dari 0 (saat 45%) hingga 1.0 (saat 0%)
+		local intensity = math.clamp((0.45 - fraction) / 0.45, 0, 1)
+		self.panicIntensity = intensity
+
+		-- Blur penglihatan (0 hingga 16) seolah mau pingsan
+		if self.blur then
+			self.blur.Size = math.floor(intensity * 16)
+		end
+	else
+		self.panicIntensity = 0
+		if self.blur and self.blur.Size > 0 then
+			self.blur.Size = 0
+		end
+	end
+end
+
+---------------------------------------------------------------------
+-- REQUEST EXIT (Client -> Server)
+---------------------------------------------------------------------
+
+function PeekCamera:requestExit()
+	if not self.active then
+		return
+	end
+	local remote = ReplicatedStorage:FindFirstChild("SafeZoneState")
+	if remote and remote:IsA("RemoteEvent") then
+		remote:FireServer({ action = "LEAVE" })
+	end
 end
 
 ---------------------------------------------------------------------
@@ -267,6 +398,12 @@ function PeekCamera:forceRelease()
 		self.shade.BackgroundTransparency = 1
 		self.shade.Visible = false
 	end
+	if self.exitHint then
+		self.exitHint.Visible = false
+	end
+	if self.blur then
+		self.blur.Size = 0
+	end
 end
 
 function PeekCamera:destroy()
@@ -274,8 +411,13 @@ function PeekCamera:destroy()
 	if self.gui then
 		self.gui:Destroy()
 	end
+	if self.blur then
+		self.blur:Destroy()
+	end
 	self.gui = nil
 	self.shade = nil
+	self.exitHint = nil
+	self.blur = nil
 end
 
 return PeekCamera

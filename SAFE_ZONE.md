@@ -1,8 +1,9 @@
 # Safe Zone — bilik toilet: sembunyi, napas terbatas, diusir
 
 Pemain menekan **E** di depan bilik toilet → ia **masuk sembunyi**: karakternya pindah ke dalam,
-kamera berubah jadi mengintip dari balik pintu, monster tidak bisa menarget **dan tidak bisa masuk**.
-Tapi napasnya cuma **20 detik**. Habis napas → pemain **dikeluarkan paksa** dan bilik hangus 15 detik.
+kamera berubah jadi mengintip dari balik pintu (bisa lirik 120°), monster tidak bisa menarget **dan tidak bisa masuk**.
+Pemain bisa **keluar kapan saja** dengan menekan **E / Space** lagi tanpa harus menunggu oksigen habis.
+Jika tetap di dalam, napas cuma **20 detik** dengan efek guncangan kamera (camera shake) dan penglihatan mengabur (blur) saat mau habis. Habis napas → pemain **dikeluarkan paksa** dan bilik hangus 15 detik.
 
 Bedanya dengan Safe Zone lama: dulu cukup berdiri di dalam Part untuk aman selamanya. Sekarang
 bilik punya **state**, masuknya **disengaja**, dan "berada di dalam" tidak sama dengan "dilindungi".
@@ -144,6 +145,30 @@ Badan monster otomatis masuk `MonsterBody` mengikuti tag `Monster`, jadi Enemy A
 diubah. Grup asli setiap Part **disimpan dan dipulihkan** kalau bilik di-untag.
 
 Matikan per bilik dengan `NoBarrier = true`, atau global lewat `Config.BarrierEnabled = false`.
+
+---
+
+## Keluar dari Safe Zone
+
+Pemain memiliki **dua cara** untuk keluar:
+1. **Manual Kapan Saja (Tanpa Menunggu Oksigen Habis)**:
+   - Tekan tombol **E** atau **Space** di keyboard.
+   - Atau klik tombol/hint **`[E] LEAVE STALL`** di pojok layar.
+   - Client langsung mengirim sinyal `LEAVE` ke server, pintu terbuka, kendali karakter pulih,
+     dan pemain keluar secara mulus dengan transisi fade.
+2. **Otomatis Saat Napas Habis (Breached)**:
+   - Begitu timer 20 detik habis, bilik mengalami `BREACHED` dan pemain **dikeluarkan paksa** ke depan pintu.
+   - Bilik masuk masa `COOLDOWN` (hangus) selama 15 detik.
+
+---
+
+## Efek Saat Oksigen Mau Habis (Suffocation Horror)
+
+Bukan sekadar bar menyusut, sistem menghadirkan sensasi panik & asfiksia nyata di layar pemain:
+- **Suffocation Camera Shake**: Saat napas < 35%, kepala pemain mulai bergetar tak beraturan karena sesak napas. Getaran semakin hebat dan liar saat napas mendekati 0.
+- **Suffocation Blur (`Lighting.BlurEffect`)**: Penglihatan pemain mulai mengabur bertahap (blur naik hingga 16) seolah mau pingsan kekurangan oksigen di dalam bilik sempit.
+- **Heartbeat Vignette Pulse**: Tepi layar diselimuti 4-sisi bayangan merah darah pekat yang berdenyut kencang mengikuti irama detak jantung saat panik.
+- **Text Jitter**: Teks status `CAN'T HOLD ON!` bergetar panik di atas bar darah.
 
 ---
 

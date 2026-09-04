@@ -103,6 +103,12 @@ remote.OnClientEvent:Connect(function(payload)
 		if bar then
 			safe(function() bar:update(payload) end)
 		end
+		-- Teruskan fraction oksigen ke kamera agar camera shake & suffocation blur aktif
+		if camera and payload.fraction ~= nil then
+			safe(function() camera:setBreathFraction(payload.fraction) end)
+		elseif camera and payload.state == "NONE" then
+			safe(function() camera:setBreathFraction(1.0) end)
+		end
 
 	elseif kind == E.ENTER then
 		if camera then
