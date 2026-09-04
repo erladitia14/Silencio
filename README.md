@@ -47,13 +47,14 @@ rantai puzzle (semua id default `"control_room"`):
 
 ### Safe Zone
 
-Tempel **`SafeZone`** pada Part bilik (toilet, lemari). Pemain di dalamnya tidak bisa ditarget
-**dan monster tidak bisa masuk** — tapi cuma **20 detik**, kapasitas **1 orang**, lalu bilik hangus
-15 detik. Bar napas muncul otomatis di layar pemain.
+Tempel **`SafeZone`** pada Part bilik toilet, lalu putar Part-nya supaya muka depannya = arah pintu.
+Pemain menekan **E** untuk **sembunyi** di dalam: kamera jadi mengintip dari balik pintu, monster
+tidak bisa menarget **dan tidak bisa masuk** — tapi cuma **20 detik**, kapasitas **1 orang**. Napas
+habis → pemain **dikeluarkan paksa**, bilik hangus 15 detik. Bar napas muncul otomatis.
 
-Aman selamanya seperti perilaku lama: Attribute `NoBreath = true`.
+Aman selamanya tanpa prompt (perilaku lama): Attribute `NoBreath = true` + `TouchToEnter = true`.
 
-→ Siklus bilik, Attribute, tukar modul UI: [`SAFE_ZONE.md`](SAFE_ZONE.md)
+→ Siklus bilik, Attribute, titik presisi, tukar modul UI: [`SAFE_ZONE.md`](SAFE_ZONE.md)
 
 ---
 
@@ -63,7 +64,7 @@ Aman selamanya seperti perilaku lama: Attribute `NoBreath = true`.
 |---|---|---|
 | `Monster` | Enemy AI | Model NPC (rig ber-`Humanoid`) |
 | `MonsterSkin` | Enemy AI | Model mesh visual (pola driver+skin) |
-| `SafeZone` | Safe Zone | Part bilik aman (napas 20s, 1 orang, monster ditahan) |
+| `SafeZone` | Safe Zone | Part bilik toilet (tekan E untuk sembunyi, napas 20s, 1 orang) |
 | `KeyPickup` | Key System | Kunci yang bisa diambil |
 | `LockedDoor` | Key System | Pintu yang butuh kunci |
 | `PowerSwitch` | Key System | Tuas/tombol power |
@@ -78,6 +79,7 @@ dipakai untuk Enemy AI:
 | `ShareTarget` | Model `Monster` | Bebas dari aturan "satu monster satu korban" |
 | `MonsterBait` | `Tool` apa pun | Pembawanya diprioritaskan monster mode `ITEM_HOLDER` |
 | `BreathTime` | Part `SafeZone` | Lama bilik melindungi, detik (default 20) |
+| `TouchToEnter` | Part `SafeZone` | Masuk cukup berdiri di dalam, tanpa prompt & kamera intip |
 | `NoBreath` | Part `SafeZone` | Bilik aman selamanya (tanpa timer napas) |
 | `KeyId` | Objek `KeyPickup` | Id kunci; harus cocok dengan `RequiredKey` pintu |
 
@@ -94,12 +96,12 @@ src/
 ├── ReplicatedStorage/Modules/           ← ModuleScript (logika)
 │   ├── EnemyController/                 ← 11 modul Enemy AI
 │   ├── KeySystem/                       ← 8 modul Key System
-│   └── SafeZone/                        ← 7 modul Safe Zone
+│   └── SafeZone/                        ← 11 modul Safe Zone
 ├── StarterPlayer/
 │   ├── StarterCharacterScripts/
 │   │   └── DamageEffect.client.luau     ← efek horor client (vignette + camera shake)
 │   └── StarterPlayerScripts/
-│       └── SafeZoneUI.client.luau       ← bar napas Safe Zone
+│       └── SafeZoneUI.client.luau       ← bar napas + kamera mengintip Safe Zone
 └── ServerStorage/
     └── NPCAnimationTemplate.server.luau ← contoh opsional
 ```

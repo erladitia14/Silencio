@@ -4,15 +4,14 @@
 	Konfigurasi terpusat sistem Safe Zone "bilik toilet".
 
 	KONSEP:
-	  Safe Zone bukan lagi area aman permanen. Ia punya JATAH NAPAS.
-	  Pemain masuk bilik -> monster tidak bisa menarget & tidak bisa masuk
-	  (dinding tak terlihat). Napas habis -> perlindungan lepas, dinding
-	  dibuka, monster boleh masuk. Setelah dipakai bilik HANGUS sebentar
-	  (cooldown) sebelum bisa dipakai lagi.
+	  Pemain menekan ProximityPrompt di bilik -> ia SEMBUNYI di dalam:
+	  karakternya dipindah ke dalam bilik, gerakannya dikunci, kamera
+	  berubah jadi "mengintip" ke luar. Monster tidak bisa menarget dan
+	  tidak bisa masuk. Tapi napasnya terbatas — habis napas, pemain
+	  DIKELUARKAN dan bilik hangus sebentar.
 
 	SEMUA nilai di bawah bisa di-override PER BILIK lewat Attribute pada
-	Part bilik itu (nama Attribute = nama field di sini). Jadi satu bilik
-	bisa 20 detik dan bilik lain 8 detik tanpa menyentuh script.
+	Part bilik itu (nama Attribute = nama field di sini).
 --]]
 
 local Config = {}
@@ -26,17 +25,59 @@ Config.SafeZoneTag    = "SafeZone"
 Config.SafeZoneFolder = "SafeZones"
 
 -----------------------------------------------------------------
+-- CARA MASUK
+-----------------------------------------------------------------
+-- false (default) = ProximityPrompt. Pemain menekan tombol untuk
+--   sembunyi; karakter dipindah ke dalam bilik + kamera mengintip.
+--   Ini mode untuk bilik toilet / lemari.
+-- true = cukup berdiri di dalam area (perilaku lama). Untuk ruang aman
+--   terbuka yang luas, di mana "sembunyi" tidak masuk akal.
+Config.TouchToEnter = false
+
+Config.PromptActionText   = "Sembunyi"
+Config.PromptExitText     = "Keluar"
+Config.PromptObjectText   = ""      -- kosong = tidak menampilkan nama objek
+Config.PromptDistance     = 9       -- MaxActivationDistance (studs)
+Config.PromptHoldDuration = 0       -- >0 = harus tahan tombol
+Config.PromptKey          = Enum.KeyCode.E
+-- Pintu toilet itu mesh padat; kalau LOS diwajibkan, prompt-nya sering
+-- tidak muncul walau pemain berdiri tepat di depannya.
+Config.PromptRequiresLineOfSight = false
+
+-----------------------------------------------------------------
+-- SEMBUNYI: posisi karakter, kamera mengintip, pintu keluar
+-----------------------------------------------------------------
+-- Child OPSIONAL di dalam Part bilik untuk mengatur titik secara presisi.
+-- Kalau tidak ada, semuanya dihitung dari ukuran & arah hadap Part.
+Config.HidePointName = "HidePoint"  -- di mana karakter berdiri
+Config.PeekPointName = "PeekPoint"  -- di mana kamera mengintip
+Config.ExitPointName = "ExitPoint"  -- ke mana pemain dikeluarkan
+
+Config.HideFeetOffset = 3.0   -- tinggi root R15 dari lantai (studs)
+Config.PeekEyeHeight  = 1.4   -- tinggi mata dari root karakter
+Config.PeekOutward    = 0.4   -- geser kamera keluar dari muka pintu
+Config.ExitPush       = 4.0   -- jarak lempar keluar dari muka pintu
+
+-- Kunci karakter di tempat. Anchored = paling andal (tidak bisa terdorong
+-- monster / physics), WalkSpeed 0 saja masih bisa tergeser.
+Config.HideAnchor = true
+
+-- Batas mengintip (derajat). Kamera tidak bebas 360 — ia terkurung di
+-- balik pintu, jadi cuma bisa melirik.
+Config.PeekYawLimit   = 45
+Config.PeekPitchLimit = 22
+Config.PeekSensitivity = 0.25
+
+-- Transisi gelap saat masuk/keluar. Ini PENGGANTI SEMENTARA animasi
+-- masuk-bilik & animasi monster menarik keluar (belum ada asetnya).
+Config.FadeTime = 0.35
+
+-----------------------------------------------------------------
 -- NAPAS (anti-camping)
 -----------------------------------------------------------------
--- Lama perlindungan satu bilik, dalam detik.
-Config.BreathTime = 20
-
--- Berapa orang boleh dilindungi satu bilik sekaligus.
--- 1 = bilik toilet (rebutan). Naikkan untuk ruangan besar.
-Config.MaxOccupants = 1
-
--- Lama bilik "hangus" sebelum napasnya terisi penuh lagi (detik).
-Config.CooldownTime = 15
+Config.BreathTime   = 20   -- lama perlindungan satu bilik (detik)
+Config.MaxOccupants = 1    -- 1 = bilik toilet (rebutan)
+Config.CooldownTime = 15   -- lama bilik "hangus" sebelum napas penuh lagi
 
 -- true  = keluar sebelum napas habis pun langsung menghanguskan bilik.
 -- false = bilik boleh langsung dipakai lagi, TAPI napasnya tidak terisi
@@ -47,16 +88,12 @@ Config.BurnOnExit = false
 -----------------------------------------------------------------
 -- DINDING TAK TERLIHAT (monster ditahan di luar)
 -----------------------------------------------------------------
--- Bilik jadi solid KHUSUS untuk monster selama masih melindungi.
--- Pemain tetap bisa lewat (pakai CollisionGroup, bukan CanCollide biasa).
 Config.BarrierEnabled = true
-
--- Nama CollisionGroup. Ubah hanya kalau bentrok dengan grup lain di place.
-Config.BarrierGroup = "SafeZoneShield"
-Config.MonsterGroup = "MonsterBody"
+Config.BarrierGroup   = "SafeZoneShield"
+Config.MonsterGroup   = "MonsterBody"
 
 -----------------------------------------------------------------
--- LAPORAN KE CLIENT (untuk UI bar napas)
+-- LAPORAN KE CLIENT (UI bar napas + kamera mengintip)
 -----------------------------------------------------------------
 Config.RemoteName   = "SafeZoneState"  -- RemoteEvent di ReplicatedStorage
 Config.TickInterval = 0.1              -- detak server (detik)
@@ -66,9 +103,16 @@ Config.TickInterval = 0.1              -- detak server (detik)
 -----------------------------------------------------------------
 Config.State = {
 	READY    = "READY",     -- kosong, siap dipakai
-	OCCUPIED = "OCCUPIED",  -- ada yang dilindungi, napas berkurang
-	BREACHED = "BREACHED",  -- napas habis, perlindungan lepas
+	OCCUPIED = "OCCUPIED",  -- ada yang sembunyi, napas berkurang
+	BREACHED = "BREACHED",  -- napas habis, penghuni dikeluarkan
 	COOLDOWN = "COOLDOWN",  -- hangus, belum bisa dipakai
+}
+
+-- Jenis pesan ke client
+Config.Event = {
+	STATE = "STATE",   -- pembaruan bar napas
+	ENTER = "ENTER",   -- pemain masuk: fade + kamera mengintip
+	EXIT  = "EXIT",    -- pemain keluar: fade + kamera normal
 }
 
 -----------------------------------------------------------------
@@ -81,10 +125,10 @@ Config.State = {
 	  CooldownTime  lama hangus bilik ini
 
 	Bool:
+	  TouchToEnter  masuk cukup dengan berdiri di dalam (tanpa prompt)
 	  BurnOnExit    keluar lebih awal langsung menghanguskan bilik
-	  NoBarrier     bilik ini TIDAK menahan monster (cuma perlindungan
-	                target), berguna untuk area aman terbuka
-	  NoBreath      bilik ini aman SELAMANYA (perilaku lama, tanpa timer)
+	  NoBarrier     bilik ini TIDAK menahan monster
+	  NoBreath      bilik ini aman SELAMANYA (tanpa timer)
 
 	Nilai salah tipe / negatif diabaikan + warn sekali. Prinsipnya sama
 	dengan sistem lain di project ini: satu salah ketik tidak boleh
@@ -97,9 +141,10 @@ Config.NumberOverrides = {
 }
 
 Config.BoolOverrides = {
-	BurnOnExit = true,
-	NoBarrier  = true,
-	NoBreath   = true,
+	TouchToEnter = true,
+	BurnOnExit   = true,
+	NoBarrier    = true,
+	NoBreath     = true,
 }
 
 return Config

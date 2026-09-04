@@ -65,6 +65,11 @@ function Zone:capacity(): number
 	return Settings.capacity(self.part)
 end
 
+--- Bilik ini pakai ProximityPrompt (sembunyi), bukan sentuh-masuk?
+function Zone:usesPrompt(): boolean
+	return Settings.get(self.part, "TouchToEnter") ~= true
+end
+
 --- Bilik "abadi": tanpa timer napas (perilaku Safe Zone lama).
 function Zone:isEternal(): boolean
 	return Settings.get(self.part, "NoBreath") == true

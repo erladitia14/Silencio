@@ -69,9 +69,11 @@ sembunyikan rig **saat Play**, matikan script animasi lama yang bentrok, dan pas
 Tag **`SafeZone`** pada Part, atau `Folder` **`SafeZones`** di `Workspace`.
 Player yang **dilindungi** bilik tidak akan ditarget, dan monster ditahan di luar.
 
-Perlindungan itu **berbatas waktu** (default 20 detik, kapasitas 1 orang) — jadi berdiri di dalam
-Part tidak otomatis berarti aman. Sistemnya berdiri sendiri: [`SAFE_ZONE.md`](SAFE_ZONE.md).
-Untuk perilaku lama (aman selamanya), beri Attribute `NoBreath = true` pada Part-nya.
+Perlindungan itu **berbatas waktu dan harus disengaja**: pemain menekan **E** untuk sembunyi
+(default 20 detik, kapasitas 1 orang), dan **dikeluarkan paksa** saat napas habis. Jadi berdiri di
+dalam Part tidak otomatis berarti aman. Sistemnya berdiri sendiri: [`SAFE_ZONE.md`](SAFE_ZONE.md).
+Untuk perilaku lama (aman selamanya, tanpa prompt), beri Attribute `NoBreath = true` dan
+`TouchToEnter = true` pada Part-nya.
 
 ---
 

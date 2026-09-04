@@ -7,55 +7,130 @@
 	  1. Menemukan bilik (tag "SafeZone" / Folder "SafeZones") dan membuat
 	     objek Zone untuk masing-masing — termasuk bilik yang di-tag saat
 	     game sudah jalan.
-	  2. Menjalankan detak: siapa di dalam bilik mana, napas berkurang,
-	     cooldown, dinding monster dibuka/ditutup.
-	  3. Menjawab pertanyaan core AI: "apakah karakter ini terlindungi?"
-	     (dipakai TargetFinder lewat SafeZoneManager).
-	  4. Menyiarkan keadaan ke client untuk UI bar napas.
+	  2. Memasang ProximityPrompt: pemain MENEKAN tombol untuk sembunyi,
+	     karakternya dipindah ke dalam bilik dan dikunci di tempat.
+	  3. Menjalankan detak: napas berkurang, cooldown, dinding monster.
+	  4. MENGELUARKAN penghuni begitu napas habis (BREACHED) — inilah
+	     bedanya dengan versi sebelumnya, di mana pemain tetap di dalam.
+	  5. Menjawab core AI: "apakah karakter ini terlindungi?"
+	  6. Menyiarkan keadaan ke client: bar napas + kamera mengintip.
 
-	NOL KONFIGURASI: tidak ada script yang perlu ditempel ke bilik, tidak
-	ada ID yang perlu diisi. Cukup tag Part-nya. Detail per bilik lewat
-	Attribute (lihat Config).
+	NOL KONFIGURASI: cukup tag Part-nya. Detail per bilik lewat Attribute.
 
-	MONSTER: modul ini yang menandai badan monster ke CollisionGroup
-	(mengikuti tag "Monster"), jadi core AI tidak perlu diubah untuk
-	urusan dinding.
+	DUA CARA MASUK:
+	  - default: ProximityPrompt (bilik toilet / lemari — "sembunyi")
+	  - Attribute `TouchToEnter` = true: cukup berdiri di dalam area,
+	    karakter tidak dipindah/dikunci (untuk ruang aman terbuka)
 --]]
 
 local CollectionService = game:GetService("CollectionService")
 local Players           = game:GetService("Players")
-local RunService        = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Config   = require(script.Parent.Config)
-local Geometry = require(script.Parent.Geometry)
-local Settings = require(script.Parent.Settings)
-local Barrier  = require(script.Parent.Barrier)
-local Zone     = require(script.Parent.Zone)
+local Config    = require(script.Parent.Config)
+local Geometry  = require(script.Parent.Geometry)
+local Settings  = require(script.Parent.Settings)
+local Barrier   = require(script.Parent.Barrier)
+local Zone      = require(script.Parent.Zone)
+local Anchors   = require(script.Parent.Anchors)
+local Occupancy = require(script.Parent.Occupancy)
+local Prompt    = require(script.Parent.PromptManager)
 
 local ZoneService = {}
 
 local S = Config.State
+local E = Config.Event
 
-local zones: { [BasePart]: any } = {}      -- part -> Zone
-local zoneOf: { [any]: any } = {}          -- player -> Zone (yang sedang melindunginya)
+local zones:  { [BasePart]: any } = {}   -- part -> Zone
+local zoneOf: { [any]: any }      = {}   -- player -> Zone yang menampungnya
 local started = false
 local remote: RemoteEvent? = nil
 local lastTick = 0
 
 ---------------------------------------------------------------------
+-- KOMUNIKASI KE CLIENT
+---------------------------------------------------------------------
+
+local function fire(player: any, payload: { [string]: any })
+	if not remote then
+		return
+	end
+	-- Player palsu (uji di edit mode) tidak punya FireClient.
+	if typeof(player) ~= "Instance" then
+		return
+	end
+	remote:FireClient(player, payload)
+end
+
+--- Kirim pembaruan bar napas.
+local function sendState(player: any, zone: any?)
+	if not zone then
+		fire(player, { kind = E.STATE, state = "NONE" })
+		return
+	end
+	local snap = zone:snapshot()
+	fire(player, {
+		kind     = E.STATE,
+		state    = snap.state,
+		breath   = snap.breath,
+		max      = snap.max,
+		fraction = snap.fraction,
+		count    = snap.count,
+		capacity = snap.capacity,
+		eternal  = snap.eternal,
+	})
+end
+
+--- Suruh client memasang kamera "mengintip" + transisi gelap.
+--- Kamera diurus CLIENT karena Camera itu objek lokal; server cuma
+--- memberi titik intip dan arah pintu.
+local function sendEnter(player: any, zone: any)
+	local peek = Anchors.peek(zone.part)
+	fire(player, {
+		kind      = E.ENTER,
+		zone      = zone.part,
+		peekCF    = peek,
+		doorDir   = Anchors.doorDirection(zone.part),
+		fade      = Config.FadeTime,
+		yawLimit  = Config.PeekYawLimit,
+		pitchLimit = Config.PeekPitchLimit,
+	})
+end
+
+--- Suruh client mengembalikan kamera normal.
+--- @param forced  true = diusir karena napas habis (bukan keluar sendiri)
+local function sendExit(player: any, forced: boolean)
+	fire(player, { kind = E.EXIT, fade = Config.FadeTime, forced = forced })
+end
+
+---------------------------------------------------------------------
 -- PENDAFTARAN BILIK
 ---------------------------------------------------------------------
 
---- Publikasikan keadaan bilik sebagai Attribute pada Part-nya.
---- Kanal ini sengaja disediakan supaya tim bisa memasang efek (suara
---- pintu, lampu, partikel) TANPA menyentuh script ini — pola yang sama
---- dengan Attribute "AIState" milik EnemyController.
+--- Publikasikan keadaan bilik sebagai Attribute pada Part-nya sendiri.
+--- Kanal untuk efek tim (suara pintu, lampu, partikel) TANPA menyentuh
+--- script ini — pola yang sama dengan Attribute "AIState" milik EnemyController.
 local function publish(zone: any)
 	pcall(function()
 		zone.part:SetAttribute("SafeZoneState", zone.state)
 		zone.part:SetAttribute("SafeZoneBreath", math.floor(zone.breathLeft * 10) / 10)
 	end)
+end
+
+--- Pemain menekan prompt: masuk kalau di luar, keluar kalau di dalam.
+local function onPromptTriggered(part: BasePart, player: Player)
+	local zone = zones[part]
+	if not zone then
+		return
+	end
+
+	-- Sudah di dalam bilik INI -> prompt berfungsi sebagai tombol keluar.
+	if zone:hasOccupant(player) then
+		ZoneService:leave(player, false)
+		return
+	end
+
+	ZoneService:enter(player, zone)
 end
 
 function ZoneService:register(part: BasePart): boolean
@@ -76,6 +151,10 @@ function ZoneService:register(part: BasePart): boolean
 		Barrier.setSolid(part, false)
 	end
 
+	if zone:usesPrompt() then
+		Prompt.attach(part, onPromptTriggered)
+	end
+
 	publish(zone)
 	return true
 end
@@ -86,10 +165,18 @@ function ZoneService:unregister(part: BasePart)
 		return
 	end
 
+	-- Lepaskan penghuni SEBELUM bilik hilang, kalau tidak mereka
+	-- terkunci selamanya (Anchored, WalkSpeed 0).
 	for who in zone.occupants do
+		if Occupancy.isHidden(who) then
+			Occupancy.exit(who, self:_characterOf(who), part)
+			sendExit(who, true)
+		end
 		zoneOf[who] = nil
+		sendState(who, nil)
 	end
 
+	Prompt.detach(part)
 	Barrier.unregister(part)
 	zones[part] = nil
 end
@@ -106,12 +193,85 @@ function ZoneService:scan(): number
 end
 
 ---------------------------------------------------------------------
+-- MASUK / KELUAR
+---------------------------------------------------------------------
+
+function ZoneService:_characterOf(player: any): Model?
+	if typeof(player) == "Instance" then
+		return (player :: Player).Character
+	end
+	-- Player palsu untuk uji perilaku.
+	return (player :: any).Character
+end
+
+--- Masukkan pemain ke bilik (sembunyi).
+--- @return string?  nil = berhasil; "FULL"/"COOLDOWN"/"BREACHED"/... = gagal
+function ZoneService:enter(player: any, zone: any): string?
+	-- Satu pemain tidak boleh menempati dua bilik.
+	if zoneOf[player] then
+		return "ALREADY_IN_ZONE"
+	end
+
+	local character = self:_characterOf(player)
+	if not character then
+		return "NO_CHARACTER"
+	end
+
+	-- Cek kuota/keadaan bilik DULU, baru pindahkan karakter — supaya
+	-- pemain tidak sempat tergeser ke dalam bilik yang menolaknya.
+	local denied = zone:tryAdd(player)
+	if denied then
+		sendState(player, zone)
+		return denied
+	end
+
+	if zone:usesPrompt() then
+		local ok, why = Occupancy.enter(player, character, zone.part)
+		if not ok then
+			-- Batalkan keanggotaan: jangan biarkan bilik "terpakai" oleh
+			-- pemain yang gagal masuk.
+			zone:remove(player)
+			return why
+		end
+		Prompt.setOccupied(zone.part, true)
+		sendEnter(player, zone)
+	end
+
+	zoneOf[player] = zone
+	sendState(player, zone)
+	return nil
+end
+
+--- Keluarkan pemain dari bilik.
+--- @param forced  true = diusir karena napas habis
+function ZoneService:leave(player: any, forced: boolean)
+	local zone = zoneOf[player]
+	if not zone then
+		return
+	end
+
+	local usesPrompt = zone:usesPrompt()
+
+	zone:remove(player)
+	zoneOf[player] = nil
+
+	if usesPrompt then
+		if Occupancy.isHidden(player) then
+			Occupancy.exit(player, self:_characterOf(player), zone.part)
+		end
+		Prompt.setOccupied(zone.part, zone.count > 0)
+		sendExit(player, forced)
+	end
+
+	sendState(player, nil)
+end
+
+---------------------------------------------------------------------
 -- PERTANYAAN DARI CORE AI
 ---------------------------------------------------------------------
 
 --- Apakah karakter ini sedang DILINDUNGI (bukan cuma "berada di dalam").
---- Inilah bedanya dengan Safe Zone versi lama: berdiri di bilik yang
---- napasnya habis / penuh / hangus TIDAK melindungi.
+--- Berdiri di bilik yang napasnya habis / penuh / hangus TIDAK melindungi.
 function ZoneService:isProtected(character: Model?): boolean
 	if not character then
 		return false
@@ -139,7 +299,7 @@ function ZoneService:isProtected(character: Model?): boolean
 	return false
 end
 
---- Keadaan bilik seorang player (untuk sistem lain: musik, SFX, UI server-side).
+--- Keadaan bilik seorang player (untuk sistem lain: musik, SFX, dsb).
 function ZoneService:stateOf(player: any): { [string]: any }?
 	local zone = zoneOf[player]
 	return zone and zone:snapshot() or nil
@@ -158,14 +318,93 @@ end
 -- DETAK
 ---------------------------------------------------------------------
 
-local function leaveZone(who: any, zone: any)
-	zone:remove(who)
-	if zoneOf[who] == zone then
-		zoneOf[who] = nil
+--- Bilik bertipe sentuh: keanggotaan mengikuti posisi karakter.
+function ZoneService:_updateTouchZones(parts: { BasePart })
+	local touchParts = {}
+	for _, part in parts do
+		local zone = zones[part]
+		if zone and not zone:usesPrompt() then
+			table.insert(touchParts, part)
+		end
+	end
+	if #touchParts == 0 then
+		return
+	end
+
+	for _, player in Players:GetPlayers() do
+		local current = zoneOf[player]
+		-- Jangan ganggu pemain yang sedang sembunyi di bilik prompt.
+		if not (current and current:usesPrompt()) then
+			local char = player.Character
+			local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+			local alive = humanoid ~= nil and humanoid.Health > 0
+			local insidePart = (char and alive)
+				and Geometry.findContainingZone(char, touchParts) or nil
+
+			if current and (not insidePart or current.part ~= insidePart) then
+				self:leave(player, false)
+				current = nil
+			end
+			if insidePart and not current then
+				self:enter(player, zones[insidePart])
+			end
+		end
 	end
 end
 
---- Tentukan bilik setiap player, lalu majukan waktu semua bilik.
+--- Usir semua penghuni bilik yang napasnya habis.
+function ZoneService:_ejectBreached()
+	for _, zone in zones do
+		if zone.state == S.BREACHED and zone.count > 0 then
+			local victims = {}
+			for who in zone.occupants do
+				table.insert(victims, who)
+			end
+			for _, who in victims do
+				self:leave(who, true)
+			end
+		end
+	end
+end
+
+--- Karakter penghuni hilang/mati saat sembunyi: bersihkan supaya bilik
+--- tidak terkunci oleh pemain yang sudah tidak ada.
+---
+--- Iterasi lewat DAFTAR PENGHUNI, bukan Players:GetPlayers() — penghuni
+--- yang sudah keluar server tidak lagi muncul di Players, jadi kalau
+--- kita menyapu dari sisi Players, catatannya justru tertinggal selamanya.
+function ZoneService:_pruneDeadOccupants()
+	local stale = {}
+
+	for _, zone in zones do
+		for who in zone.occupants do
+			local char = self:_characterOf(who)
+			local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+			local gone = not char
+				or not char.Parent
+				or (humanoid ~= nil and humanoid.Health <= 0)
+			if gone then
+				table.insert(stale, { who = who, zone = zone })
+			end
+		end
+	end
+
+	for _, entry in stale do
+		local who, zone = entry.who, entry.zone
+		-- forget(): karakternya sudah mati/hilang, memulihkan WalkSpeed pada
+		-- karakter lama tidak ada guna — tapi kunci Anchored tetap dilepas
+		-- kalau karakternya masih ada, kalau tidak ia tertinggal dan
+		-- membuat pemain terkunci permanen di sesi berikutnya.
+		Occupancy.forget(who, self:_characterOf(who))
+		zone:remove(who)
+		zoneOf[who] = nil
+		if zone:usesPrompt() then
+			Prompt.setOccupied(zone.part, zone.count > 0)
+		end
+		sendState(who, nil)
+	end
+end
+
 function ZoneService:step(dt: number)
 	local parts = {}
 	for part in zones do
@@ -177,32 +416,10 @@ function ZoneService:step(dt: number)
 		end
 	end
 
-	-- 1. Perbarui keanggotaan
-	for _, player in Players:GetPlayers() do
-		local char = player.Character
-		local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-		local alive = humanoid ~= nil and humanoid.Health > 0
+	self:_pruneDeadOccupants()
+	self:_updateTouchZones(parts)
 
-		local insidePart = (char and alive) and Geometry.findContainingZone(char, parts) or nil
-		local current = zoneOf[player]
-
-		if current and (not insidePart or current.part ~= insidePart) then
-			leaveZone(player, current)
-			current = nil
-		end
-
-		if insidePart and not current then
-			local zone = zones[insidePart]
-			if zone then
-				local denied = zone:tryAdd(player)
-				if not denied then
-					zoneOf[player] = zone
-				end
-			end
-		end
-	end
-
-	-- 2. Majukan waktu tiap bilik + sinkronkan dinding
+	-- Majukan waktu tiap bilik + sinkronkan dinding
 	for _, zone in zones do
 		local wasProtecting = zone:isProtecting()
 		zone:step(dt)
@@ -213,42 +430,31 @@ function ZoneService:step(dt: number)
 				Barrier.setSolid(zone.part, solid)
 			end
 		end
-
-		if zone.dirty then
-			publish(zone)
-		end
 	end
 
-	-- 3. Siarkan ke client (UI bar napas)
-	if remote then
-		for _, player in Players:GetPlayers() do
-			local zone = zoneOf[player]
-			if zone then
-				if zone.dirty then
-					local snap = zone:snapshot()
-					remote:FireClient(player, {
-						state    = snap.state,
-						breath   = snap.breath,
-						max      = snap.max,
-						fraction = snap.fraction,
-						count    = snap.count,
-						capacity = snap.capacity,
-						eternal  = snap.eternal,
-					})
-				end
-			elseif self._wasShowing and self._wasShowing[player] then
-				remote:FireClient(player, { state = "NONE" })
+	-- Siarkan bar napas ke penghuni SEBELUM pengusiran, supaya pemain
+	-- sempat melihat "Napas habis!" — kalau diusir dulu, ia cuma melihat
+	-- layar gelap tanpa tahu kenapa.
+	for _, zone in zones do
+		if zone.dirty then
+			for who in zone.occupants do
+				sendState(who, zone)
 			end
 		end
-
-		self._wasShowing = {}
-		for _, player in Players:GetPlayers() do
-			self._wasShowing[player] = zoneOf[player] ~= nil
-		end
 	end
 
+	-- Napas habis -> penghuni DIKELUARKAN (permintaan Aer: jangan biarkan
+	-- pemain tetap di dalam setelah "Napas habis!").
+	self:_ejectBreached()
+
+	-- Terbitkan Attribute PALING AKHIR: pengusiran mengubah state lagi
+	-- (BREACHED -> COOLDOWN saat bilik jadi kosong), jadi kalau diterbitkan
+	-- sebelum itu, efek buatan tim akan membaca keadaan yang sudah basi.
 	for _, zone in zones do
-		zone.dirty = false
+		if zone.dirty then
+			publish(zone)
+			zone.dirty = false
+		end
 	end
 end
 
@@ -267,7 +473,6 @@ local function ensureRemote(): RemoteEvent
 	return ev
 end
 
---- Nyalakan sistem. Dipanggil sekali oleh SafeZoneController.
 function ZoneService:start()
 	if started then
 		return
@@ -302,7 +507,7 @@ function ZoneService:start()
 	end
 	CollectionService:GetInstanceAddedSignal("Monster"):Connect(function(inst)
 		if inst:IsA("Model") then
-			task.wait(0.5)  -- tunggu model selesai dimuat (pola yang sama dengan EnemyController)
+			task.wait(0.5)  -- tunggu model selesai dimuat (pola EnemyController)
 			Barrier.markMonster(inst)
 		end
 	end)
@@ -313,12 +518,14 @@ function ZoneService:start()
 	end)
 
 	Players.PlayerRemoving:Connect(function(player)
+		Occupancy.forget(player, player.Character)
 		local zone = zoneOf[player]
 		if zone then
-			leaveZone(player, zone)
-		end
-		if self._wasShowing then
-			self._wasShowing[player] = nil
+			zone:remove(player)
+			zoneOf[player] = nil
+			if zone:usesPrompt() then
+				Prompt.setOccupied(zone.part, zone.count > 0)
+			end
 		end
 	end)
 
@@ -339,33 +546,32 @@ function ZoneService:start()
 	end)
 end
 
---- KHUSUS UJI: kosongkan seluruh state. Jangan dipanggil saat runtime.
+---------------------------------------------------------------------
+-- KHUSUS UJI (jangan dipanggil runtime)
+---------------------------------------------------------------------
+
 function ZoneService:reset()
 	for part in zones do
+		Prompt.detach(part)
 		Barrier.unregister(part)
 	end
 	zones = {}
 	zoneOf = {}
-	self._wasShowing = nil
+	Occupancy._reset()
 	started = false
 end
 
---- KHUSUS UJI: akses objek Zone sebuah part.
 function ZoneService:zoneFor(part: BasePart): any
 	return zones[part]
 end
 
---- KHUSUS UJI: daftarkan penghuni palsu (edit mode tidak punya Player).
+--- Daftarkan penghuni palsu (edit mode tidak punya Player nyata).
 function ZoneService:_debugSetOccupant(part: BasePart, who: any): string?
 	local zone = zones[part]
 	if not zone then
 		return "NO_ZONE"
 	end
-	local denied = zone:tryAdd(who)
-	if not denied then
-		zoneOf[who] = zone
-	end
-	return denied
+	return self:enter(who, zone)
 end
 
 return ZoneService
