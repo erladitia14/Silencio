@@ -29,7 +29,10 @@ local Anchors = {}
 ---------------------------------------------------------------------
 
 --- Ambil CFrame sebuah child penanda, kalau tim menyediakannya.
-local function markerCFrame(zonePart: BasePart, name: string): CFrame?
+local function markerCFrame(zonePart: BasePart, name: string?): CFrame?
+	if not name or typeof(name) ~= "string" or name == "" then
+		return nil
+	end
 	local child = zonePart:FindFirstChild(name)
 	if not child then
 		return nil
@@ -79,15 +82,17 @@ end
 --- Di mana karakter berdiri saat sembunyi. Menghadap pintu (keluar),
 --- supaya kalau nanti ada animasi "mengintip", arahnya sudah benar.
 function Anchors.hide(zonePart: BasePart): CFrame
-	local override = markerCFrame(zonePart, Config.HidePointName)
+	local markerName = Config.HidePointName or "HidePoint"
+	local override = markerCFrame(zonePart, markerName)
 	if override then
 		return override
 	end
 
 	local dir = outward(zonePart)
+	local feetOffset = Config.HideFeetOffset or 3.0
 	local pos = Vector3.new(
 		zonePart.Position.X,
-		floorY(zonePart) + Config.HideFeetOffset,
+		floorY(zonePart) + feetOffset,
 		zonePart.Position.Z
 	)
 	return facing(pos, dir)
@@ -98,16 +103,19 @@ end
 --- bukan studs — supaya bilik sempit dan lemari besar sama-sama benar
 --- tanpa tuning per objek.
 function Anchors.peek(zonePart: BasePart): CFrame
-	local override = markerCFrame(zonePart, Config.PeekPointName)
+	local markerName = Config.PeekPointName or "PeekPoint"
+	local override = markerCFrame(zonePart, markerName)
 	if override then
 		return override
 	end
 
 	local dir = outward(zonePart)
 	local hide = Anchors.hide(zonePart)
+	local eyeHeight = Config.PeekEyeHeight or 1.4
+	local peekOutward = Config.PeekOutward or 0.4
 	local pos = hide.Position
-		+ Vector3.new(0, Config.PeekEyeHeight, 0)
-		+ dir * (halfDepth(zonePart) * Config.PeekOutward)
+		+ Vector3.new(0, eyeHeight, 0)
+		+ dir * (halfDepth(zonePart) * peekOutward)
 
 	return facing(pos, dir)
 end
@@ -116,17 +124,20 @@ end
 --- ia tidak langsung memicu prompt lagi (atau, pada bilik TouchToEnter,
 --- tidak langsung terdaftar ulang sebagai penghuni).
 function Anchors.exit(zonePart: BasePart): CFrame
-	local override = markerCFrame(zonePart, Config.ExitPointName)
+	local markerName = Config.ExitPointName or "ExitPoint"
+	local override = markerCFrame(zonePart, markerName)
 	if override then
 		return override
 	end
 
 	local dir = outward(zonePart)
+	local feetOffset = Config.HideFeetOffset or 3.0
+	local exitPush = Config.ExitPush or 4.0
 	local pos = Vector3.new(
 		zonePart.Position.X,
-		floorY(zonePart) + Config.HideFeetOffset,
+		floorY(zonePart) + feetOffset,
 		zonePart.Position.Z
-	) + dir * (halfDepth(zonePart) + Config.ExitPush)
+	) + dir * (halfDepth(zonePart) + exitPush)
 
 	-- Menghadap BALIK ke bilik: pemain yang baru diusir melihat tempat
 	-- persembunyiannya (dan monster yang menunggu di depannya).

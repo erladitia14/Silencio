@@ -147,24 +147,22 @@ Matikan per bilik dengan `NoBarrier = true`, atau global lewat `Config.BarrierEn
 
 ---
 
-## UI Bar Napas — "Choked Breath"
+## UI Bar Napas — Silencio Carnival Horror
 
-Bar muncul di bawah layar saat pemain sembunyi. **Teksnya bahasa Inggris** (permintaan Aer); komentar
-dan nama variabel di kode tetap Indonesia untuk tim.
+Bar muncul di bawah layar saat pemain sembunyi. Menggunakan tipografi horor badut (`Creepster` + `SpecialElite`),
+vignette atmosferik di tepi layar yang berdenyut saat napas menipis, bar daging/karat dengan 20 goresan kuku,
+dan proteksi anti-stuck (auto-hide jika menerima penolakan/cooldown).
 
-Ini bukan progress bar biasa. Tiga hal yang bikin dia terasa horor, bukan HUD game biasa:
+Teks per keadaan:
+- `HOLDING BREATH` (tenang)
+- `LUNGS BURNING...` (napas di bawah 55%)
+- `CAN'T HOLD ON!` (napas di bawah 25%, vignette merah darah berdenyut cepat)
+- `IT HEARD YOU!` (kebobolan)
+- `STALL IS COMPROMISED` (hangus / cooldown, auto-fade dalam 1.8 detik)
 
-- **Bar-nya bernapas.** Track-nya mengembang-mengempis (`GASP`) — 3.4 detik per tarikan saat tenang,
-  1.0 detik saat panik, **berhenti total** saat kebobolan. Pemain menyadari bahaya dari ritmenya
-  sebelum membaca angkanya.
-- **Isinya darah, bukan warna.** Gradien merah gelap ke hampir hitam, ditutupi 24 garis "tulang
-  rusuk" supaya terbaca terkurung, bukan tabung cairan.
-- **20 goresan kuku** di atas bar, satu per detik napas, sedikit bengkok. Tiap detik satu goresan
-  jadi gelap dan memendek — hitungan mundur yang bisa dilihat tanpa membaca teks.
-
-Teks per keadaan: `holding breath` → `lungs burning` (di bawah 55%) → `can't hold on` (di bawah 25%)
-→ `it heard you` (kebobolan) → `the stall is spent` (hangus). Bilik `NoBreath` cuma menampilkan
-`safe` tanpa meter — timer palsu itu bohong ke pemain.
+Kamera mengintip dibatasi **120 derajat total** (±60° kiri-kanan, ±25° atas-bawah) agar pemain merasa terkurung
+di dalam toilet tanpa bisa memutar 360 derajat bebas. Mouse terkunci dengan `LockCenter` per frame agar
+input lirikan responsif dan tidak terbentur CameraModule default.
 
 **Modulnya bisa ditukar.** Kalau ada desain dari tim: ganti isi
 `ReplicatedStorage/Modules/SafeZone/BreathBar`, atau taruh modul baru di folder itu dan ubah satu

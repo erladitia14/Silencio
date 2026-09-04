@@ -52,11 +52,25 @@ local lastTick = 0
 ---------------------------------------------------------------------
 
 local function fire(player: any, payload: { [string]: any })
-	if not remote then
+	-- Player palsu (uji perilaku di edit mode) tidak punya FireClient. Payload-nya
+	-- dicatat ke outbox supaya alur pesan tetap BISA DIVERIFIKASI — tanpa ini,
+	-- perbaikan seperti "kirim NONE setelah ditolak" cuma bisa diyakini,
+	-- tidak bisa dibuktikan.
+	--
+	-- Dicek SEBELUM `remote`: uji tidak memanggil start(), jadi remote-nya nil
+	-- dan pencatatan tidak akan pernah jalan kalau urutannya dibalik.
+	if typeof(player) ~= "Instance" then
+		if ZoneService._outbox then
+			local box = ZoneService._outbox[player]
+			if not box then
+				box = {}
+				ZoneService._outbox[player] = box
+			end
+			table.insert(box, payload)
+		end
 		return
 	end
-	-- Player palsu (uji di edit mode) tidak punya FireClient.
-	if typeof(player) ~= "Instance" then
+	if not remote then
 		return
 	end
 	remote:FireClient(player, payload)
@@ -94,6 +108,7 @@ local function sendEnter(player: any, zone: any)
 		fade      = Config.FadeTime,
 		yawLimit  = Config.PeekYawLimit,
 		pitchLimit = Config.PeekPitchLimit,
+		sensitivity = Config.PeekSensitivity,
 	})
 end
 
@@ -221,7 +236,16 @@ function ZoneService:enter(player: any, zone: any): string?
 	-- pemain tidak sempat tergeser ke dalam bilik yang menolaknya.
 	local denied = zone:tryAdd(player)
 	if denied then
+		-- Tampilkan alasan penolakan sekejap, LALU sembunyikan lagi.
+		-- Tanpa `NONE` menyusul, pesan "the stall is spent" nempel di layar
+		-- selamanya karena pemain ini tidak pernah jadi penghuni — jadi tidak
+		-- ada jalur lain yang akan membersihkannya. (bug dari playtest Aer)
 		sendState(player, zone)
+		task.delay(Config.DeniedNoticeTime, function()
+			if not zoneOf[player] then
+				sendState(player, nil)
+			end
+		end)
 		return denied
 	end
 
@@ -558,11 +582,26 @@ function ZoneService:reset()
 	zones = {}
 	zoneOf = {}
 	Occupancy._reset()
+	self._outbox = nil
 	started = false
 end
 
 function ZoneService:zoneFor(part: BasePart): any
 	return zones[part]
+end
+
+--- KHUSUS UJI: mulai merekam payload yang dikirim ke player palsu.
+function ZoneService:_recordOutbox()
+	self._outbox = {}
+end
+
+--- KHUSUS UJI: daftar `kind`/`state` pesan yang diterima seorang player palsu.
+function ZoneService:_outboxFor(who: any): { string }
+	local list = {}
+	for _, payload in (self._outbox and self._outbox[who] or {}) do
+		table.insert(list, tostring(payload.kind) .. ":" .. tostring(payload.state))
+	end
+	return list
 end
 
 --- Daftarkan penghuni palsu (edit mode tidak punya Player nyata).

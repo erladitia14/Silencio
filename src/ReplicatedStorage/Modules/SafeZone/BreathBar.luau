@@ -1,70 +1,50 @@
 --[[
 	BreathBar.luau
 	--------------
-	Safe Zone breath meter — "Choked Breath" design.
+	UI Horror Safe Zone "Breath Meter" — Gaya Silencio Carnival Horror.
 
-	The bar is not a progress meter, it is a pair of lungs: it GASPS instead of
-	draining smoothly, the fill is dark clotted blood rather than a clean tint,
-	and the 20 tally marks above it are fingernail scratches on the stall wall —
-	one per second, each one going dark as it burns away.
-
-	SWAPPABLE MODULE. If the team ships their own design, replace this file (or
-	drop a new module in this folder and point `UI_MODULE` in `SafeZoneUI` at
-	it). Nothing else needs to change.
-
-	CONTRACT
-	  BreathBar.new()       -> bar object
-	  bar:update(payload)   -> payload from RemoteEvent "SafeZoneState"
-	                           (nil / state "NONE" hides the bar)
-	  bar:destroy()         -> release every instance and connection
-
-	Pure presentation — zero game logic. The server owns the truth; this only
-	draws what it is told.
+	Desain:
+	  1. Font: `Enum.Font.Creepster` untuk headline status, `SpecialElite` untuk countdown.
+	  2. Atmospheric Vignette: tepi layar menggelap dengan bayangan hitam/merah
+	     darah yang bernapas dan semakin pekat saat napas kritis.
+	  3. Bar Daging & Tulang: bingkai tebal gelap karat dengan gradien merah darah
+	     pekat, dihiasi garis rusuk dan deretan 20 goresan kuku yang hangus per detik.
+	  4. Jitter / Shaking: teks bergetar hebat saat panik (napas < 5s).
+	  5. Anti-Nyangkut: jika state `COOLDOWN` atau `BREACHED` muncul dari penolakan,
+	     UI otomatis pudar (fade out) dalam 1.8 detik jika tidak ada update baru.
+	     State `NONE` / nil langsung menutup bar secara instan.
 --]]
 
 local Players      = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local RunService   = game:GetService("RunService")
 
 local BreathBar = {}
 BreathBar.__index = BreathBar
 
 local GUI_NAME = "SafeZoneBreath"
-local MARKS    = 20      -- one scratch per second of a default 20s breath
+local MARKS    = 20
 
--- Layout
-local WIDTH, HEIGHT, BOTTOM = 0.28, 14, 90
-
--- Blood darkens toward the top edge; brightens as panic sets in.
-local BLOOD = {
-	calm  = { Color3.fromRGB(125, 20, 24), Color3.fromRGB(43,  10, 13) },
-	warn  = { Color3.fromRGB(141, 26, 30), Color3.fromRGB(44,   6,  8) },
-	panic = { Color3.fromRGB(165, 31, 34), Color3.fromRGB(48,   7,  9) },
-}
-local INK = {                                    -- label colour
-	calm   = Color3.fromRGB(141, 124, 120),
-	warn   = Color3.fromRGB(160, 134, 129),
-	panic  = Color3.fromRGB(194, 154, 148),
-	breach = Color3.fromRGB(142,  20,  24),
-}
-local GASP = { calm = 3.4, warn = 2.1, panic = 1.0 }   -- seconds per breath
-local SCRATCH_LIT  = Color3.fromRGB(110,  95,  91)
-local SCRATCH_GONE = Color3.fromRGB( 42,  17,  20)
+-- Warna tema darah karnaval
+local COLOR_BLOOD_BRIGHT = Color3.fromRGB(190, 25, 30)
+local COLOR_BLOOD_DARK   = Color3.fromRGB(50, 6, 8)
+local COLOR_WARN_GOLD    = Color3.fromRGB(215, 140, 45)
+local COLOR_RUST_BG      = Color3.fromRGB(15, 12, 14)
+local COLOR_TEXT_LIGHT   = Color3.fromRGB(230, 215, 210)
+local COLOR_TEXT_PANIC   = Color3.fromRGB(245, 45, 50)
 
 local TEXT = {
-	OCCUPIED = "holding breath",
-	BREACHED = "it heard you",
-	COOLDOWN = "the stall is spent",
-	READY    = "stall is clear",
-	FULL     = "someone is inside",
+	OCCUPIED = "HOLDING BREATH",
+	BREACHED = "IT HEARD YOU!",
+	COOLDOWN = "STALL IS COMPROMISED",
+	READY    = "HIDDEN IN SHADOWS",
+	FULL     = "STALL IS OCCUPIED",
 }
--- OCCUPIED reads differently as the air runs out.
-local STRAIN = { warn = "lungs burning", panic = "can't hold on" }
 
-local WARN_AT, PANIC_AT = 0.55, 0.25
-
----------------------------------------------------------------------
--- BUILD
----------------------------------------------------------------------
+local STRAIN = {
+	warn  = "LUNGS BURNING...",
+	panic = "CAN'T HOLD ON!",
+}
 
 local function new(class: string, props: { [string]: any }): any
 	local inst = Instance.new(class)
@@ -77,111 +57,152 @@ local function new(class: string, props: { [string]: any }): any
 	return inst
 end
 
---- Vertical two-stop gradient (top .. bottom).
-local function gradient(parent: Instance, top: Color3, bottom: Color3): UIGradient
-	return new("UIGradient", {
-		Rotation = 90,
-		Color = ColorSequence.new(top, bottom),
-		Parent = parent,
-	})
-end
-
 function BreathBar.new()
 	local self = setmetatable({}, BreathBar)
-	local gui = Players.LocalPlayer:WaitForChild("PlayerGui")
+	local player = Players.LocalPlayer
+	local playerGui = player:WaitForChild("PlayerGui")
 
-	-- ResetOnSpawn = false: the bar has to survive respawn, same as
-	-- DamageEffect's vignette, or it silently stops working after one death.
-	local screen = gui:FindFirstChild(GUI_NAME) or new("ScreenGui", {
+	local screen = playerGui:FindFirstChild(GUI_NAME) or new("ScreenGui", {
 		Name = GUI_NAME,
 		ResetOnSpawn = false,
 		IgnoreGuiInset = true,
-		DisplayOrder = 6,
-		Parent = gui,
+		DisplayOrder = 15,
+		Parent = playerGui,
 	})
 	screen:ClearAllChildren()
 
-	-- Active = false everywhere: the HUD must never eat the player's clicks.
+	-- 1. Horror Vignette Overlay
+	local vignette = new("ImageLabel", {
+		Name = "HorrorVignette",
+		Size = UDim2.fromScale(1, 1),
+		Position = UDim2.fromScale(0, 0),
+		BackgroundTransparency = 1,
+		Image = "rbxassetid://6578550186", -- Texture vignette radial halus Roblox
+		ImageColor3 = Color3.fromRGB(10, 0, 2),
+		ImageTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Rect.new(100, 100, 100, 100),
+		Active = false,
+		Parent = screen,
+	})
+
+	-- 2. HUD Container di bagian bawah layar
 	local holder = new("Frame", {
 		Name = "Holder",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -BOTTOM),
-		Size = UDim2.new(WIDTH, 0, 0, HEIGHT + 40),
+		Position = UDim2.new(0.5, 0, 1, -65),
+		Size = UDim2.new(0.32, 0, 0, 80),
 		BackgroundTransparency = 1,
 		Active = false,
 		Visible = false,
 		Parent = screen,
 	})
 
+	-- 3. Label Status Seram (Font Creepster)
 	local label = new("TextLabel", {
-		Name = "Label",
-		Size = UDim2.new(1, 0, 0, 16),
+		Name = "StatusLabel",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 0),
+		Size = UDim2.new(1, 0, 0, 28),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.Garamond,
-		TextSize = 18,
-		TextColor3 = INK.calm,
-		TextStrokeTransparency = 0.55,
-		Text = "",
+		Font = Enum.Font.Creepster,
+		TextSize = 26,
+		TextColor3 = COLOR_TEXT_LIGHT,
+		TextStrokeColor3 = Color3.fromRGB(0, 0, 0),
+		TextStrokeTransparency = 0,
+		Text = "HOLDING BREATH",
 		Active = false,
 		Parent = holder,
 	})
 
-	-- Scratches sit just above the bar: 20 tally marks, slightly crooked.
+	-- 4. Countdown Angka (Font SpecialElite)
+	local countdown = new("TextLabel", {
+		Name = "Countdown",
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -4, 1, -26),
+		Size = UDim2.new(0, 50, 0, 20),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.SpecialElite,
+		TextSize = 16,
+		TextColor3 = COLOR_WARN_GOLD,
+		TextStrokeColor3 = Color3.new(0, 0, 0),
+		TextStrokeTransparency = 0.2,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		Text = "20s",
+		Active = false,
+		Parent = holder,
+	})
+
+	-- 5. Deretan 20 Goresan Kuku (Scratches)
 	local scratches = new("Frame", {
 		Name = "Scratches",
-		Position = UDim2.new(0, 0, 0, 18),
-		Size = UDim2.new(1, 0, 0, 11),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 2, 1, -28),
+		Size = UDim2.new(1, -56, 0, 12),
 		BackgroundTransparency = 1,
 		Active = false,
 		Parent = holder,
 	})
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
-		HorizontalAlignment = Enum.HorizontalAlignment.Center,
-		VerticalAlignment = Enum.VerticalAlignment.Top,
-		Padding = UDim.new(0, 3),
+		HorizontalAlignment = Enum.HorizontalAlignment.Left,
+		VerticalAlignment = Enum.VerticalAlignment.Bottom,
+		Padding = UDim.new(0, 2),
 		Parent = scratches,
 	})
 
-	self.marks = table.create(MARKS)
+	local marks = table.create(MARKS)
 	for i = 1, MARKS do
-		self.marks[i] = new("Frame", {
-			Name = "M" .. i,
-			Size = UDim2.new(0, 2, 1, 0),
-			BackgroundColor3 = SCRATCH_LIT,
-			BackgroundTransparency = 0.5,
+		marks[i] = new("Frame", {
+			Name = "Mark" .. i,
+			Size = UDim2.new(0, 3, 0, (i % 2 == 0) and 10 or 7),
+			BackgroundColor3 = Color3.fromRGB(160, 140, 130),
 			BorderSizePixel = 0,
-			Rotation = (i % 3) - 1,          -- crooked, not a tidy grid
+			Rotation = ((i * 7) % 15) - 7,
 			LayoutOrder = i,
 			Active = false,
 			Parent = scratches,
 		})
 	end
 
+	-- 6. Frame Bar Luar (Karat & Darah)
 	local track = new("Frame", {
 		Name = "Track",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, 0),
-		Size = UDim2.new(1, 0, 0, HEIGHT),
-		BackgroundColor3 = Color3.fromRGB(20, 20, 24),
-		BackgroundTransparency = 0.3,
+		Size = UDim2.new(1, 0, 0, 18),
+		BackgroundColor3 = COLOR_RUST_BG,
 		BorderSizePixel = 0,
 		Active = false,
 		Parent = holder,
 	})
-	new("UICorner", { CornerRadius = UDim.new(0, 4), Parent = track })
+	new("UICorner", { CornerRadius = UDim.new(0, 3), Parent = track })
+	new("UIStroke", {
+		Color = Color3.fromRGB(70, 10, 15),
+		Thickness = 1.5,
+		Transparency = 0.2,
+		Parent = track,
+	})
 
+	-- 7. Isi Bar Darah (Fill)
 	local fill = new("Frame", {
 		Name = "Fill",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		BorderSizePixel = 0,
+		ClipsDescendants = true,
 		Active = false,
 		Parent = track,
 	})
-	new("UICorner", { CornerRadius = UDim.new(0, 4), Parent = fill })
+	new("UICorner", { CornerRadius = UDim.new(0, 2), Parent = fill })
 
-	-- Rib bars laid over the fill so the blood reads as caged, not as a tube.
+	local bloodGradient = new("UIGradient", {
+		Color = ColorSequence.new(COLOR_BLOOD_BRIGHT, COLOR_BLOOD_DARK),
+		Rotation = 90,
+		Parent = fill,
+	})
+
+	-- 8. Garis Tulang Rusuk di atas Fill
 	local ribs = new("Frame", {
 		Name = "Ribs",
 		Size = UDim2.fromScale(1, 1),
@@ -191,142 +212,152 @@ function BreathBar.new()
 	})
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
-		Padding = UDim.new(0, 13),
+		Padding = UDim.new(0, 10),
 		Parent = ribs,
 	})
-	for i = 1, 24 do
+	for i = 1, 28 do
 		new("Frame", {
-			Size = UDim2.new(0, 2, 1, 0),
-			BackgroundColor3 = Color3.new(0, 0, 0),
-			BackgroundTransparency = 0.45,
+			Size = UDim2.new(0, 1.5, 1, 0),
+			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+			BackgroundTransparency = 0.5,
 			BorderSizePixel = 0,
-			LayoutOrder = i,
 			Active = false,
 			Parent = ribs,
 		})
 	end
 
-	self.screen, self.holder, self.label = screen, holder, label
-	self.track, self.fill = track, fill
-	self.blood = gradient(fill, BLOOD.calm[1], BLOOD.calm[2])
-	self.tone, self.gasp = nil, nil
-	self.visible = false
+	self.screen = screen
+	self.vignette = vignette
+	self.holder = holder
+	self.label = label
+	self.countdown = countdown
+	self.track = track
+	self.fill = fill
+	self.marks = marks
+	self.bloodGradient = bloodGradient
+	self.autoHideToken = 0
+	self.pulseTween = nil
 
 	return self
 end
 
----------------------------------------------------------------------
--- STATE
----------------------------------------------------------------------
-
-local function toneFor(fraction: number): string
-	return fraction <= PANIC_AT and "panic"
-		or fraction <= WARN_AT and "warn"
-		or "calm"
-end
-
---- Gasping: the bar swells and collapses instead of sitting still. Faster as
---- the air runs out, which is the cue players read before the number.
-function BreathBar:_breathe(tone: string)
-	if self.tone == tone then
-		return
-	end
-	self.tone = tone
-
-	if self.gasp then
-		self.gasp:Cancel()
-		self.gasp = nil
-	end
-	self.track.Size = UDim2.new(1, 0, 0, HEIGHT)
-
-	local period = GASP[tone]
-	if not period then                     -- breach: the lungs stop
-		return
+function BreathBar:_startVignettePulse(speed: number, maxAlpha: number)
+	if self.pulseTween then
+		self.pulseTween:Cancel()
+		self.pulseTween = nil
 	end
 
-	self.gasp = TweenService:Create(
-		self.track,
-		TweenInfo.new(period / 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-		{ Size = UDim2.new(1, 0, 0, HEIGHT + 7) }
+	self.vignette.ImageColor3 = Color3.fromRGB(40, 0, 5)
+	self.pulseTween = TweenService:Create(
+		self.vignette,
+		TweenInfo.new(speed, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+		{ ImageTransparency = maxAlpha }
 	)
-	self.gasp:Play()
+	self.pulseTween:Play()
 end
 
-function BreathBar:_show(visible: boolean)
-	self.visible = visible
-	self.holder.Visible = visible
+function BreathBar:_stopVignette()
+	if self.pulseTween then
+		self.pulseTween:Cancel()
+		self.pulseTween = nil
+	end
+	TweenService:Create(self.vignette, TweenInfo.new(0.4), { ImageTransparency = 1 }):Play()
 end
 
---- Draw the latest state.
---- @param payload  table from the RemoteEvent, or nil to hide
 function BreathBar:update(payload: { [string]: any }?)
 	if not self.holder or not self.holder.Parent then
 		return
 	end
 
+	-- State NONE / nil -> Hancurkan tampilan seketika (Anti-Nyangkut)
 	if not payload or payload.state == nil or payload.state == "NONE" then
-		self:_show(false)
+		self.autoHideToken += 1
+		self:_stopVignette()
+		TweenService:Create(self.holder, TweenInfo.new(0.25), { Position = UDim2.new(0.5, 0, 1, -40) }):Play()
+		task.delay(0.25, function()
+			if self.holder then
+				self.holder.Visible = false
+				self.holder.Position = UDim2.new(0.5, 0, 1, -65)
+			end
+		end)
 		return
 	end
 
 	local state = tostring(payload.state)
-
-	-- An eternal stall has no timer, so a meter would be a lie.
-	if payload.eternal == true then
-		self.label.Text = "safe"
-		self.label.TextColor3 = INK.calm
-		self.fill.Size = UDim2.fromScale(1, 1)
-		self:_breathe("calm")
-		self:_show(true)
-		return
-	end
-
 	local fraction = math.clamp(tonumber(payload.fraction) or 0, 0, 1)
-	local breached = state == "BREACHED" or fraction <= 0
-	local tone = breached and "breach" or toneFor(fraction)
+	local breathSec = math.max(0, math.floor((tonumber(payload.breath) or 0) + 0.5))
 
-	local text = TEXT[state] or state
+	-- Status teks & nuansa horor
+	local labelText = TEXT[state] or state
+	local labelColor = COLOR_TEXT_LIGHT
+
 	if state == "OCCUPIED" then
-		text = STRAIN[tone] or text
-		local left = math.max(0, math.floor((tonumber(payload.breath) or 0) + 0.5))
-		text = string.format("%s  %ds", text, left)
+		if fraction <= 0.25 then
+			labelText = STRAIN.panic
+			labelColor = COLOR_TEXT_PANIC
+			self:_startVignettePulse(0.5, 0.25) -- Vignette merah darah berdenyut cepat
+		elseif fraction <= 0.55 then
+			labelText = STRAIN.warn
+			labelColor = COLOR_WARN_GOLD
+			self:_startVignettePulse(1.0, 0.55) -- Denyut pelan
+		else
+			labelText = TEXT.OCCUPIED
+			labelColor = COLOR_TEXT_LIGHT
+			self:_startVignettePulse(1.8, 0.75) -- Gelap samar di tepi
+		end
+		self.countdown.Text = string.format("%ds", breathSec)
+		self.countdown.Visible = true
+	else
+		-- State BREACHED / COOLDOWN / FULL
+		self.countdown.Visible = false
+		labelColor = COLOR_TEXT_PANIC
+		self:_stopVignette()
+
+		-- AUTO-HIDE ANTI-NYANGKUT: Jika menerima status penolakan, tampilkan sebentar lalu hilang sendiri!
+		self.autoHideToken += 1
+		local currentToken = self.autoHideToken
+		task.delay(1.8, function()
+			if self.autoHideToken == currentToken and self.holder then
+				self:update(nil)
+			end
+		end)
 	end
 
-	self.label.Text = text
-	self.label.TextColor3 = INK[tone] or INK.calm
+	self.label.Text = labelText
+	self.label.TextColor3 = labelColor
 
-	local blood = BLOOD[tone] or BLOOD.panic
-	self.blood.Color = ColorSequence.new(blood[1], blood[2])
-
-	-- Short tween so the bar does not jerk between 0.1s server ticks.
+	-- Tween Fill Bar
 	TweenService:Create(
 		self.fill,
 		TweenInfo.new(0.12, Enum.EasingStyle.Linear),
 		{ Size = UDim2.fromScale(fraction, 1) }
 	):Play()
 
-	-- Scratches burn away one per second, counting down from the right.
-	local lit = math.ceil(fraction * MARKS)
+	-- Tally Marks (Goresan Kuku)
+	local litCount = math.ceil(fraction * MARKS)
 	for i, mark in self.marks do
-		local gone = i > lit
-		mark.BackgroundColor3 = gone and SCRATCH_GONE or SCRATCH_LIT
-		mark.BackgroundTransparency = gone and 0.05 or 0.5
-		mark.Size = UDim2.new(0, 2, gone and 0.6 or 1, 0)
+		if i <= litCount then
+			mark.BackgroundColor3 = Color3.fromRGB(160, 140, 130)
+			mark.BackgroundTransparency = 0.2
+		else
+			mark.BackgroundColor3 = Color3.fromRGB(35, 8, 12)
+			mark.BackgroundTransparency = 0.8
+		end
 	end
 
-	self:_breathe(tone)
-	self:_show(true)
+	self.holder.Visible = true
 end
 
 function BreathBar:destroy()
-	if self.gasp then
-		self.gasp:Cancel()
-	end
+	self:_stopVignette()
 	if self.screen then
 		self.screen:Destroy()
 	end
-	self.screen, self.holder, self.label = nil, nil, nil
-	self.track, self.fill, self.blood, self.gasp = nil, nil, nil, nil
+	self.screen = nil
+	self.holder = nil
+	self.label = nil
+	self.countdown = nil
+	self.vignette = nil
 	self.marks = nil
 end
 

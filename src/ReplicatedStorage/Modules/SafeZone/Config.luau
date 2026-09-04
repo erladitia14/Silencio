@@ -66,9 +66,17 @@ Config.HideAnchor = true
 
 -- Batas mengintip (derajat). Kamera tidak bebas 360 — ia terkurung di
 -- balik pintu, jadi cuma bisa melirik.
-Config.PeekYawLimit   = 45
-Config.PeekPitchLimit = 22
-Config.PeekSensitivity = 0.25
+-- YawLimit = SETENGAH dari rentang total: 60 berarti pemain bisa menengok
+-- 60 kiri + 60 kanan = 120 derajat (permintaan Aer).
+Config.PeekYawLimit   = 60
+Config.PeekPitchLimit = 25
+-- Derajat per piksel gerakan mouse. 0.25 terlalu lambat untuk rentang 120.
+Config.PeekSensitivity = 0.4
+
+-- Lama pesan penolakan ("stall is spent") tampil sebelum disembunyikan.
+-- Pemain yang DITOLAK tidak pernah jadi penghuni, jadi tanpa timer ini
+-- tidak ada apa pun yang akan membersihkan UI-nya.
+Config.DeniedNoticeTime = 1.6
 
 -- Transisi gelap saat masuk/keluar. Ini PENGGANTI SEMENTARA animasi
 -- masuk-bilik & animasi monster menarik keluar (belum ada asetnya).
