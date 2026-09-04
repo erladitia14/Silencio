@@ -99,7 +99,7 @@ src/
 │   └── SafeZone/                        ← 11 modul Safe Zone
 ├── StarterPlayer/
 │   ├── StarterCharacterScripts/
-│   │   └── DamageEffect.client.luau     ← efek horor client (vignette + camera shake)
+│   │   └── DamageEffect.client.luau     ← efek horor sinematik (vignette darah 4-sisi, heartbeat pulse, adrenaline blur, shake)
 │   └── StarterPlayerScripts/
 │       └── SafeZoneUI.client.luau       ← bar napas + kamera mengintip Safe Zone
 └── ServerStorage/
