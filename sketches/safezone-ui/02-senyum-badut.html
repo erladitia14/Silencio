@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Silencio — Senyum Badut</title>
+<link href="https://fonts.googleapis.com/css2?family=Rye&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  /* Custom property yang di-transition WAJIB didaftarkan lewat @property;
+     tanpa itu perubahan var() tidak bisa diinterpolasi dan nilainya
+     "nyangkut" di angka lama (terukur: vignette tetap .58 saat panic). */
+  @property --dark { syntax: "<number>"; inherits: true; initial-value: 0.58; }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #060406;
+    color: #b8a9a4;
+    font-family: "Special Elite", "Courier New", monospace;
+    min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    padding: 28px 16px 60px;
+  }
+
+  h1 { font-family: "Rye", serif; font-size: 22px; letter-spacing: .06em; color: #7a5a4a; }
+  .sub { font-size: 13px; color: #4a3f42; margin: 8px 0 22px; }
+
+  .screen {
+    position: relative; width: min(920px, 100%); aspect-ratio: 16/9; overflow: hidden;
+    border: 1px solid #1d1518; cursor: pointer;
+    background: radial-gradient(ellipse 65% 50% at 50% 45%, #1e1418 0%, #0c0709 58%, #040203 100%);
+  }
+  .stall {
+    position: absolute; inset: 0; opacity: .8;
+    background:
+      linear-gradient(90deg, transparent 0 20%, #0e0a0c 20% 21.4%, transparent 21.4% 49%,
+        #0e0a0c 49% 50.4%, transparent 50.4% 78%, #0e0a0c 78% 79.4%, transparent 79.4%),
+      linear-gradient(180deg, transparent 0 60%, #090607 100%);
+  }
+  /* wallpaper karnaval belang, pudar */
+  .stripe {
+    position: absolute; inset: 0; opacity: .05;
+    background: repeating-linear-gradient(90deg, #8b1a1f 0 34px, transparent 34px 68px);
+    mask-image: radial-gradient(ellipse 72% 58% at 50% 45%, #000 15%, transparent 78%);
+  }
+  /* Default --dark ditaruh di RULE, bukan inline: inline style menang atas
+     selektor [data-state], jadi vignette-nya tidak akan pernah menggelap. */
+  .screen { --dark: .58; }
+  .vignette {
+    position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse 76% 60% at 50% 50%, transparent 30%, #000 100%);
+    opacity: var(--dark,.58); transition: opacity .5s;
+  }
+
+  /* ============ HUD: SENYUM ============ */
+  .hud {
+    position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%);
+    width: 40%; text-align: center; pointer-events: none;
+  }
+
+  .smile-wrap { position: relative; height: 66px; }
+
+  /* gigi = jatah napas. 10 gigi, tanggal satu per satu. */
+  .teeth { position: absolute; inset: 0; display: flex; gap: 3px; align-items: flex-start; justify-content: center; }
+  .teeth b {
+    display: block; width: 8.2%; border-radius: 0 0 40% 40%;
+    background: linear-gradient(180deg, #e8ddc8 0%, #c9b79a 62%, #8e7f68 100%);
+    box-shadow: inset 0 -3px 5px #6b5c4740, 0 1px 3px #000;
+    transition: height .3s, transform .45s cubic-bezier(.3,1.4,.6,1), opacity .45s, background .3s;
+  }
+  /* tinggi gigi tidak rata — senyum bengkok, bukan grid rapi */
+  .teeth b:nth-child(odd)  { height: 84%; }
+  .teeth b:nth-child(even) { height: 96%; }
+  .teeth b:nth-child(3n)   { height: 74%; }
+
+  /* gigi tanggal: rontok ke bawah sambil berputar */
+  .teeth b.out {
+    transform: translateY(58px) rotate(var(--spin, 22deg));
+    opacity: 0;
+  }
+  /* gigi busuk saat panik */
+  .screen[data-state="panic"] .teeth b:not(.out) {
+    background: linear-gradient(180deg, #cbb89a 0%, #8d7350 55%, #4d3d2c 100%);
+  }
+
+  /* gusi: lengkung merah di atas gigi */
+  .gum {
+    position: absolute; left: 0; right: 0; top: -9px; height: 22px;
+    background: linear-gradient(180deg, #6d1116 0%, #45080c 100%);
+    border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+    box-shadow: 0 2px 12px #4a0a0d88, inset 0 -2px 6px #23050799;
+  }
+  /* lipstik badut: dua garis meluber keluar dari mulut */
+  .lip { position: absolute; height: 4px; background: #7d1418; opacity: .85; filter: blur(.4px); }
+  .lip.l { left: -14%; width: 22%; top: 4px; transform: rotate(-16deg); }
+  .lip.r { right: -14%; width: 22%; top: 4px; transform: rotate(16deg); }
+
+  .label {
+    font-size: 13px; letter-spacing: .3em; text-transform: uppercase;
+    color: #8b7873; text-shadow: 0 0 12px #000; margin-top: 16px;
+  }
+  .count { font-family: "Rye", serif; font-size: 15px; color: #6d5a56; margin-top: 6px; letter-spacing: .1em; }
+
+  /* ---- keadaan ---- */
+  .screen[data-state="warn"]  { --dark:.7; }
+  .screen[data-state="warn"]  .label { color: #a4877f; }
+  .screen[data-state="panic"] { --dark:.82; }
+  .screen[data-state="panic"] .label { color: #c39c94; }
+  .screen[data-state="panic"] .gum { animation: quiver .28s infinite; }
+  @keyframes quiver { 50% { transform: translateX(1.5px) } }
+
+  /* BREACH: senyum melebar — gusi kosong menganga */
+  .screen[data-state="breach"] { --dark:.94; }
+  .screen[data-state="breach"] .gum {
+    height: 40px; background: linear-gradient(180deg,#8e1418 0%, #1a0304 85%);
+    animation: grin .8s cubic-bezier(.3,1.5,.5,1) forwards;
+  }
+  @keyframes grin { to { transform: scaleX(1.45) } }
+  .screen[data-state="breach"] .label {
+    color: #a11418; letter-spacing: .46em; animation: flick .12s steps(2) 8;
+  }
+  @keyframes flick { 50% { opacity: .1 } }
+  .screen[data-state="breach"] .lip { animation: smear .9s ease-out forwards; }
+  @keyframes smear { to { width: 40%; opacity: .55; filter: blur(2px) } }
+
+  /* mata muncul di kegelapan saat ketahuan */
+  .eyes { position: absolute; top: 26%; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 46px; opacity: 0; transition: opacity 1s; }
+  .eyes span { width: 13px; height: 13px; border-radius: 50%;
+    background: #b81418; box-shadow: 0 0 22px #b8141899, 0 0 4px #fff2; }
+  .screen[data-state="breach"] .eyes { opacity: 1; }
+  .screen[data-state="breach"] .eyes span { animation: blink 2.6s steps(1) infinite; }
+  @keyframes blink { 92% { opacity: 1 } 94% { opacity: 0 } 96% { opacity: 1 } }
+
+  .bar { display: flex; gap: 8px; margin: 20px 0 6px; flex-wrap: wrap; justify-content: center; }
+  button {
+    font-family: inherit; font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+    background: #130e10; color: #8a7873; border: 1px solid #2b2023; padding: 9px 15px; cursor: pointer;
+    transition: .18s;
+  }
+  button:hover { background: #1e1518; color: #cbb8b3; border-color: #4d2c31; }
+  button.on { background: #3c1013; color: #ecd9d4; border-color: #7d1418; }
+  .hint { font-size: 12px; color: #3d3538; margin-top: 12px; }
+</style>
+</head>
+<body>
+
+<h1>02 · Senyum Badut</h1>
+<p class="sub">Sepuluh gigi = jatah napas. Tiap 2 detik satu gigi rontok. Habis → senyumnya melebar.</p>
+
+<div class="screen" id="screen" data-state="calm">
+  <div class="stall"></div>
+  <div class="stripe"></div>
+  <div class="eyes"><span></span><span></span></div>
+  <div class="vignette"></div>
+
+  <div class="hud">
+    <div class="smile-wrap">
+      <div class="gum"></div>
+      <div class="lip l"></div>
+      <div class="lip r"></div>
+      <div class="teeth" id="teeth"></div>
+    </div>
+    <div class="label" id="label">dia belum melihatmu</div>
+    <div class="count" id="count">20</div>
+  </div>
+</div>
+
+<div class="bar">
+  <button data-s="calm" class="on">20s · tenang</button>
+  <button data-s="warn">10s · setengah</button>
+  <button data-s="panic">4s · gigi busuk</button>
+  <button data-s="breach">habis · senyum lebar</button>
+  <button id="play">▶ jalankan 20 detik</button>
+</div>
+<p class="hint">Klik layar untuk menjalankan hitungan penuh.</p>
+
+<script>
+  const screen = document.getElementById('screen');
+  const teeth  = document.getElementById('teeth');
+  const label  = document.getElementById('label');
+  const count  = document.getElementById('count');
+
+  const N = 10, TOTAL = 20;
+  for (let i = 0; i < N; i++) {
+    const t = document.createElement('b');
+    t.style.setProperty('--spin', (Math.random() * 70 - 35).toFixed(0) + 'deg');
+    teeth.appendChild(t);
+  }
+  const all = [...teeth.children];
+
+  const TEXT = {
+    calm:   'dia belum melihatmu',
+    warn:   'langkahnya mendekat',
+    panic:  'jangan bergerak',
+    breach: 'senyum itu untukmu'
+  };
+
+  function render(sec, state) {
+    // gigi rontok dari tengah ke luar — lebih menyeramkan daripada kiri ke kanan
+    const left = Math.ceil((sec / TOTAL) * N);
+    const order = [4,5,3,6,2,7,1,8,0,9];
+    all.forEach(t => t.classList.remove('out'));
+    for (let i = 0; i < N - left; i++) all[order[i]].classList.add('out');
+
+    screen.dataset.state = state;
+    label.textContent = TEXT[state];
+    count.textContent = state === 'breach' ? '—' : Math.ceil(sec);
+  }
+
+  const PRESET = { calm: 20, warn: 10, panic: 4, breach: 0 };
+  let timer = null;
+
+  document.querySelectorAll('[data-s]').forEach(b => {
+    b.onclick = () => {
+      clearInterval(timer);
+      document.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      render(PRESET[b.dataset.s], b.dataset.s);
+    };
+  });
+
+  const stateFor = s => s <= 0 ? 'breach' : s <= 5 ? 'panic' : s <= 11 ? 'warn' : 'calm';
+
+  function run() {
+    clearInterval(timer);
+    document.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+    let sec = TOTAL;
+    render(sec, 'calm');
+    timer = setInterval(() => {
+      sec -= 0.1;
+      if (sec <= 0) { render(0, 'breach'); clearInterval(timer); return; }
+      render(sec, stateFor(sec));
+    }, 100);
+  }
+  document.getElementById('play').onclick = run;
+  screen.onclick = run;
+
+  render(20, 'calm');
+</script>
+</body>
+</html>

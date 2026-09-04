@@ -34,8 +34,10 @@ Config.SafeZoneFolder = "SafeZones"
 --   terbuka yang luas, di mana "sembunyi" tidak masuk akal.
 Config.TouchToEnter = false
 
-Config.PromptActionText   = "Sembunyi"
-Config.PromptExitText     = "Keluar"
+-- Teks yang DILIHAT PEMAIN: bahasa Inggris (permintaan Aer).
+-- Komentar & nama variabel tetap Indonesia untuk tim.
+Config.PromptActionText   = "Hide"
+Config.PromptExitText     = "Leave"
 Config.PromptObjectText   = ""      -- kosong = tidak menampilkan nama objek
 Config.PromptDistance     = 9       -- MaxActivationDistance (studs)
 Config.PromptHoldDuration = 0       -- >0 = harus tahan tombol

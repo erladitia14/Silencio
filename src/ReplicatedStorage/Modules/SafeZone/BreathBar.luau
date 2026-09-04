@@ -1,223 +1,333 @@
 --[[
 	BreathBar.luau
 	--------------
-	UI bar napas Safe Zone. MODUL TERPISAH dan bisa ditukar.
+	Safe Zone breath meter — "Choked Breath" design.
 
-	Kenapa modul, bukan langsung di LocalScript: UI ini sementara (buatan
-	kita). Kalau tim mengirim desain sendiri, yang perlu diganti cuma
-	modul ini — LocalScript pemanggil dan seluruh sistem server tidak
-	disentuh.
+	The bar is not a progress meter, it is a pair of lungs: it GASPS instead of
+	draining smoothly, the fill is dark clotted blood rather than a clean tint,
+	and the 20 tally marks above it are fingernail scratches on the stall wall —
+	one per second, each one going dark as it burns away.
 
-	KONTRAK (harus dipenuhi modul pengganti):
-	  BreathBar.new()          -> objek bar
-	  bar:update(payload)      -> payload dari RemoteEvent "SafeZoneState"
-	  bar:destroy()            -> lepas semua koneksi & instance
+	SWAPPABLE MODULE. If the team ships their own design, replace this file (or
+	drop a new module in this folder and point `UI_MODULE` in `SafeZoneUI` at
+	it). Nothing else needs to change.
 
-	Bentuk payload dari server:
-	  { state, breath, max, fraction, count, capacity, eternal }
-	  state "NONE" = pemain sedang tidak berada di bilik mana pun.
+	CONTRACT
+	  BreathBar.new()       -> bar object
+	  bar:update(payload)   -> payload from RemoteEvent "SafeZoneState"
+	                           (nil / state "NONE" hides the bar)
+	  bar:destroy()         -> release every instance and connection
 
-	Murni presentasi — nol logika game. Server tetap satu-satunya pemilik
-	kebenaran; bar ini hanya menggambar apa yang dikirim.
+	Pure presentation — zero game logic. The server owns the truth; this only
+	draws what it is told.
 --]]
+
+local Players      = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 
 local BreathBar = {}
 BreathBar.__index = BreathBar
 
--- Tampilan
-local BAR_WIDTH   = 0.28   -- lebar bar, skala layar
-local BAR_HEIGHT  = 14     -- tinggi bar, piksel
-local BOTTOM_PAD  = 90     -- jarak dari bawah layar, piksel
-local FADE_TIME   = 0.25   -- lama muncul/hilang, detik
+local GUI_NAME = "SafeZoneBreath"
+local MARKS    = 20      -- one scratch per second of a default 20s breath
 
--- Warna per keadaan napas
-local COLOR_SAFE  = Color3.fromRGB(120, 220, 150)  -- napas banyak
-local COLOR_WARN  = Color3.fromRGB(235, 200,  90)  -- mulai habis
-local COLOR_PANIC = Color3.fromRGB(225,  75,  70)  -- kritis
-local WARN_AT     = 0.5
-local PANIC_AT    = 0.25
+-- Layout
+local WIDTH, HEIGHT, BOTTOM = 0.28, 14, 90
 
-local LABEL = {
-	OCCUPIED = "Menahan napas",
-	BREACHED = "Napas habis!",
-	COOLDOWN = "Bilik tidak bisa dipakai",
-	READY    = "Bilik siap",
-	FULL     = "Bilik sudah dipakai",
+-- Blood darkens toward the top edge; brightens as panic sets in.
+local BLOOD = {
+	calm  = { Color3.fromRGB(125, 20, 24), Color3.fromRGB(43,  10, 13) },
+	warn  = { Color3.fromRGB(141, 26, 30), Color3.fromRGB(44,   6,  8) },
+	panic = { Color3.fromRGB(165, 31, 34), Color3.fromRGB(48,   7,  9) },
 }
+local INK = {                                    -- label colour
+	calm   = Color3.fromRGB(141, 124, 120),
+	warn   = Color3.fromRGB(160, 134, 129),
+	panic  = Color3.fromRGB(194, 154, 148),
+	breach = Color3.fromRGB(142,  20,  24),
+}
+local GASP = { calm = 3.4, warn = 2.1, panic = 1.0 }   -- seconds per breath
+local SCRATCH_LIT  = Color3.fromRGB(110,  95,  91)
+local SCRATCH_GONE = Color3.fromRGB( 42,  17,  20)
+
+local TEXT = {
+	OCCUPIED = "holding breath",
+	BREACHED = "it heard you",
+	COOLDOWN = "the stall is spent",
+	READY    = "stall is clear",
+	FULL     = "someone is inside",
+}
+-- OCCUPIED reads differently as the air runs out.
+local STRAIN = { warn = "lungs burning", panic = "can't hold on" }
+
+local WARN_AT, PANIC_AT = 0.55, 0.25
 
 ---------------------------------------------------------------------
+-- BUILD
+---------------------------------------------------------------------
 
-local function make(class: string, props: { [string]: any }): any
+local function new(class: string, props: { [string]: any }): any
 	local inst = Instance.new(class)
+	local parent = props.Parent
+	props.Parent = nil
 	for key, value in props do
-		if key ~= "Parent" then
-			(inst :: any)[key] = value
-		end
+		(inst :: any)[key] = value
 	end
-	if props.Parent then
-		inst.Parent = props.Parent
-	end
+	inst.Parent = parent
 	return inst
+end
+
+--- Vertical two-stop gradient (top .. bottom).
+local function gradient(parent: Instance, top: Color3, bottom: Color3): UIGradient
+	return new("UIGradient", {
+		Rotation = 90,
+		Color = ColorSequence.new(top, bottom),
+		Parent = parent,
+	})
 end
 
 function BreathBar.new()
 	local self = setmetatable({}, BreathBar)
+	local gui = Players.LocalPlayer:WaitForChild("PlayerGui")
 
-	local player = game:GetService("Players").LocalPlayer
-
-	-- ResetOnSpawn = false: bar ini harus selamat dari respawn, sama
-	-- seperti HorrorVignette milik DamageEffect.
-	local gui = player:WaitForChild("PlayerGui"):FindFirstChild("SafeZoneBreath")
-	if not gui then
-		gui = make("ScreenGui", {
-			Name = "SafeZoneBreath",
-			ResetOnSpawn = false,
-			IgnoreGuiInset = true,
-			DisplayOrder = 5,
-			Parent = player:WaitForChild("PlayerGui"),
-		})
-	end
-	gui:ClearAllChildren()
-
-	local holder = make("Frame", {
-		Name = "Holder",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -BOTTOM_PAD),
-		Size = UDim2.new(BAR_WIDTH, 0, 0, BAR_HEIGHT + 22),
-		BackgroundTransparency = 1,
-		-- Active = false: bar tidak boleh memblokir klik/tap pemain.
-		Active = false,
-		Visible = false,
+	-- ResetOnSpawn = false: the bar has to survive respawn, same as
+	-- DamageEffect's vignette, or it silently stops working after one death.
+	local screen = gui:FindFirstChild(GUI_NAME) or new("ScreenGui", {
+		Name = GUI_NAME,
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		DisplayOrder = 6,
 		Parent = gui,
 	})
+	screen:ClearAllChildren()
 
-	local label = make("TextLabel", {
-		Name = "Label",
-		Size = UDim2.new(1, 0, 0, 18),
-		Position = UDim2.new(0, 0, 0, 0),
+	-- Active = false everywhere: the HUD must never eat the player's clicks.
+	local holder = new("Frame", {
+		Name = "Holder",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -BOTTOM),
+		Size = UDim2.new(WIDTH, 0, 0, HEIGHT + 40),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamMedium,
-		TextSize = 13,
-		TextColor3 = Color3.fromRGB(235, 235, 235),
-		TextStrokeTransparency = 0.6,
-		TextXAlignment = Enum.TextXAlignment.Center,
+		Active = false,
+		Visible = false,
+		Parent = screen,
+	})
+
+	local label = new("TextLabel", {
+		Name = "Label",
+		Size = UDim2.new(1, 0, 0, 16),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.Garamond,
+		TextSize = 18,
+		TextColor3 = INK.calm,
+		TextStrokeTransparency = 0.55,
 		Text = "",
 		Active = false,
 		Parent = holder,
 	})
 
-	local track = make("Frame", {
+	-- Scratches sit just above the bar: 20 tally marks, slightly crooked.
+	local scratches = new("Frame", {
+		Name = "Scratches",
+		Position = UDim2.new(0, 0, 0, 18),
+		Size = UDim2.new(1, 0, 0, 11),
+		BackgroundTransparency = 1,
+		Active = false,
+		Parent = holder,
+	})
+	new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Top,
+		Padding = UDim.new(0, 3),
+		Parent = scratches,
+	})
+
+	self.marks = table.create(MARKS)
+	for i = 1, MARKS do
+		self.marks[i] = new("Frame", {
+			Name = "M" .. i,
+			Size = UDim2.new(0, 2, 1, 0),
+			BackgroundColor3 = SCRATCH_LIT,
+			BackgroundTransparency = 0.5,
+			BorderSizePixel = 0,
+			Rotation = (i % 3) - 1,          -- crooked, not a tidy grid
+			LayoutOrder = i,
+			Active = false,
+			Parent = scratches,
+		})
+	end
+
+	local track = new("Frame", {
 		Name = "Track",
-		Size = UDim2.new(1, 0, 0, BAR_HEIGHT),
-		Position = UDim2.new(0, 0, 1, -BAR_HEIGHT),
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, 0),
+		Size = UDim2.new(1, 0, 0, HEIGHT),
 		BackgroundColor3 = Color3.fromRGB(20, 20, 24),
-		BackgroundTransparency = 0.35,
+		BackgroundTransparency = 0.3,
 		BorderSizePixel = 0,
 		Active = false,
 		Parent = holder,
 	})
-	make("UICorner", { CornerRadius = UDim.new(0, 4), Parent = track })
+	new("UICorner", { CornerRadius = UDim.new(0, 4), Parent = track })
 
-	local fill = make("Frame", {
+	local fill = new("Frame", {
 		Name = "Fill",
-		Size = UDim2.new(1, 0, 1, 0),
-		BackgroundColor3 = COLOR_SAFE,
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.new(1, 1, 1),
 		BorderSizePixel = 0,
 		Active = false,
 		Parent = track,
 	})
-	make("UICorner", { CornerRadius = UDim.new(0, 4), Parent = fill })
+	new("UICorner", { CornerRadius = UDim.new(0, 4), Parent = fill })
 
-	self._gui = gui
-	self._holder = holder
-	self._label = label
-	self._fill = fill
-	self._tween = game:GetService("TweenService")
-	self._visible = false
+	-- Rib bars laid over the fill so the blood reads as caged, not as a tube.
+	local ribs = new("Frame", {
+		Name = "Ribs",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Active = false,
+		Parent = track,
+	})
+	new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 13),
+		Parent = ribs,
+	})
+	for i = 1, 24 do
+		new("Frame", {
+			Size = UDim2.new(0, 2, 1, 0),
+			BackgroundColor3 = Color3.new(0, 0, 0),
+			BackgroundTransparency = 0.45,
+			BorderSizePixel = 0,
+			LayoutOrder = i,
+			Active = false,
+			Parent = ribs,
+		})
+	end
+
+	self.screen, self.holder, self.label = screen, holder, label
+	self.track, self.fill = track, fill
+	self.blood = gradient(fill, BLOOD.calm[1], BLOOD.calm[2])
+	self.tone, self.gasp = nil, nil
+	self.visible = false
 
 	return self
 end
 
---- Warna bar mengikuti sisa napas — pemain tahu bahaya tanpa membaca teks.
-local function colorFor(fraction: number): Color3
-	if fraction <= PANIC_AT then
-		return COLOR_PANIC
-	elseif fraction <= WARN_AT then
-		return COLOR_WARN
-	end
-	return COLOR_SAFE
+---------------------------------------------------------------------
+-- STATE
+---------------------------------------------------------------------
+
+local function toneFor(fraction: number): string
+	return fraction <= PANIC_AT and "panic"
+		or fraction <= WARN_AT and "warn"
+		or "calm"
 end
 
-function BreathBar:_setVisible(visible: boolean)
-	if self._visible == visible then
+--- Gasping: the bar swells and collapses instead of sitting still. Faster as
+--- the air runs out, which is the cue players read before the number.
+function BreathBar:_breathe(tone: string)
+	if self.tone == tone then
 		return
 	end
-	self._visible = visible
+	self.tone = tone
 
-	if visible then
-		self._holder.Visible = true
-	else
-		task.delay(FADE_TIME, function()
-			if not self._visible and self._holder and self._holder.Parent then
-				self._holder.Visible = false
-			end
-		end)
+	if self.gasp then
+		self.gasp:Cancel()
+		self.gasp = nil
 	end
+	self.track.Size = UDim2.new(1, 0, 0, HEIGHT)
+
+	local period = GASP[tone]
+	if not period then                     -- breach: the lungs stop
+		return
+	end
+
+	self.gasp = TweenService:Create(
+		self.track,
+		TweenInfo.new(period / 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+		{ Size = UDim2.new(1, 0, 0, HEIGHT + 7) }
+	)
+	self.gasp:Play()
 end
 
---- Gambar keadaan terbaru.
---- @param payload  tabel dari RemoteEvent, atau nil = sembunyikan
+function BreathBar:_show(visible: boolean)
+	self.visible = visible
+	self.holder.Visible = visible
+end
+
+--- Draw the latest state.
+--- @param payload  table from the RemoteEvent, or nil to hide
 function BreathBar:update(payload: { [string]: any }?)
-	if not self._holder or not self._holder.Parent then
+	if not self.holder or not self.holder.Parent then
 		return
 	end
 
-	if not payload or payload.state == "NONE" then
-		self:_setVisible(false)
+	if not payload or payload.state == nil or payload.state == "NONE" then
+		self:_show(false)
 		return
 	end
 
 	local state = tostring(payload.state)
 
-	-- Bilik abadi tidak punya timer -> tidak perlu bar.
+	-- An eternal stall has no timer, so a meter would be a lie.
 	if payload.eternal == true then
-		self._label.Text = "Aman"
-		self._fill.Size = UDim2.new(1, 0, 1, 0)
-		self._fill.BackgroundColor3 = COLOR_SAFE
-		self:_setVisible(true)
+		self.label.Text = "safe"
+		self.label.TextColor3 = INK.calm
+		self.fill.Size = UDim2.fromScale(1, 1)
+		self:_breathe("calm")
+		self:_show(true)
 		return
 	end
 
-	local fraction = tonumber(payload.fraction) or 0
-	fraction = math.clamp(fraction, 0, 1)
+	local fraction = math.clamp(tonumber(payload.fraction) or 0, 0, 1)
+	local breached = state == "BREACHED" or fraction <= 0
+	local tone = breached and "breach" or toneFor(fraction)
 
-	local text = LABEL[state] or state
+	local text = TEXT[state] or state
 	if state == "OCCUPIED" then
+		text = STRAIN[tone] or text
 		local left = math.max(0, math.floor((tonumber(payload.breath) or 0) + 0.5))
 		text = string.format("%s  %ds", text, left)
 	end
 
-	self._label.Text = text
-	self._fill.BackgroundColor3 = colorFor(fraction)
+	self.label.Text = text
+	self.label.TextColor3 = INK[tone] or INK.calm
 
-	-- Tween pendek supaya bar tidak tersentak di antara detak server 0.1s.
-	self._tween:Create(
-		self._fill,
+	local blood = BLOOD[tone] or BLOOD.panic
+	self.blood.Color = ColorSequence.new(blood[1], blood[2])
+
+	-- Short tween so the bar does not jerk between 0.1s server ticks.
+	TweenService:Create(
+		self.fill,
 		TweenInfo.new(0.12, Enum.EasingStyle.Linear),
-		{ Size = UDim2.new(fraction, 0, 1, 0) }
+		{ Size = UDim2.fromScale(fraction, 1) }
 	):Play()
 
-	self:_setVisible(true)
+	-- Scratches burn away one per second, counting down from the right.
+	local lit = math.ceil(fraction * MARKS)
+	for i, mark in self.marks do
+		local gone = i > lit
+		mark.BackgroundColor3 = gone and SCRATCH_GONE or SCRATCH_LIT
+		mark.BackgroundTransparency = gone and 0.05 or 0.5
+		mark.Size = UDim2.new(0, 2, gone and 0.6 or 1, 0)
+	end
+
+	self:_breathe(tone)
+	self:_show(true)
 end
 
 function BreathBar:destroy()
-	if self._gui then
-		self._gui:Destroy()
+	if self.gasp then
+		self.gasp:Cancel()
 	end
-	self._gui = nil
-	self._holder = nil
-	self._label = nil
-	self._fill = nil
+	if self.screen then
+		self.screen:Destroy()
+	end
+	self.screen, self.holder, self.label = nil, nil, nil
+	self.track, self.fill, self.blood, self.gasp = nil, nil, nil, nil
+	self.marks = nil
 end
 
 return BreathBar

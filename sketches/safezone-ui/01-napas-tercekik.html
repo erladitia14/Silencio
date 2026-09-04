@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Silencio — Napas Tercekik</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  /* Custom property WAJIB didaftarkan kalau nilainya di-transition.
+     Tanpa @property, Chrome menganggap perubahan var() tidak bisa
+     diinterpolasi — vignette-nya "nyangkut" di nilai lama sampai ada
+     style recalc lain. Terukur: opacity tetap .55 padahal state panic
+     seharusnya .8. Dengan registrasi, ia beranimasi mulus. */
+  @property --dark { syntax: "<number>"; inherits: true;  initial-value: 0.55; }
+  @property --p    { syntax: "<number>"; inherits: false; initial-value: 1; }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #050405;
+    color: #cfc6c0;
+    font-family: "Cormorant Garamond", Georgia, serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 28px 16px 60px;
+  }
+
+  h1 { font-size: 20px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: #6d605c; }
+  .sub { font-size: 14px; color: #4a4142; margin: 6px 0 22px; font-style: italic; }
+
+  /* ---- layar game palsu: toilet gelap ---- */
+  .screen {
+    position: relative;
+    width: min(920px, 100%);
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border: 1px solid #1a1416;
+    background:
+      radial-gradient(ellipse 60% 45% at 50% 42%, #1c1517 0%, #0b0809 55%, #040303 100%);
+    cursor: pointer;
+  }
+
+  /* bilik toilet: dua pintu + celah */
+  .stall {
+    position: absolute; inset: 0;
+    background:
+      linear-gradient(90deg, transparent 0 18%, #0d0a0b 18% 19.2%, transparent 19.2% 47%,
+        #0d0a0b 47% 48.4%, transparent 48.4% 79%, #0d0a0b 79% 80.2%, transparent 80.2%),
+      linear-gradient(180deg, #14101100 0 62%, #0a0708 100%);
+    opacity: .85;
+  }
+  .tile {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(#ffffff07 1px, transparent 1px),
+      linear-gradient(90deg, #ffffff05 1px, transparent 1px);
+    background-size: 46px 46px;
+    mask-image: radial-gradient(ellipse 70% 55% at 50% 45%, #000 20%, transparent 75%);
+  }
+
+  /* vignette makin pekat saat napas habis.
+     Default TIDAK boleh ditulis inline di elemen — inline style menang atas
+     selektor [data-state], jadi vignette-nya tidak akan pernah menggelap. */
+  .screen { --dark: .55; }
+  .vignette {
+    position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse 78% 62% at 50% 50%, transparent 32%, #000 100%);
+    opacity: var(--dark, .55);
+    transition: opacity .5s;
+  }
+  /* denyut merah samar — jantung, bukan lampu disko */
+  .pulse {
+    position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse 90% 75% at 50% 60%, transparent 45%, #3d0507 100%);
+    opacity: 0;
+    mix-blend-mode: screen;
+  }
+
+  /* ================= HUD ================= */
+  .hud {
+    position: absolute;
+    left: 50%; bottom: 7%;
+    transform: translateX(-50%);
+    width: 46%;
+    text-align: center;
+    pointer-events: none;
+  }
+
+  /* teks: tipis, gemetar, seperti bisikan */
+  .label {
+    font-size: 15px;
+    letter-spacing: .34em;
+    text-transform: uppercase;
+    color: #8d7c78;
+    text-shadow: 0 0 14px #000, 0 1px 0 #000;
+    margin-bottom: 9px;
+    font-variant: small-caps;
+  }
+  .count {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 13px; letter-spacing: .3em;
+    color: #6c5c58; margin-top: 9px;
+  }
+
+  /* --- BAR = luka / tulang rusuk --- */
+  .rib {
+    position: relative;
+    height: 15px;
+    background: #0a0607;
+    box-shadow: inset 0 0 0 1px #241a1c, inset 0 2px 9px #000;
+  }
+  /* isi bar: darah gelap, bukan merah cerah.
+     Pakai left/top/bottom + width — JANGAN `inset:1px` bersama `width`,
+     karena left+right sudah mengunci lebar dan width-nya diabaikan
+     (over-constrained), jadi bar tidak pernah menyusut. */
+  .flesh {
+    position: absolute; left: 1px; top: 1px; bottom: 1px;
+    width: calc(var(--p, 1) * (100% - 2px));
+    background:
+      linear-gradient(180deg, #7d1418 0%, #4a0a0d 48%, #2b0507 100%);
+    box-shadow: 0 0 16px #64101433, inset 0 1px 0 #a5252a55;
+    transition: width .28s linear;
+  }
+  /* tepi isi bar bergerigi — tidak rapi, seperti daging */
+  .flesh::after {
+    content: ""; position: absolute; right: -3px; top: 0; bottom: 0; width: 6px;
+    background: repeating-linear-gradient(180deg, #7d1418 0 2px, transparent 2px 4px);
+    opacity: .8;
+  }
+  /* garis rusuk di atas bar */
+  .bones {
+    position: absolute; inset: 1px; pointer-events: none;
+    background: repeating-linear-gradient(90deg, transparent 0 13px, #0000008c 13px 15px);
+  }
+
+  /* napas: bar tidak turun mulus, ia tersengal */
+  @keyframes gasp {
+    0%,100% { transform: scaleY(1); }
+    46%     { transform: scaleY(1.5); }
+    58%     { transform: scaleY(.88); }
+  }
+  .rib.breathing { animation: gasp var(--rate, 3.4s) cubic-bezier(.4,0,.5,1) infinite; transform-origin: center; }
+
+  /* goresan kuku di kiri-kanan bar: 20 detik = 20 goresan */
+  .scratch { position: absolute; bottom: 100%; left: 0; right: 0; height: 13px; margin-bottom: 5px;
+    display: flex; gap: 3px; justify-content: center; }
+  .scratch i {
+    display: block; width: 2px; height: 100%;
+    background: #6e5f5b; opacity: .5;
+    transform: rotate(var(--tilt, 4deg));
+  }
+  .scratch i.gone { background: #2a1114; opacity: .95; height: 60%; align-self: flex-end; }
+
+  /* ---- keadaan ---- */
+  .screen[data-state="warn"]    { --dark: .68; }
+  .screen[data-state="warn"]    .flesh { background: linear-gradient(180deg,#8d1a1e,#521013 55%,#2c0608); }
+  .screen[data-state="warn"]    .rib { --rate: 2.1s; }
+  .screen[data-state="warn"]    .label { color: #a08681; }
+
+  .screen[data-state="panic"]   { --dark: .8; }
+  .screen[data-state="panic"]   .rib { --rate: 1s; }
+  .screen[data-state="panic"]   .flesh { background: linear-gradient(180deg,#a51f22,#5e1114 55%,#300709); }
+  .screen[data-state="panic"]   .label { color: #c29a94; letter-spacing: .4em; }
+  .screen[data-state="panic"]   .pulse { animation: heart 1s ease-in-out infinite; }
+  @keyframes heart { 0%,100% { opacity: .06 } 50% { opacity: .3 } }
+
+  .screen[data-state="breach"]  { --dark: .93; }
+  .screen[data-state="breach"]  .rib { animation: none; box-shadow: inset 0 0 0 1px #3d1418; }
+  .screen[data-state="breach"]  .flesh { width: 0 !important; }
+  .screen[data-state="breach"]  .label { color: #8e1418; letter-spacing: .5em; animation: flick .13s steps(2) 6; }
+  .screen[data-state="breach"]  .bones { background: repeating-linear-gradient(90deg,transparent 0 13px,#5e0d1180 13px 15px); }
+  @keyframes flick { 50% { opacity: .12 } }
+  /* darah menetes dari bar yang kosong */
+  .drip { position: absolute; top: 100%; width: 1px; background: linear-gradient(#7d1418, transparent);
+    opacity: 0; }
+  .screen[data-state="breach"] .drip { opacity: .85; animation: fall 2.6s ease-in forwards; }
+  @keyframes fall { from { height: 0 } to { height: 62px } }
+
+  /* ---- kontrol demo ---- */
+  .bar { display: flex; gap: 8px; margin: 20px 0 6px; flex-wrap: wrap; justify-content: center; }
+  button {
+    font-family: inherit; font-size: 13px; letter-spacing: .16em; text-transform: uppercase;
+    background: #120d0f; color: #8b7a76; border: 1px solid #2a1f22;
+    padding: 9px 15px; cursor: pointer; transition: .18s;
+  }
+  button:hover { background: #1d1417; color: #c9b6b1; border-color: #4a2b30; }
+  button.on { background: #3b0f13; color: #e8d6d2; border-color: #7d1418; }
+  .hint { font-size: 12.5px; color: #3f3739; font-style: italic; margin-top: 12px; }
+</style>
+</head>
+<body>
+
+<h1>01 · Napas Tercekik</h1>
+<p class="sub">Bar-nya bukan meter — itu paru-paru. Ia tersengal, bukan menurun rapi.</p>
+
+<div class="screen" id="screen" data-state="calm">
+  <div class="stall"></div>
+  <div class="tile"></div>
+  <div class="pulse"></div>
+  <div class="vignette"></div>
+
+  <div class="hud">
+    <div class="label" id="label">menahan napas</div>
+    <div class="rib breathing" id="rib">
+      <div class="scratch" id="scratch"></div>
+      <div class="flesh" id="flesh" style="--p:1"></div>
+      <div class="bones"></div>
+      <div class="drip" style="left:22%"></div>
+      <div class="drip" style="left:57%; animation-delay:.5s"></div>
+      <div class="drip" style="left:81%; animation-delay:.9s"></div>
+    </div>
+    <div class="count" id="count">20</div>
+  </div>
+</div>
+
+<div class="bar">
+  <button data-s="calm"   class="on">20s · tenang</button>
+  <button data-s="warn">10s · mulai sesak</button>
+  <button data-s="panic">4s · panik</button>
+  <button data-s="breach">habis · ketahuan</button>
+  <button id="play">▶ jalankan 20 detik</button>
+</div>
+<p class="hint">Klik layar untuk menjalankan hitungan penuh.</p>
+
+<script>
+  const screen = document.getElementById('screen');
+  const flesh  = document.getElementById('flesh');
+  const label  = document.getElementById('label');
+  const count  = document.getElementById('count');
+  const scratch= document.getElementById('scratch');
+
+  const TOTAL = 20;
+  for (let i = 0; i < TOTAL; i++) {
+    const s = document.createElement('i');
+    s.style.setProperty('--tilt', (Math.random() * 10 - 5).toFixed(1) + 'deg');
+    scratch.appendChild(s);
+  }
+  const marks = [...scratch.children];
+
+  const TEXT = {
+    calm:   'menahan napas',
+    warn:   'paru-paru terbakar',
+    panic:  'tidak tahan lagi',
+    breach: 'ia mendengarmu'
+  };
+
+  function render(sec, state) {
+    const p = Math.max(0, sec / TOTAL);
+    flesh.style.setProperty('--p', p);
+    screen.dataset.state = state;
+    label.textContent = TEXT[state];
+    count.textContent = state === 'breach' ? '—' : Math.ceil(sec);
+    marks.forEach((m, i) => m.classList.toggle('gone', i >= Math.ceil(sec)));
+  }
+
+  const PRESET = { calm: 20, warn: 10, panic: 4, breach: 0 };
+  let timer = null;
+
+  document.querySelectorAll('[data-s]').forEach(b => {
+    b.onclick = () => {
+      clearInterval(timer);
+      document.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      render(PRESET[b.dataset.s], b.dataset.s);
+    };
+  });
+
+  function stateFor(sec) {
+    if (sec <= 0)  return 'breach';
+    if (sec <= 5)  return 'panic';
+    if (sec <= 11) return 'warn';
+    return 'calm';
+  }
+
+  function run() {
+    clearInterval(timer);
+    document.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+    let sec = TOTAL;
+    render(sec, 'calm');
+    timer = setInterval(() => {
+      sec -= 0.1;
+      if (sec <= 0) { render(0, 'breach'); clearInterval(timer); return; }
+      render(sec, stateFor(sec));
+    }, 100);
+  }
+  document.getElementById('play').onclick = run;
+  screen.onclick = run;
+
+  render(20, 'calm');
+</script>
+</body>
+</html>

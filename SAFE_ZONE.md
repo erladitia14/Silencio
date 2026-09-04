@@ -147,22 +147,39 @@ Matikan per bilik dengan `NoBarrier = true`, atau global lewat `Config.BarrierEn
 
 ---
 
-## UI Bar Napas
+## UI Bar Napas — "Choked Breath"
 
-Bar muncul di bawah layar saat pemain sembunyi: sisa detik + warna yang berubah
-(hijau → kuning → merah).
+Bar muncul di bawah layar saat pemain sembunyi. **Teksnya bahasa Inggris** (permintaan Aer); komentar
+dan nama variabel di kode tetap Indonesia untuk tim.
 
-**Modulnya bisa ditukar.** UI sekarang buatan sendiri, sementara. Kalau ada desain dari tim: ganti
-isi `ReplicatedStorage/Modules/SafeZone/BreathBar`, atau taruh modul baru di folder itu dan ubah
-satu konstanta `UI_MODULE` di `SafeZoneUI`. Server dan kamera tidak perlu disentuh.
+Ini bukan progress bar biasa. Tiga hal yang bikin dia terasa horor, bukan HUD game biasa:
+
+- **Bar-nya bernapas.** Track-nya mengembang-mengempis (`GASP`) — 3.4 detik per tarikan saat tenang,
+  1.0 detik saat panik, **berhenti total** saat kebobolan. Pemain menyadari bahaya dari ritmenya
+  sebelum membaca angkanya.
+- **Isinya darah, bukan warna.** Gradien merah gelap ke hampir hitam, ditutupi 24 garis "tulang
+  rusuk" supaya terbaca terkurung, bukan tabung cairan.
+- **20 goresan kuku** di atas bar, satu per detik napas, sedikit bengkok. Tiap detik satu goresan
+  jadi gelap dan memendek — hitungan mundur yang bisa dilihat tanpa membaca teks.
+
+Teks per keadaan: `holding breath` → `lungs burning` (di bawah 55%) → `can't hold on` (di bawah 25%)
+→ `it heard you` (kebobolan) → `the stall is spent` (hangus). Bilik `NoBreath` cuma menampilkan
+`safe` tanpa meter — timer palsu itu bohong ke pemain.
+
+**Modulnya bisa ditukar.** Kalau ada desain dari tim: ganti isi
+`ReplicatedStorage/Modules/SafeZone/BreathBar`, atau taruh modul baru di folder itu dan ubah satu
+konstanta `UI_MODULE` di `SafeZoneUI`. Server dan kamera tidak perlu disentuh.
 
 Kontrak modul UI:
 
 ```lua
 BreathBar.new()            -- membuat objek bar
-bar:update(payload)        -- payload dari RemoteEvent "SafeZoneState"
+bar:update(payload)        -- payload dari RemoteEvent "SafeZoneState"; nil = sembunyikan
 bar:destroy()              -- lepas semua instance & koneksi
 ```
+
+Tiga mockup HTML yang jadi dasar desain ini ada di `sketches/safezone-ui/` (yang dipakai: nomor 1,
+*Napas Tercekik*).
 
 Bentuk pesan dari server, dibedakan lewat `kind`:
 
