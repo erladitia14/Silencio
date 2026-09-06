@@ -192,8 +192,10 @@ end
 --- CFrame arah yang harus dihadapi skin = orientasi rig + koreksi yaw manual.
 --- SkinYawOffset (derajat) untuk aset yang "depan"-nya tidak sejajar sumbu
 --- Roblox (mesh Mixamo sering kebalik 180 atau nyamping 90). Default 0.
-local function targetRotation(rig: Model, root: BasePart): CFrame
-	local yaw = tonumber(rig:GetAttribute("SkinYawOffset")) or 0
+local function targetRotation(rig: Model, root: BasePart, skin: Instance?): CFrame
+	local yaw = tonumber(rig:GetAttribute("SkinYawOffset"))
+		or (skin and tonumber(skin:GetAttribute("SkinYawOffset")))
+		or 0
 	return root.CFrame.Rotation * CFrame.Angles(0, math.rad(yaw), 0)
 end
 
@@ -205,7 +207,7 @@ local function needsAlign(skin: Instance, rig: Model, root: BasePart): boolean
 	if not pivot then
 		return false
 	end
-	local dot = math.clamp(targetRotation(rig, root).LookVector:Dot(pivot.CFrame.LookVector), -1, 1)
+	local dot = math.clamp(targetRotation(rig, root, skin).LookVector:Dot(pivot.CFrame.LookVector), -1, 1)
 	return math.deg(math.acos(dot)) > ALIGN_TOLERANCE_DEG
 end
 
@@ -224,7 +226,7 @@ local function alignSkinToRig(skin: Instance, rig: Model, root: BasePart): numbe
 		return 0
 	end
 
-	local target = targetRotation(rig, root)
+	local target = targetRotation(rig, root, skin)
 
 	-- Sudah lurus? Jangan disentuh (hindari jitter presisi float).
 	local dot = math.clamp(target.LookVector:Dot(pivot.CFrame.LookVector), -1, 1)
