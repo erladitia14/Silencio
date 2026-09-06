@@ -207,7 +207,8 @@ function SkinAnimator:applyState(state: string?)
 	if not state then return end
 	local animName = STATE_ANIM[state]
 	if animName then
-		self:playLoop(animName)
+		-- Gunakan fade time 0.35s agar transisi antar-state (Walk <-> Idle) mengalir halus (smooth blend)
+		self:playLoop(animName, 0.35)
 	end
 end
 
