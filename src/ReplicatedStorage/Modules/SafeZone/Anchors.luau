@@ -12,9 +12,19 @@
 	Tidak ada Attribute yang perlu diisi.
 
 	KALAU BUTUH PRESISI: taruh child bernama `HidePoint` / `PeekPoint` /
-	`ExitPoint` di dalam Part (BasePart atau Attachment). Kalau ada, CFrame
-	child itu dipakai apa adanya dan perhitungan otomatis dilewati — berguna
-	untuk mesh toilet yang pintunya tidak di tengah muka Part.
+	`ExitPoint` (BasePart atau Attachment). Kalau ada, CFrame marker itu
+	dipakai apa adanya dan perhitungan otomatis dilewati — berguna untuk
+	mesh toilet yang pintunya tidak di tengah muka Part.
+
+	Marker dicari di TIGA tempat, urut prioritas:
+	  1. Child langsung Part ber-tag SafeZone (body bilik)
+	  2. Descendant mana pun di dalam Model induk Part itu (misal di pintu)
+	  3. Descendant mana pun di Workspace (fallback terakhir)
+
+	Contoh kasus nyata: bilik Outhouse punya peephole oval di MESH PINTU
+	(sibling dari body yang di-tag SafeZone). Tim menempel Attachment
+	`PeekPoint` tepat di lubang pintu itu — modul ini menemukannya lewat
+	jalur (2), tanpa perlu memindahkan tag SafeZone ke pintu.
 
 	Modul ini murni matematika: tidak menyimpan state, tidak menyentuh
 	Instance apa pun. Aman dipakai server maupun client.
@@ -29,11 +39,30 @@ local Anchors = {}
 ---------------------------------------------------------------------
 
 --- Ambil CFrame sebuah child penanda, kalau tim menyediakannya.
+--- Cari di: (1) child Part itu sendiri, (2) descendants Model induk,
+--- (3) descendants Workspace. Ini memungkinkan PeekPoint ditempel
+--- di pintu (sibling dari Part ber-tag), bukan hanya di body.
 local function markerCFrame(zonePart: BasePart, name: string?): CFrame?
 	if not name or typeof(name) ~= "string" or name == "" then
 		return nil
 	end
+
+	-- (1) Child langsung dari Part ber-tag (paling umum).
 	local child = zonePart:FindFirstChild(name)
+
+	-- (2) Mana pun di dalam Model induk (misal pintu / dinding sibling).
+	if not child then
+		local parent = zonePart.Parent
+		if parent and parent ~= workspace then
+			child = parent:FindFirstChild(name, true)
+		end
+	end
+
+	-- (3) Fallback: mana pun di Workspace (bilik kompleks multi-model).
+	if not child then
+		child = workspace:FindFirstChild(name, true)
+	end
+
 	if not child then
 		return nil
 	end
