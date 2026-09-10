@@ -26,6 +26,12 @@
 	`PeekPoint` tepat di lubang pintu itu — modul ini menemukannya lewat
 	jalur (2), tanpa perlu memindahkan tag SafeZone ke pintu.
 
+	KONVENSI ARAH MARKER ATTACHMENT: arah hadap = PANAH KUNING attachment
+	(sumbu +X). Itu yang tim atur pakai Rotate tool di Studio. Modul ini
+	membaca +X sebagai "hadap", BUKAN LookVector — jadi yang terlihat di
+	viewport (panah kuning) persis yang dipakai. Marker BasePart tetap
+	pakai konvensi Roblox biasa (LookVector, muka depan Part).
+
 	Modul ini murni matematika: tidak menyimpan state, tidak menyentuh
 	Instance apa pun. Aman dipakai server maupun client.
 --]]
@@ -70,7 +76,13 @@ local function markerCFrame(zonePart: BasePart, name: string?): CFrame?
 		return child.CFrame
 	end
 	if child:IsA("Attachment") then
-		return child.WorldCFrame
+		-- Panah KUNING attachment di Studio = sumbu +X (RightVector). Itu yang
+		-- tim putar untuk menentukan arah hadap. Jadikan LookVector hasil =
+		-- panah kuning itu, supaya pemain/kamera menghadap persis seperti yang
+		-- terlihat di viewport (bukan 90° nyamping seperti LookVector mentah).
+		local wc = child.WorldCFrame
+		local forward = wc.XVector
+		return CFrame.lookAt(wc.Position, wc.Position + forward, Vector3.yAxis)
 	end
 	return nil
 end
