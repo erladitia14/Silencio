@@ -17,6 +17,7 @@
 --]]
 
 local Config = require(script.Parent.Config)
+local CPHelper = require(script.Parent.Parent.CustomPromptHelper)
 
 local PromptManager = {}
 
@@ -54,6 +55,8 @@ function PromptManager.attach(zonePart: BasePart, onTrigger: (BasePart, Player) 
 	prompt.HoldDuration = Config.PromptHoldDuration
 	prompt.RequiresLineOfSight = Config.PromptRequiresLineOfSight
 	prompt.Exclusivity = Enum.ProximityPromptExclusivity.OnePerButton
+
+	CPHelper.apply(prompt)
 
 	prompts[zonePart] = prompt
 	conns[zonePart] = prompt.Triggered:Connect(function(player)

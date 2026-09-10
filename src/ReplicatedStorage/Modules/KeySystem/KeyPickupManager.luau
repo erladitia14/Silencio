@@ -34,6 +34,7 @@ local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 
 local Config = require(script.Parent.Config)
+local CPHelper = require(script.Parent.Parent.CustomPromptHelper)
 
 local KeyPickupManager = {}
 KeyPickupManager.__index = KeyPickupManager
@@ -108,6 +109,8 @@ function KeyPickupManager:register(inst: Instance)
 		prompt.Parent = part
 	end
 	prompt.ActionText = Config.PromptKeyPickup
+
+	CPHelper.apply(prompt, { highlight = true })
 
 	-- Matikan auto-pickup engine (lihat CATATAN di header) supaya prompt jadi
 	-- satu-satunya jalur masuk dan KeyService selalu tercatat.

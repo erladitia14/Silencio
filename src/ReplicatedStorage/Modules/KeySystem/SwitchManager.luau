@@ -15,6 +15,7 @@
 local CollectionService = game:GetService("CollectionService")
 
 local Config = require(script.Parent.Config)
+local CPHelper = require(script.Parent.Parent.CustomPromptHelper)
 
 local SwitchManager = {}
 SwitchManager.__index = SwitchManager
@@ -77,6 +78,8 @@ function SwitchManager:register(inst: Instance)
 		prompt.RequiresLineOfSight = false
 		prompt.Parent = part
 	end
+
+	CPHelper.apply(prompt)
 
 	local record = {
 		part = part,

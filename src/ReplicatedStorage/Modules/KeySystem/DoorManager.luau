@@ -16,6 +16,7 @@
 local CollectionService = game:GetService("CollectionService")
 
 local Config = require(script.Parent.Config)
+local CPHelper = require(script.Parent.Parent.CustomPromptHelper)
 
 local DoorManager = {}
 DoorManager.__index = DoorManager
@@ -118,6 +119,8 @@ function DoorManager:register(inst: Instance)
 		prompt.RequiresLineOfSight = false
 		prompt.Parent = part
 	end
+
+	CPHelper.apply(prompt)
 
 	local record = {
 		part = part,
