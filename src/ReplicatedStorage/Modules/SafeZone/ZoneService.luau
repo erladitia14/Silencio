@@ -100,10 +100,16 @@ end
 --- memberi titik intip dan arah pintu.
 local function sendEnter(player: any, zone: any)
 	local peek = Anchors.peek(zone.part)
+	-- hideCF = posisi kamera "di dalam bilik, gelap" sebelum pemain menekan F.
+	-- Diambil dari titik hide yang dinaikkan setinggi mata (Config.PeekEyeHeight).
+	local hide = Anchors.hide(zone.part)
+	local eye = Config.PeekEyeHeight or 1.4
+	local hideCF = hide + Vector3.new(0, eye, 0)
 	fire(player, {
 		kind      = E.ENTER,
 		zone      = zone.part,
 		peekCF    = peek,
+		hideCF    = hideCF,
 		doorDir   = Anchors.doorDirection(zone.part),
 		fade      = Config.FadeTime,
 		yawLimit  = Config.PeekYawLimit,
