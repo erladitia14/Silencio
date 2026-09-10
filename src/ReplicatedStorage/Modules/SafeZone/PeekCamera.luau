@@ -220,6 +220,7 @@ function PeekCamera:_attach(peekCF: CFrame, hideCF: CFrame?)
 	self.savedType = cam.CameraType
 	self.savedSubject = cam.CameraSubject
 	self.savedMouse = UserInputService.MouseBehavior
+	self.savedFOV = cam.FieldOfView
 
 	cam.CameraType = Enum.CameraType.Scriptable
 	self.peekCF = peekCF
@@ -368,33 +369,35 @@ function PeekCamera:togglePeek()
 	end
 
 	if self.state == "HIDDEN" then
-		-- -> PEEKING: tween ke lubang pintu
+		-- -> PEEKING: tween ke lubang pintu, FOV sempit fokus lubang (48)
 		self.state = "PEEKING"
 		self:_applyHiddenVisual(false)
-		self:_tweenCameraTo(self.peekCF, 0.5)
+		self:_tweenCameraTo(self.peekCF, 0.5, 48)
 	else
-		-- -> HIDDEN: tween balik ke posisi gelap
+		-- -> HIDDEN: tween balik ke posisi gelap, FOV normal
 		self.state = "HIDDEN"
 		self:_applyHiddenVisual(true)
-		self:_tweenCameraTo(self.hideCF, 0.5)
+		self:_tweenCameraTo(self.hideCF, 0.5, self.savedFOV or 70)
 	end
 end
 
 --- Tween baseCF ke target selama `duration` detik. RenderStep loop membaca
 --- baseCF tiap frame, jadi kita animasikan baseCF (bukan cam.CFrame langsung).
-function PeekCamera:_tweenCameraTo(targetCF: CFrame, duration: number)
+function PeekCamera:_tweenCameraTo(targetCF: CFrame, duration: number, targetFOV: number?)
 	if not targetCF then
 		return
 	end
+	local cam = workspace.CurrentCamera
 	local fromCF = self.baseCF or targetCF
+	local fromFOV = cam and cam.FieldOfView or 70
+	local toFOV = targetFOV or fromFOV
+
 	-- Reset lirikan supaya masuk ke posisi baru tanpa offset aneh
 	self.yaw = 0
 	self.pitch = 0
 
 	local startTime = os.clock()
 	local dur = math.max(0.05, duration)
-	-- Matikan baseCF sementara supaya RenderStep tidak menimpa tween kita
-	local savedBase = self.baseCF
 	self._tweening = true
 
 	task.spawn(function()
@@ -403,12 +406,18 @@ function PeekCamera:_tweenCameraTo(targetCF: CFrame, duration: number)
 			-- Ease in-out quad
 			local ease = alpha < 0.5 and 2 * alpha * alpha or 1 - ((-2 * alpha + 2) ^ 2) / 2
 			self.baseCF = fromCF:Lerp(targetCF, ease)
+			if cam then
+				cam.FieldOfView = fromFOV + (toFOV - fromFOV) * ease
+			end
 			if alpha >= 1 then
 				break
 			end
 			RunService.RenderStepped:Wait()
 		end
 		self.baseCF = targetCF
+		if cam then
+			cam.FieldOfView = toFOV
+		end
 		self._tweening = false
 	end)
 end
@@ -466,8 +475,11 @@ function PeekCamera:_detach()
 		local char = self.player.Character
 		local humanoid = char and char:FindFirstChildOfClass("Humanoid")
 		cam.CameraSubject = self.savedSubject or humanoid
+		if self.savedFOV then
+			cam.FieldOfView = self.savedFOV
+		end
 	end
-	self.savedType, self.savedSubject, self.savedMouse = nil, nil, nil
+	self.savedType, self.savedSubject, self.savedMouse, self.savedFOV = nil, nil, nil, nil
 end
 
 ---------------------------------------------------------------------
@@ -585,6 +597,10 @@ function PeekCamera:forceRelease()
 	end
 	if self.blur then
 		self.blur.Size = 0
+	end
+	local cam = workspace.CurrentCamera
+	if cam and self.savedFOV then
+		cam.FieldOfView = self.savedFOV
 	end
 end
 

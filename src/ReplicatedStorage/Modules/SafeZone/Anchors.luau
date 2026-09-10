@@ -146,6 +146,8 @@ end
 function Anchors.peek(zonePart: BasePart): CFrame
 	local markerName = Config.PeekPointName or "PeekPoint"
 	local override = markerCFrame(zonePart, markerName)
+		or markerCFrame(zonePart, "PeekPoint")
+		or markerCFrame(zonePart, "PeekCamera")
 	if override then
 		return override
 	end
