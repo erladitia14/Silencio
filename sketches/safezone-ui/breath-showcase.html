@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Silencio — 6 Konsep Eksplorasi HUD "Nahan Napas"</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=JetBrains+Mono:wght@400;500;700&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #050304;
+    color: #dbd0ca;
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    padding: 28px 24px 70px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 24px;
+    max-width: 920px;
+  }
+  h1 {
+    font-family: 'Cinzel', serif;
+    font-size: 24px;
+    letter-spacing: 0.18em;
+    color: #ede2dc;
+    text-transform: uppercase;
+  }
+  .sub {
+    font-size: 13px;
+    color: #8c7670;
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+
+  /* Control Panel */
+  .toolbar {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    background: #110c0e;
+    border: 1px solid #291a20;
+    padding: 12px 26px;
+    border-radius: 6px;
+    margin-bottom: 30px;
+  }
+  .toolbar label {
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    color: #a8958f;
+  }
+  .toolbar input[type=range] {
+    width: 260px;
+    accent-color: #9e1a24;
+  }
+  .timer-val {
+    font-weight: 700;
+    color: #e63946;
+    width: 50px;
+    font-size: 15px;
+  }
+
+  /* Grid 6 Cards (3 columns x 2 rows) */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    width: 100%;
+    max-width: 1440px;
+  }
+
+  .card {
+    background: #0c080a;
+    border: 1px solid #24161b;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .card-header {
+    padding: 14px 18px;
+    background: #130d10;
+    border-bottom: 1px solid #24161b;
+  }
+  .card-title {
+    font-family: 'Cinzel', serif;
+    font-size: 14px;
+    color: #eeded8;
+    letter-spacing: 0.08em;
+  }
+  .card-desc {
+    font-size: 10.5px;
+    color: #806c66;
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  /* Viewport (Dark Stall Interior) */
+  .viewport {
+    position: relative;
+    height: 250px;
+    background: radial-gradient(ellipse 65% 55% at 50% 45%, #1c0f13 0%, #0a0507 60%, #020102 100%);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 16px;
+  }
+
+  .stall-bg {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(90deg, transparent 0 25%, #080305 25% 26.5%, transparent 26.5% 73.5%, #080305 73.5% 75%, transparent 75%),
+      linear-gradient(180deg, rgba(40,10,18,0.06) 0%, rgba(0,0,0,0.75) 100%);
+    pointer-events: none;
+  }
+
+  .hud-area {
+    position: relative;
+    z-index: 10;
+    align-self: center;
+    width: 90%;
+    margin-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ==========================================================
+     1. THE SQUEEZED RIBCAGE (Tulang Rusuk Menghimpit)
+     ========================================================== */
+  .opt-ribs {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+  }
+  .ribs-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .rib-wing {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    transition: transform 0.15s ease-out;
+  }
+  .rib-bar {
+    height: 3px;
+    background: #543b3d;
+    border-radius: 2px;
+  }
+  .rib-wing.l .rib-bar:nth-child(1) { width: 18px; }
+  .rib-wing.l .rib-bar:nth-child(2) { width: 28px; }
+  .rib-wing.l .rib-bar:nth-child(3) { width: 34px; }
+  .rib-wing.l .rib-bar:nth-child(4) { width: 26px; }
+  .rib-wing.l .rib-bar:nth-child(5) { width: 16px; }
+
+  .rib-wing.r .rib-bar:nth-child(1) { width: 18px; margin-left: auto; }
+  .rib-wing.r .rib-bar:nth-child(2) { width: 28px; margin-left: auto; }
+  .rib-wing.r .rib-bar:nth-child(3) { width: 34px; margin-left: auto; }
+  .rib-wing.r .rib-bar:nth-child(4) { width: 26px; margin-left: auto; }
+  .rib-wing.r .rib-bar:nth-child(5) { width: 16px; margin-left: auto; }
+
+  .ribs-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .ribs-label {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: #c9bab3;
+    font-family: 'Special Elite', monospace;
+  }
+  .ribs-gauge {
+    width: 100px;
+    height: 3px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .ribs-fill {
+    height: 100%;
+    width: 80%;
+    background: #a81c26;
+    transition: width 0.15s;
+  }
+
+  /* ==========================================================
+     2. TRACHEA AIRWAY (Cincin Tenggorokan Menyempit)
+     ========================================================== */
+  .opt-trachea {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+  }
+  .trachea-channel {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 24px;
+    padding: 0 8px;
+  }
+  .cartilage-ring {
+    flex: 1;
+    height: 20px;
+    border: 1.5px solid #472c32;
+    border-radius: 3px;
+    background: #12090c;
+    transition: background 0.15s, border-color 0.15s, transform 0.15s;
+  }
+  .cartilage-ring.active {
+    background: #87161e;
+    border-color: #b8232d;
+    box-shadow: 0 0 6px rgba(184, 35, 45, 0.4);
+  }
+  .trachea-label {
+    font-size: 9.5px;
+    letter-spacing: 0.2em;
+    color: #baaba5;
+    font-family: 'Special Elite', monospace;
+  }
+
+  /* ==========================================================
+     3. CONDENSATION BREATH CLOUD (Awan Hawa Embun Napas)
+     ========================================================== */
+  .opt-mist {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+  }
+  .mist-bubble-wrap {
+    position: relative;
+    width: 120px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mist-cloud {
+    width: 100px;
+    height: 26px;
+    border-radius: 14px;
+    background: radial-gradient(ellipse at center, rgba(230, 210, 215, 0.4) 0%, rgba(160, 30, 45, 0.5) 60%, transparent 100%);
+    filter: blur(3px);
+    transition: transform 0.2s, opacity 0.2s;
+  }
+  .mist-label {
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    color: #cfbfb8;
+    font-family: 'Special Elite', monospace;
+  }
+  .mist-track {
+    width: 150px;
+    height: 3px;
+    background: rgba(255,255,255,0.07);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .mist-fill {
+    height: 100%;
+    width: 80%;
+    background: linear-gradient(90deg, #591017, #cf2735);
+    transition: width 0.15s;
+  }
+
+  /* ==========================================================
+     4. DIAPHRAGM SPASM WAVE (Gelombang Spasme Diafragma)
+     ========================================================== */
+  .opt-diaphragm {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+  }
+  .wave-svg {
+    width: 180px;
+    height: 24px;
+    stroke: #b5202c;
+    stroke-width: 1.5;
+    fill: none;
+    filter: drop-shadow(0 0 4px rgba(181, 32, 44, 0.6));
+  }
+  .diaphragm-label {
+    font-size: 9.5px;
+    letter-spacing: 0.22em;
+    color: #c4b5ae;
+    font-family: 'Special Elite', monospace;
+  }
+  .diaphragm-sub {
+    font-size: 8px;
+    color: #695652;
+    letter-spacing: 0.16em;
+  }
+
+  /* ==========================================================
+     5. DUAL AIR LOBES (Sepasang Katup Paru Geometris)
+     ========================================================== */
+  .opt-lobes {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+  }
+  .lobes-wrap {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+  .lobe {
+    width: 22px;
+    height: 36px;
+    border: 1.5px solid #572027;
+    border-radius: 11px 11px 6px 6px;
+    background: rgba(18, 9, 12, 0.8);
+    position: relative;
+    overflow: hidden;
+  }
+  .lobe-fill {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    height: 80%;
+    background: linear-gradient(180deg, #d12c3b 0%, #630c14 100%);
+    transition: height 0.15s ease-out;
+  }
+  .lobes-label {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: #c9b9b3;
+    font-family: 'Special Elite', monospace;
+  }
+
+  /* ==========================================================
+     6. CHOKED SINE WAVE (Garis Ritme Pernapasan Flatline)
+     ========================================================== */
+  .opt-sine {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+  }
+  .sine-box {
+    width: 190px;
+    height: 28px;
+    background: rgba(14, 8, 11, 0.6);
+    border: 1px solid rgba(80, 20, 30, 0.35);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .sine-line {
+    width: 100%;
+    height: 100%;
+    stroke: #d12c3b;
+    stroke-width: 1.4;
+    fill: none;
+    transition: stroke 0.2s;
+  }
+  .sine-label {
+    font-size: 9.5px;
+    letter-spacing: 0.2em;
+    color: #bfaea8;
+    font-family: 'Special Elite', monospace;
+  }
+  .sine-sub {
+    font-size: 8px;
+    color: #695652;
+    letter-spacing: 0.15em;
+  }
+
+  /* Vignette simulation */
+  .vignette-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at center, transparent 40%, rgba(20, 0, 3, 0.6) 80%, rgba(10, 0, 2, 0.95) 100%);
+    opacity: 0.55;
+    transition: opacity 0.3s;
+  }
+  .vignette-layer.panic {
+    opacity: 0.95;
+    animation: choke 0.35s infinite alternate;
+  }
+  @keyframes choke {
+    0% { opacity: 0.75; }
+    100% { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Silencio — 6 Konsep Eksplorasi HUD "Nahan Napas"</h1>
+  <p class="sub">Variasi Visual Seputar <strong>Respirasi, Dada Tertekan, Saluran Napas, & Kejang Diafragma</strong> (Bebas Bentuk Permen/Balon)</p>
+</header>
+
+<div class="toolbar">
+  <label for="breathRange">Sisa Kapasitas Napas:</label>
+  <input type="range" id="breathRange" min="0" max="20" step="0.5" value="16">
+  <span class="timer-val" id="timeDisplay">16.0s</span>
+</div>
+
+<div class="grid">
+
+  <!-- CARD 1 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">1. Squeezed Ribcage (Rusuk Menghimpit)</h2>
+      <p class="card-desc">Tulang rusuk kiri-kanan yang saling menghimpit ke tengah seiring udara habis, memvisualisasikan dada yang tertekan kuat.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig1"></div>
+      <div class="hud-area">
+        <div class="opt-ribs">
+          <div class="ribs-box">
+            <div class="rib-wing l" id="ribsL">
+              <div class="rib-bar"></div>
+              <div class="rib-bar"></div>
+              <div class="rib-bar"></div>
+              <div class="rib-bar"></div>
+              <div class="rib-bar"></div>
+            </div>
+            <div class="ribs-center">
+              <span class="ribs-label" id="ribsLabel">HOLDING BREATH</span>
+              <div class="ribs-gauge">
+                <div class="ribs-fill" id="ribsFill"></div>
+              </div>
+            </div>
+            <div class="rib-wing r" id="ribsR">
+              <div class="rib-bar"></div>
+              <div class="rib-bar"></div>
+              <div class="rib-bar"></div>
+              <div class="rib-bar"></div>
+              <div class="rib-bar"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 2 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">2. Trachea Airway (Cincin Tenggorokan)</h2>
+      <p class="card-desc">10 cincin kartilago batang tenggorokan. Udara yang tertahan padam satu per satu dari atas ke bawah seiring leher tercekik.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig2"></div>
+      <div class="hud-area">
+        <div class="opt-trachea">
+          <div class="trachea-channel" id="tracheaContainer"></div>
+          <span class="trachea-label" id="tracheaLabel">AIRWAY COMPRESSED</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 3 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">3. Condensation Breath (Embun Hawa Napas)</h2>
+      <p class="card-desc">Gumpalan hawa dingin napas yang terperangkap di udara bilik. Gumpalan uap menyusut & berkerut saat pemain menahan udara keluar.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig3"></div>
+      <div class="hud-area">
+        <div class="opt-mist">
+          <div class="mist-bubble-wrap">
+            <div class="mist-cloud" id="mistCloud"></div>
+          </div>
+          <span class="mist-label" id="mistLabel">CHOKED CONDENSATION</span>
+          <div class="mist-track">
+            <div class="mist-fill" id="mistFill"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 4 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">4. Diaphragm Spasm (Kejang Diafragma)</h2>
+      <p class="card-desc">Garis lengkung diafragma perut yang melengkung tajam. Saat napas < 25%, garis kejang bergetar liar menandakan refleks tersedak.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig4"></div>
+      <div class="hud-area">
+        <div class="opt-diaphragm">
+          <svg class="wave-svg" viewBox="0 0 180 24">
+            <path id="diaphragmPath" d="M 0 16 Q 90 2, 180 16" />
+          </svg>
+          <span class="diaphragm-label" id="diaphragmLabel">DIAPHRAGM TIGHT</span>
+          <span class="diaphragm-sub" id="diaphragmSub">PRESSURE: CONTAINED</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 5 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">5. Dual Air Lobes (Kantung Paru Kiri-Kanan)</h2>
+      <p class="card-desc">Dua silinder kapsul udara kaca minimalis (paru kiri & kanan). Ketinggian udara merah surut seimbang sampai titik nadir.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig5"></div>
+      <div class="hud-area">
+        <div class="opt-lobes">
+          <div class="lobes-wrap">
+            <div class="lobe"><div class="lobe-fill" id="lobeFillL"></div></div>
+            <div class="lobe"><div class="lobe-fill" id="lobeFillR"></div></div>
+          </div>
+          <span class="lobes-label" id="lobesLabel">OXYGEN RESERVES</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 6 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">6. Respiration Sine Wave (Gelombang Napas)</h2>
+      <p class="card-desc">Gelombang napas biologis yang melambat dan mendatar (menuju flatline) seiring paru-paru kehabisan oksigen segar.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig6"></div>
+      <div class="hud-area">
+        <div class="opt-sine">
+          <div class="sine-box">
+            <svg class="sine-line" viewBox="0 0 190 28">
+              <path id="sinePath" d="M 0 14 Q 47.5 4, 95 14 T 190 14" />
+            </svg>
+          </div>
+          <span class="sine-label" id="sineLabel">RESPIRATION: HELD</span>
+          <span class="sine-sub" id="sineSub">AIR FLOW: 0.0 L/MIN</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const range = document.getElementById('breathRange');
+  const display = document.getElementById('timeDisplay');
+
+  // Build 10 cartilage rings for Option 2
+  const tracheaContainer = document.getElementById('tracheaContainer');
+  for (let i = 0; i < 10; i++) {
+    const r = document.createElement('div');
+    r.className = 'cartilage-ring active';
+    tracheaContainer.appendChild(r);
+  }
+
+  function update(val) {
+    const frac = val / 20;
+    display.textContent = val.toFixed(1) + 's';
+
+    // 1. Ribs Squeeze
+    const ribsFill = document.getElementById('ribsFill');
+    const ribsLabel = document.getElementById('ribsLabel');
+    const ribsL = document.getElementById('ribsL');
+    const ribsR = document.getElementById('ribsR');
+    ribsFill.style.width = (frac * 100) + '%';
+    const squeeze = (1 - frac) * 12; // squeeze inward
+    ribsL.style.transform = `translateX(${squeeze}px)`;
+    ribsR.style.transform = `translateX(${-squeeze}px)`;
+
+    if (frac <= 0.25) {
+      ribsLabel.textContent = "CAN'T HOLD ON!";
+      ribsLabel.style.color = "#ff3b4b";
+    } else if (frac <= 0.5) {
+      ribsLabel.textContent = "LUNGS BURNING...";
+      ribsLabel.style.color = "#d95f23";
+    } else {
+      ribsLabel.textContent = "HOLDING BREATH";
+      ribsLabel.style.color = "#c9bab3";
+    }
+
+    // 2. Trachea
+    const rings = tracheaContainer.children;
+    const activeCount = Math.round(frac * 10);
+    const tracheaLabel = document.getElementById('tracheaLabel');
+    for (let i = 0; i < 10; i++) {
+      if (i < activeCount) {
+        rings[i].className = 'cartilage-ring active';
+      } else {
+        rings[i].className = 'cartilage-ring';
+      }
+    }
+    if (frac <= 0.25) {
+      tracheaLabel.textContent = "AIRWAY COLLAPSING!";
+      tracheaLabel.style.color = "#ff3b4b";
+    } else if (frac <= 0.5) {
+      tracheaLabel.textContent = "BURNING AIRWAY";
+      tracheaLabel.style.color = "#d95f23";
+    } else {
+      tracheaLabel.textContent = "AIRWAY COMPRESSED";
+      tracheaLabel.style.color = "#baaba5";
+    }
+
+    // 3. Mist Cloud
+    const mistCloud = document.getElementById('mistCloud');
+    const mistFill = document.getElementById('mistFill');
+    const mistLabel = document.getElementById('mistLabel');
+    mistFill.style.width = (frac * 100) + '%';
+    const mistScale = 0.3 + frac * 0.7;
+    mistCloud.style.transform = `scale(${mistScale})`;
+    mistCloud.style.opacity = Math.max(0.15, frac);
+    if (frac <= 0.25) {
+      mistLabel.textContent = "CHOKE THRESHOLD";
+      mistLabel.style.color = "#ff3b4b";
+    } else if (frac <= 0.5) {
+      mistLabel.textContent = "VAPOR BURNING";
+      mistLabel.style.color = "#d95f23";
+    } else {
+      mistLabel.textContent = "CHOKED CONDENSATION";
+      mistLabel.style.color = "#cfbfb8";
+    }
+
+    // 4. Diaphragm Spasm
+    const diaphragmPath = document.getElementById('diaphragmPath');
+    const diaphragmLabel = document.getElementById('diaphragmLabel');
+    const diaphragmSub = document.getElementById('diaphragmSub');
+    const curveY = 16 - (1 - frac) * 14;
+    diaphragmPath.setAttribute('d', `M 0 16 Q 90 ${curveY}, 180 16`);
+    if (frac <= 0.25) {
+      diaphragmLabel.textContent = "DIAPHRAGM SPASM!";
+      diaphragmLabel.style.color = "#ff3b4b";
+      diaphragmSub.textContent = "PRESSURE: REFLEX RUPTURING";
+      diaphragmSub.style.color = "#ff3b4b";
+    } else if (frac <= 0.5) {
+      diaphragmLabel.textContent = "THORACIC STRAIN";
+      diaphragmLabel.style.color = "#d95f23";
+      diaphragmSub.textContent = "PRESSURE: CRITICAL";
+      diaphragmSub.style.color = "#d95f23";
+    } else {
+      diaphragmLabel.textContent = "DIAPHRAGM TIGHT";
+      diaphragmLabel.style.color = "#c4b5ae";
+      diaphragmSub.textContent = "PRESSURE: CONTAINED";
+      diaphragmSub.style.color = "#695652";
+    }
+
+    // 5. Dual Lobes
+    const fillL = document.getElementById('lobeFillL');
+    const fillR = document.getElementById('lobeFillR');
+    const lobesLabel = document.getElementById('lobesLabel');
+    fillL.style.height = (frac * 100) + '%';
+    fillR.style.height = (frac * 100) + '%';
+    if (frac <= 0.25) {
+      lobesLabel.textContent = "ANOXIA IMMINENT";
+      lobesLabel.style.color = "#ff3b4b";
+    } else if (frac <= 0.5) {
+      lobesLabel.textContent = "OXYGEN BURNING";
+      lobesLabel.style.color = "#d95f23";
+    } else {
+      lobesLabel.textContent = "OXYGEN RESERVES";
+      lobesLabel.style.color = "#c9b9b3";
+    }
+
+    // 6. Sine Wave Flatline
+    const sinePath = document.getElementById('sinePath');
+    const sineLabel = document.getElementById('sineLabel');
+    const sineAmp = frac * 12; // amplitude shrinks to flatline
+    sinePath.setAttribute('d', `M 0 14 Q 47.5 ${14 - sineAmp}, 95 14 T 190 14`);
+    if (frac <= 0.25) {
+      sineLabel.textContent = "RESPIRATION: FLATLINE!";
+      sineLabel.style.color = "#ff3b4b";
+    } else if (frac <= 0.5) {
+      sineLabel.textContent = "RESPIRATION: SHALLOW";
+      sineLabel.style.color = "#d95f23";
+    } else {
+      sineLabel.textContent = "RESPIRATION: HELD";
+      sineLabel.style.color = "#bfaea8";
+    }
+
+    // Vignettes
+    ['vig1', 'vig2', 'vig3', 'vig4', 'vig5', 'vig6'].forEach(id => {
+      const el = document.getElementById(id);
+      if (frac <= 0.25) {
+        el.classList.add('panic');
+      } else {
+        el.classList.remove('panic');
+      }
+    });
+  }
+
+  range.addEventListener('input', (e) => update(parseFloat(e.target.value)));
+  update(16);
+</script>
+
+</body>
+</html>
