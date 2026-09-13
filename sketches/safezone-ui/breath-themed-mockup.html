@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Silencio — Holding Breath Themed HUD Concepts</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=JetBrains+Mono:wght@400;500;700&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #080708;
+    color: #ded6d0;
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    padding: 32px 24px 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 24px;
+    max-width: 840px;
+  }
+  h1 {
+    font-family: 'Cinzel', serif;
+    font-size: 24px;
+    letter-spacing: 0.2em;
+    color: #e5dad4;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .sub {
+    font-size: 13px;
+    color: #8c7b77;
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+
+  /* Control Panel */
+  .toolbar {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    background: #141113;
+    border: 1px solid #281f23;
+    padding: 12px 24px;
+    border-radius: 8px;
+    margin-bottom: 30px;
+  }
+  .toolbar label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #9c8e8a;
+  }
+  .toolbar input[type=range] {
+    width: 240px;
+    accent-color: #8a1520;
+  }
+  .timer-val {
+    font-weight: 700;
+    color: #e63946;
+    width: 48px;
+  }
+
+  /* Grid 3 Options */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    width: 100%;
+    max-width: 1400px;
+  }
+
+  .card {
+    background: #0f0d0f;
+    border: 1px solid #261e22;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .card-header {
+    padding: 16px 20px;
+    background: #151113;
+    border-bottom: 1px solid #261e22;
+  }
+  .card-title {
+    font-family: 'Cinzel', serif;
+    font-size: 15px;
+    color: #eee0db;
+    letter-spacing: 0.1em;
+  }
+  .card-desc {
+    font-size: 11px;
+    color: #7d6e6a;
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  /* Viewport (Dark Stall Interior) */
+  .viewport {
+    position: relative;
+    height: 330px;
+    background: radial-gradient(ellipse 65% 55% at 50% 45%, #1d1417 0%, #0d090b 60%, #030203 100%);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 18px;
+  }
+
+  .stall-bg {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(90deg, transparent 0 25%, #080506 25% 26.5%, transparent 26.5% 73.5%, #080506 73.5% 75%, transparent 75%),
+      linear-gradient(180deg, rgba(30,10,15,0.08) 0%, rgba(0,0,0,0.7) 100%);
+    pointer-events: none;
+  }
+
+  .top-row {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .btn-sim {
+    background: rgba(22, 16, 19, 0.7);
+    border: 1px solid rgba(90, 30, 38, 0.4);
+    color: #cfc1ba;
+    font-size: 11px;
+    padding: 6px 14px;
+    border-radius: 4px;
+    letter-spacing: 0.08em;
+  }
+
+  .hud-area {
+    position: relative;
+    z-index: 10;
+    align-self: center;
+    width: 82%;
+    margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ==========================================================
+     OPSI A: "THE LUNGS SILHOUETTE" (Siluet Paru-Paru Anatomis)
+     ========================================================== */
+  .opt-lungs {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .lungs-graphic-wrap {
+    position: relative;
+    width: 64px;
+    height: 52px;
+  }
+  .lungs-svg {
+    width: 100%;
+    height: 100%;
+    fill: none;
+    stroke: #5c2028;
+    stroke-width: 1.5;
+  }
+  .lungs-fill-mask {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 80%;
+    background: linear-gradient(180deg, rgba(212, 59, 72, 0.6) 0%, rgba(138, 21, 32, 0.9) 100%);
+    mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 52"><path d="M 28 6 C 24 2, 12 4, 8 16 C 4 28, 6 44, 18 48 C 26 50, 29 42, 29 32 L 29 6 Z M 36 6 C 40 2, 52 4, 56 16 C 60 28, 58 44, 46 48 C 38 50, 35 42, 35 32 L 35 6 Z" fill="black"/></svg>');
+    mask-size: 100% 100%;
+    transition: height 0.15s ease-out;
+  }
+  .lungs-label {
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: #c4b5af;
+    text-transform: uppercase;
+  }
+  .lungs-microbar {
+    width: 120px;
+    height: 3px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .lungs-microfill {
+    height: 100%;
+    width: 80%;
+    background: #d43b48;
+    transition: width 0.15s;
+  }
+
+  /* ==========================================================
+     OPSI B: "CHEST INHALE / COMPRESSION" (Dada Terhimpit Kiri-Kanan)
+     ========================================================== */
+  .opt-compress {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .compress-meter {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+  }
+  .rib-arc {
+    width: 38px;
+    height: 32px;
+    stroke: #8a2530;
+    stroke-width: 1.5;
+    fill: none;
+    transition: transform 0.2s;
+  }
+  .air-core {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 140px;
+  }
+  .air-label {
+    font-size: 10px;
+    letter-spacing: 0.28em;
+    color: #d8cac4;
+    text-transform: uppercase;
+  }
+  .air-bar-frame {
+    width: 100%;
+    height: 6px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 3px;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(138, 33, 48, 0.4);
+  }
+  .air-bar-fill {
+    height: 100%;
+    width: 80%;
+    background: linear-gradient(90deg, #78101a, #e03240);
+    box-shadow: 0 0 8px rgba(224, 50, 64, 0.6);
+    transition: width 0.15s;
+  }
+  .air-subtext {
+    font-size: 8.5px;
+    color: #6b5c58;
+    letter-spacing: 0.2em;
+  }
+
+  /* ==========================================================
+     OPSI C: "CONDENSATION FOG & SPASM" (Embun Napas di Kaca)
+     ========================================================== */
+  .opt-fog {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    background: rgba(12, 9, 11, 0.6);
+    border: 1px solid rgba(80, 25, 35, 0.35);
+    padding: 12px 16px;
+    border-radius: 6px;
+  }
+  .fog-header {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    font-size: 9.5px;
+    letter-spacing: 0.2em;
+    color: #9e8e89;
+  }
+  .fog-gauge {
+    position: relative;
+    width: 100%;
+    height: 16px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .fog-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 80%;
+    background: linear-gradient(90deg, rgba(80, 15, 25, 0.4), rgba(200, 35, 50, 0.85));
+    transition: width 0.15s;
+  }
+  .fog-mist-overlay {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(45deg, transparent, transparent 6px, rgba(255,255,255,0.03) 6px, rgba(255,255,255,0.03) 12px);
+    pointer-events: none;
+  }
+  .fog-footer {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    font-size: 8.5px;
+    color: #635350;
+    letter-spacing: 0.15em;
+  }
+
+  /* Vignette simulation */
+  .vignette-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at center, transparent 40%, rgba(20, 0, 3, 0.6) 80%, rgba(10, 0, 2, 0.95) 100%);
+    opacity: 0.6;
+    transition: opacity 0.3s;
+  }
+  .vignette-layer.panic {
+    opacity: 0.95;
+    animation: chokePulse 0.4s infinite alternate;
+  }
+  @keyframes chokePulse {
+    0% { opacity: 0.75; }
+    100% { opacity: 1; filter: contrast(1.2); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Silencio — Holding Breath Themed HUD</h1>
+  <p class="sub">3 Konsep Baru Khusus Bertema <strong>"Nahan Napas / Sesak Paru-Paru"</strong> (Organik, Horor Atmosferik, Bukan Cooldown Game)</p>
+</header>
+
+<div class="toolbar">
+  <label for="breathRange">Sisa Kapasitas Napas:</label>
+  <input type="range" id="breathRange" min="0" max="20" step="0.5" value="16">
+  <span class="timer-val" id="timeDisplay">16.0s</span>
+</div>
+
+<div class="grid">
+
+  <!-- CARD 1 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">A. Anatomical Lungs (Paru-Paru)</h2>
+      <p class="card-desc">Siluet paru-paru stilistik minimalis. Udara di dalam kantung paru-paru surut ke bawah; saat kritis urat merah menyala panik.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vigA"></div>
+      <div class="top-row">
+        <div class="btn-sim">LEAVE STALL</div>
+        <div style="width:70px"></div>
+      </div>
+      <div class="hud-area">
+        <div class="opt-lungs">
+          <div class="lungs-graphic-wrap">
+            <svg class="lungs-svg" viewBox="0 0 64 52">
+              <!-- Outline Lungs Left & Right -->
+              <path d="M 28 6 C 24 2, 12 4, 8 16 C 4 28, 6 44, 18 48 C 26 50, 29 42, 29 32 L 29 6 Z M 36 6 C 40 2, 52 4, 56 16 C 60 28, 58 44, 46 48 C 38 50, 35 42, 35 32 L 35 6 Z" />
+            </svg>
+            <div class="lungs-fill-mask" id="lungsFill"></div>
+          </div>
+          <div class="lungs-label" id="lungsLabel">HOLDING BREATH</div>
+          <div class="lungs-microbar">
+            <div class="lungs-microfill" id="lungsMicro"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 2 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">B. Thoracic Compression (Rongga Dada)</h2>
+      <p class="card-desc">Dua busur tulang rusuk kiri-kanan yang menghimpit ke dalam seiring waktu nahan napas, mensimulasikan dada sesak tertekan.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vigB"></div>
+      <div class="top-row">
+        <div class="btn-sim">LEAVE STALL</div>
+        <div style="width:70px"></div>
+      </div>
+      <div class="hud-area">
+        <div class="opt-compress">
+          <div class="compress-meter">
+            <!-- Left Rib Arc -->
+            <svg class="rib-arc" id="ribLeft" viewBox="0 0 38 32">
+              <path d="M 32 4 C 14 6, 8 16, 12 28 M 28 8 C 16 12, 12 18, 16 26" />
+            </svg>
+            <div class="air-core">
+              <span class="air-label" id="airLabel">LUNGS INHALED</span>
+              <div class="air-bar-frame">
+                <div class="air-bar-fill" id="airFill"></div>
+              </div>
+              <span class="air-subtext" id="airSub">OXYGEN STABLE</span>
+            </div>
+            <!-- Right Rib Arc -->
+            <svg class="rib-arc" id="ribRight" viewBox="0 0 38 32">
+              <path d="M 6 4 C 24 6, 30 16, 26 28 M 10 8 C 22 12, 26 18, 22 26" />
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 3 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">C. Condensation Chamber (Embun Napas)</h2>
+      <p class="card-desc">Gauge embun hawa napas yang terperangkap di kaca. Warna darah membakar dari dalam saat pemain hampir kehabisan oksigen.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vigC"></div>
+      <div class="top-row">
+        <div class="btn-sim">LEAVE STALL</div>
+        <div style="width:70px"></div>
+      </div>
+      <div class="hud-area">
+        <div class="opt-fog">
+          <div class="fog-header">
+            <span id="fogTitle">AIR RESERVOIR</span>
+            <span id="fogPct">80%</span>
+          </div>
+          <div class="fog-gauge">
+            <div class="fog-fill" id="fogFill"></div>
+            <div class="fog-mist-overlay"></div>
+          </div>
+          <div class="fog-footer">
+            <span id="fogStatus">THROAT CLEAR</span>
+            <span id="fogSec">16s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const range = document.getElementById('breathRange');
+  const display = document.getElementById('timeDisplay');
+
+  function update(val) {
+    const frac = val / 20;
+    display.textContent = val.toFixed(1) + 's';
+
+    // 1. Opsi A: Lungs
+    const lungsFill = document.getElementById('lungsFill');
+    const lungsMicro = document.getElementById('lungsMicro');
+    const lungsLabel = document.getElementById('lungsLabel');
+    lungsFill.style.height = (frac * 100) + '%';
+    lungsMicro.style.width = (frac * 100) + '%';
+
+    if (frac <= 0.25) {
+      lungsLabel.textContent = "CAN'T HOLD ON!";
+      lungsLabel.style.color = "#e63946";
+      lungsFill.style.background = "linear-gradient(180deg, #ff1a2a 0%, #8a0d15 100%)";
+    } else if (frac <= 0.5) {
+      lungsLabel.textContent = "LUNGS BURNING";
+      lungsLabel.style.color = "#cf621f";
+      lungsFill.style.background = "linear-gradient(180deg, #e64a25 0%, #75151b 100%)";
+    } else {
+      lungsLabel.textContent = "HOLDING BREATH";
+      lungsLabel.style.color = "#c4b5af";
+      lungsFill.style.background = "linear-gradient(180deg, rgba(212, 59, 72, 0.6) 0%, rgba(138, 21, 32, 0.9) 100%)";
+    }
+
+    // 2. Opsi B: Compression
+    const airFill = document.getElementById('airFill');
+    const airLabel = document.getElementById('airLabel');
+    const airSub = document.getElementById('airSub');
+    const ribLeft = document.getElementById('ribLeft');
+    const ribRight = document.getElementById('ribRight');
+
+    airFill.style.width = (frac * 100) + '%';
+    const squeeze = (1 - frac) * 8; // Menghimpit ke dalam saat udara habis
+    ribLeft.style.transform = `translateX(${squeeze}px)`;
+    ribRight.style.transform = `translateX(${-squeeze}px)`;
+
+    if (frac <= 0.25) {
+      airLabel.textContent = "THORACIC SPASM";
+      airLabel.style.color = "#e63946";
+      airSub.textContent = "SUFFOCATION IMMINENT";
+      airSub.style.color = "#e63946";
+    } else if (frac <= 0.5) {
+      airLabel.textContent = "LUNGS BURNING";
+      airLabel.style.color = "#cf621f";
+      airSub.textContent = "OXYGEN DEPLETING";
+      airSub.style.color = "#cf621f";
+    } else {
+      airLabel.textContent = "LUNGS INHALED";
+      airLabel.style.color = "#d8cac4";
+      airSub.textContent = "OXYGEN STABLE";
+      airSub.style.color = "#6b5c58";
+    }
+
+    // 3. Opsi C: Fog
+    const fogFill = document.getElementById('fogFill');
+    const fogPct = document.getElementById('fogPct');
+    const fogStatus = document.getElementById('fogStatus');
+    const fogSec = document.getElementById('fogSec');
+    fogFill.style.width = (frac * 100) + '%';
+    fogPct.textContent = Math.round(frac * 100) + '%';
+    fogSec.textContent = Math.round(val) + 's';
+
+    if (frac <= 0.25) {
+      fogStatus.textContent = "AIRWAY FAILING";
+      fogStatus.style.color = "#e63946";
+    } else if (frac <= 0.5) {
+      fogStatus.textContent = "BURNING SENSATION";
+      fogStatus.style.color = "#cf621f";
+    } else {
+      fogStatus.textContent = "THROAT CLEAR";
+      fogStatus.style.color = "#635350";
+    }
+
+    // Vignettes
+    ['vigA', 'vigB', 'vigC'].forEach(id => {
+      const el = document.getElementById(id);
+      if (frac <= 0.25) {
+        el.classList.add('panic');
+      } else {
+        el.classList.remove('panic');
+      }
+    });
+  }
+
+  range.addEventListener('input', (e) => update(parseFloat(e.target.value)));
+  update(16);
+</script>
+
+</body>
+</html>
