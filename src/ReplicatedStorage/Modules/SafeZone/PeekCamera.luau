@@ -27,6 +27,8 @@ local TweenService      = game:GetService("TweenService")
 local Lighting          = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Anchors           = require(script.Parent.Anchors)
+
 local PeekCamera = {}
 PeekCamera.__index = PeekCamera
 
@@ -71,7 +73,10 @@ function PeekCamera.new()
 	self.blur = blur
 
 	-- ScreenGui untuk fade hitam & hint keluar
-	local playerGui = self.player:WaitForChild("PlayerGui")
+	local playerGui = self.player and (self.player:FindFirstChildOfClass("PlayerGui") or self.player:WaitForChild("PlayerGui", 5))
+	if not playerGui then
+		playerGui = Instance.new("Folder")
+	end
 	local gui = playerGui:FindFirstChild(GUI_NAME) or Instance.new("ScreenGui")
 	gui.Name = GUI_NAME
 	gui.ResetOnSpawn = false
@@ -132,19 +137,61 @@ function PeekCamera.new()
 	vignette.ZIndex = 1
 	vignette.Parent = gui
 
-	-- Hint tombol [F] untuk toggle ngintip
-	local peekHint = Instance.new("TextLabel")
-	peekHint.Name = "PeekHint"
-	peekHint.AnchorPoint = Vector2.new(0.5, 1)
-	peekHint.Position = UDim2.new(0.5, 0, 1, -40)
-	peekHint.Size = UDim2.new(0, 220, 0, 36)
+	-- BillboardGui di Attachment lubang pintu (state HIDDEN)
+	local peekBillboard = playerGui:FindFirstChild("SafeZonePeekBillboard") or Instance.new("BillboardGui")
+	peekBillboard.Name = "SafeZonePeekBillboard"
+	peekBillboard.ResetOnSpawn = false
+	peekBillboard.AlwaysOnTop = true
+	peekBillboard.LightInfluence = 0
+	peekBillboard.Size = UDim2.new(0, 190, 0, 32)
+	peekBillboard.MaxDistance = 15
+	peekBillboard.Enabled = false
+	peekBillboard.Parent = playerGui
+	peekBillboard:ClearAllChildren()
+
+	local billboardFrame = Instance.new("Frame")
+	billboardFrame.Name = "Container"
+	billboardFrame.Size = UDim2.fromScale(1, 1)
+	billboardFrame.BackgroundColor3 = Color3.fromRGB(20, 15, 18)
+	billboardFrame.BackgroundTransparency = 0.35
+	billboardFrame.BorderSizePixel = 0
+	billboardFrame.Parent = peekBillboard
+
+	local billboardCorner = Instance.new("UICorner")
+	billboardCorner.CornerRadius = UDim.new(0, 4)
+	billboardCorner.Parent = billboardFrame
+
+	local billboardStroke = Instance.new("UIStroke")
+	billboardStroke.Color = Color3.fromRGB(80, 20, 25)
+	billboardStroke.Thickness = 1
+	billboardStroke.Transparency = 0.3
+	billboardStroke.Parent = billboardFrame
+
+	local billboardLabel = Instance.new("TextLabel")
+	billboardLabel.Name = "Label"
+	billboardLabel.Size = UDim2.fromScale(1, 1)
+	billboardLabel.BackgroundTransparency = 1
+	billboardLabel.BorderSizePixel = 0
+	billboardLabel.Font = Enum.Font.SpecialElite
+	billboardLabel.TextSize = 14
+	billboardLabel.TextColor3 = Color3.fromRGB(220, 200, 190)
+	billboardLabel.Text = "[F] PEEK THROUGH HOLE"
+	billboardLabel.Parent = billboardFrame
+
+	-- Hint tombol [F] di ScreenGui (hanya tampil saat PEEKING, di bawah ExitHint)
+	local peekHint = Instance.new("TextButton")
+	peekHint.Name = "ScreenPeekHint"
+	peekHint.AnchorPoint = Vector2.new(0, 0)
+	peekHint.Position = UDim2.new(0, 24, 0, 68)
+	peekHint.Size = UDim2.new(0, 160, 0, 36)
 	peekHint.BackgroundColor3 = Color3.fromRGB(20, 15, 18)
 	peekHint.BackgroundTransparency = 0.35
 	peekHint.BorderSizePixel = 0
 	peekHint.Font = Enum.Font.SpecialElite
 	peekHint.TextSize = 14
 	peekHint.TextColor3 = Color3.fromRGB(220, 200, 190)
-	peekHint.Text = "[F] PEEK THROUGH HOLE"
+	peekHint.Text = "[F] STOP PEEKING"
+	peekHint.AutoButtonColor = true
 	peekHint.Visible = false
 	peekHint.Parent = gui
 
@@ -158,11 +205,17 @@ function PeekCamera.new()
 	peekStroke.Transparency = 0.3
 	peekStroke.Parent = peekHint
 
+	peekHint.MouseButton1Click:Connect(function()
+		self:togglePeek()
+	end)
+
 	self.gui = gui
 	self.shade = shade
 	self.exitHint = exitHint
 	self.vignette = vignette
 	self.peekHint = peekHint
+	self.peekBillboard = peekBillboard
+	self.billboardLabel = billboardLabel
 
 	return self
 end
@@ -211,7 +264,7 @@ function PeekCamera:_look(dx: number, dy: number)
 	self.pitch = math.clamp(self.pitch - dy * self.sensitivity, -self.pitchLimit, self.pitchLimit)
 end
 
-function PeekCamera:_attach(peekCF: CFrame, hideCF: CFrame?)
+function PeekCamera:_attach(peekCF: CFrame, hideCF: CFrame?, zonePart: BasePart?)
 	local cam = workspace.CurrentCamera
 	if not cam then
 		return
@@ -238,7 +291,27 @@ function PeekCamera:_attach(peekCF: CFrame, hideCF: CFrame?)
 		UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
 	end)
 
-	-- Masuk = state HIDDEN: vignette gelap nyala, hint [F] muncul
+	-- Hubungkan Adornee Billboard ke marker Attachment / Part di pintu
+	if self._tempMarker then
+		self._tempMarker:Destroy()
+		self._tempMarker = nil
+	end
+
+	local marker = zonePart and Anchors.peekMarker(zonePart)
+	if not marker and typeof(peekCF) == "CFrame" then
+		local tempAtt = Instance.new("Attachment")
+		tempAtt.Name = "TempPeekMarker"
+		tempAtt.WorldCFrame = peekCF
+		tempAtt.Parent = (zonePart and zonePart:IsA("BasePart")) and zonePart or workspace.Terrain
+		self._tempMarker = tempAtt
+		marker = tempAtt
+	end
+
+	if self.peekBillboard then
+		self.peekBillboard.Adornee = marker
+	end
+
+	-- Masuk = state HIDDEN: vignette gelap nyala, billboard [F] muncul
 	self:_applyHiddenVisual(true)
 
 	-- Tampilkan tombol keluar manual
@@ -352,9 +425,22 @@ function PeekCamera:_applyHiddenVisual(isHidden: boolean)
 			end)
 		end
 	end
-	if self.peekHint then
-		self.peekHint.Text = isHidden and "[F] PEEK THROUGH HOLE" or "[F] STOP PEEKING"
-		self.peekHint.Visible = true
+	if isHidden then
+		-- State HIDDEN: Billboard [F] di lubang aktif, hint screen mati
+		if self.peekBillboard then
+			self.peekBillboard.Enabled = true
+		end
+		if self.peekHint then
+			self.peekHint.Visible = false
+		end
+	else
+		-- State PEEKING: Billboard di lubang mati (pandangan bersih), hint screen [F] STOP aktif
+		if self.peekBillboard then
+			self.peekBillboard.Enabled = false
+		end
+		if self.peekHint then
+			self.peekHint.Visible = true
+		end
 	end
 end
 
@@ -458,6 +544,16 @@ function PeekCamera:_detach()
 		self.peekHint.Visible = false
 	end
 
+	if self.peekBillboard then
+		self.peekBillboard.Enabled = false
+		self.peekBillboard.Adornee = nil
+	end
+
+	if self._tempMarker then
+		self._tempMarker:Destroy()
+		self._tempMarker = nil
+	end
+
 	-- Pulihkan Blur
 	if self.blur then
 		TweenService:Create(self.blur, TweenInfo.new(0.3), { Size = 0 }):Play()
@@ -551,7 +647,7 @@ function PeekCamera:enter(payload: { [string]: any })
 	task.spawn(function()
 		self:_fadeThrough(tonumber(payload.fade) or 0.35, function()
 			if self.pending then
-				self:_attach(peekCF, hideCF)
+				self:_attach(peekCF, hideCF, payload.zone)
 			end
 		end)
 		self.pending = false
@@ -595,6 +691,14 @@ function PeekCamera:forceRelease()
 	if self.peekHint then
 		self.peekHint.Visible = false
 	end
+	if self.peekBillboard then
+		self.peekBillboard.Enabled = false
+		self.peekBillboard.Adornee = nil
+	end
+	if self._tempMarker then
+		self._tempMarker:Destroy()
+		self._tempMarker = nil
+	end
 	if self.blur then
 		self.blur.Size = 0
 	end
@@ -609,6 +713,12 @@ function PeekCamera:destroy()
 	if self.gui then
 		self.gui:Destroy()
 	end
+	if self.peekBillboard then
+		self.peekBillboard:Destroy()
+	end
+	if self._tempMarker then
+		self._tempMarker:Destroy()
+	end
 	if self.blur then
 		self.blur:Destroy()
 	end
@@ -617,6 +727,9 @@ function PeekCamera:destroy()
 	self.exitHint = nil
 	self.vignette = nil
 	self.peekHint = nil
+	self.peekBillboard = nil
+	self.billboardLabel = nil
+	self._tempMarker = nil
 	self.blur = nil
 end
 

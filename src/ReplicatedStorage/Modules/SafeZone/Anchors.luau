@@ -48,7 +48,7 @@ local Anchors = {}
 --- Cari di: (1) child Part itu sendiri, (2) descendants Model induk,
 --- (3) descendants Workspace. Ini memungkinkan PeekPoint ditempel
 --- di pintu (sibling dari Part ber-tag), bukan hanya di body.
-local function markerCFrame(zonePart: BasePart, name: string?): CFrame?
+local function findMarkerInstance(zonePart: BasePart, name: string?): Instance?
 	if not name or typeof(name) ~= "string" or name == "" then
 		return nil
 	end
@@ -69,6 +69,11 @@ local function markerCFrame(zonePart: BasePart, name: string?): CFrame?
 		child = workspace:FindFirstChild(name, true)
 	end
 
+	return child
+end
+
+local function markerCFrame(zonePart: BasePart, name: string?): CFrame?
+	local child = findMarkerInstance(zonePart, name)
 	if not child then
 		return nil
 	end
@@ -200,6 +205,22 @@ end
 --- sudut mengintip.
 function Anchors.doorDirection(zonePart: BasePart): Vector3
 	return outward(zonePart)
+end
+
+--- Mengambil instance penanda PeekPoint (Attachment atau BasePart).
+function Anchors.peekMarker(zonePart: BasePart): Instance?
+	if not zonePart or not zonePart:IsA("BasePart") then
+		return nil
+	end
+	local markerName = Config.PeekPointName or "PeekPoint"
+	local inst = findMarkerInstance(zonePart, markerName)
+	if not inst then
+		inst = findMarkerInstance(zonePart, "PeekPoint")
+	end
+	if not inst then
+		inst = findMarkerInstance(zonePart, "PeekCamera")
+	end
+	return inst
 end
 
 return Anchors
