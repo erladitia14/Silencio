@@ -58,7 +58,10 @@ end
 function BreathBar.new()
 	local self = setmetatable({}, BreathBar)
 	local player = Players.LocalPlayer
-	local playerGui = player:WaitForChild("PlayerGui")
+	local playerGui = player and (player:FindFirstChildOfClass("PlayerGui") or player:WaitForChild("PlayerGui", 5))
+	if not playerGui then
+		playerGui = Instance.new("Folder")
+	end
 
 	local screen = playerGui:FindFirstChild(GUI_NAME) or new("ScreenGui", {
 		Name = GUI_NAME,
@@ -146,16 +149,22 @@ function BreathBar.new()
 		Parent = rightVig,
 	})
 
-	-- 2. HUD Container
+	-- 2. HUD Container (responsive: auto-scale + batas ukuran pixel)
 	local holder = new("Frame", {
 		Name = "Holder",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -60),
-		Size = UDim2.new(0.34, 0, 0, 84),
+		Position = UDim2.new(0.5, 0, 1, -80),
+		Size = UDim2.new(0.38, 0, 0, 84),
 		BackgroundTransparency = 1,
 		Active = false,
 		Visible = false,
 		Parent = screen,
+	})
+
+	new("UISizeConstraint", {
+		MinSize = Vector2.new(280, 84),
+		MaxSize = Vector2.new(420, 84),
+		Parent = holder,
 	})
 
 	-- 3. Label Status Seram (Font Creepster)

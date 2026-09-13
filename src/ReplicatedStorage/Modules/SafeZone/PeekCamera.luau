@@ -25,9 +25,15 @@ local RunService        = game:GetService("RunService")
 local UserInputService  = game:GetService("UserInputService")
 local TweenService      = game:GetService("TweenService")
 local Lighting          = game:GetService("Lighting")
+local GuiService        = game:GetService("GuiService")
+local StarterGui        = game:GetService("StarterGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Anchors           = require(script.Parent.Anchors)
+
+local function isTouch(): boolean
+	return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+end
 
 local PeekCamera = {}
 PeekCamera.__index = PeekCamera
@@ -95,19 +101,26 @@ function PeekCamera.new()
 	shade.Visible = false
 	shade.Parent = gui
 
-	-- Hint tombol keluar di pojok kiri atas
+	-- Hitung margin atas dinamis agar aman dari tombol menu/chat Roblox & poni/notch HP
+	local topInset = 0
+	pcall(function()
+		topInset = GuiService:GetGuiInset().Y
+	end)
+	local baseY = math.max(54, topInset + 10)
+
+	-- Hint tombol keluar di pojok kiri atas (posisi di bawah Safe Area / Topbar Roblox)
 	local exitHint = Instance.new("TextButton")
 	exitHint.Name = "ExitHint"
 	exitHint.AnchorPoint = Vector2.new(0, 0)
-	exitHint.Position = UDim2.new(0, 24, 0, 24)
-	exitHint.Size = UDim2.new(0, 160, 0, 36)
+	exitHint.Position = UDim2.new(0, 20, 0, baseY)
+	exitHint.Size = UDim2.new(0, 150, 0, 36)
 	exitHint.BackgroundColor3 = Color3.fromRGB(20, 15, 18)
 	exitHint.BackgroundTransparency = 0.35
 	exitHint.BorderSizePixel = 0
 	exitHint.Font = Enum.Font.SpecialElite
 	exitHint.TextSize = 14
 	exitHint.TextColor3 = Color3.fromRGB(220, 200, 190)
-	exitHint.Text = "[E] LEAVE STALL"
+	exitHint.Text = isTouch() and "LEAVE STALL" or "[E] LEAVE STALL"
 	exitHint.AutoButtonColor = true
 	exitHint.Visible = false
 	exitHint.Parent = gui
@@ -137,7 +150,7 @@ function PeekCamera.new()
 	vignette.ZIndex = 1
 	vignette.Parent = gui
 
-	-- BillboardGui di Attachment lubang pintu (state HIDDEN)
+	-- BillboardGui di Attachment lubang pintu (state HIDDEN, bisa di-tap di mobile)
 	local peekBillboard = playerGui:FindFirstChild("SafeZonePeekBillboard") or Instance.new("BillboardGui")
 	peekBillboard.Name = "SafeZonePeekBillboard"
 	peekBillboard.ResetOnSpawn = false
@@ -145,6 +158,7 @@ function PeekCamera.new()
 	peekBillboard.LightInfluence = 0
 	peekBillboard.Size = UDim2.new(0, 190, 0, 32)
 	peekBillboard.MaxDistance = 15
+	peekBillboard.Active = true
 	peekBillboard.Enabled = false
 	peekBillboard.Parent = playerGui
 	peekBillboard:ClearAllChildren()
@@ -167,30 +181,37 @@ function PeekCamera.new()
 	billboardStroke.Transparency = 0.3
 	billboardStroke.Parent = billboardFrame
 
-	local billboardLabel = Instance.new("TextLabel")
-	billboardLabel.Name = "Label"
+	local billboardLabel = Instance.new("TextButton")
+	billboardLabel.Name = "Button"
 	billboardLabel.Size = UDim2.fromScale(1, 1)
 	billboardLabel.BackgroundTransparency = 1
 	billboardLabel.BorderSizePixel = 0
 	billboardLabel.Font = Enum.Font.SpecialElite
 	billboardLabel.TextSize = 14
 	billboardLabel.TextColor3 = Color3.fromRGB(220, 200, 190)
-	billboardLabel.Text = "[F] PEEK THROUGH HOLE"
+	billboardLabel.Text = isTouch() and "PEEK THROUGH HOLE" or "[F] PEEK THROUGH HOLE"
+	billboardLabel.AutoButtonColor = true
 	billboardLabel.Parent = billboardFrame
+
+	billboardLabel.MouseButton1Click:Connect(function()
+		if self.active and self.state == "HIDDEN" then
+			self:togglePeek()
+		end
+	end)
 
 	-- Hint tombol [F] di ScreenGui (hanya tampil saat PEEKING, di bawah ExitHint)
 	local peekHint = Instance.new("TextButton")
 	peekHint.Name = "ScreenPeekHint"
 	peekHint.AnchorPoint = Vector2.new(0, 0)
-	peekHint.Position = UDim2.new(0, 24, 0, 68)
-	peekHint.Size = UDim2.new(0, 160, 0, 36)
+	peekHint.Position = UDim2.new(0, 20, 0, baseY + 42)
+	peekHint.Size = UDim2.new(0, 150, 0, 36)
 	peekHint.BackgroundColor3 = Color3.fromRGB(20, 15, 18)
 	peekHint.BackgroundTransparency = 0.35
 	peekHint.BorderSizePixel = 0
 	peekHint.Font = Enum.Font.SpecialElite
 	peekHint.TextSize = 14
 	peekHint.TextColor3 = Color3.fromRGB(220, 200, 190)
-	peekHint.Text = "[F] STOP PEEKING"
+	peekHint.Text = isTouch() and "STOP PEEKING" or "[F] STOP PEEKING"
 	peekHint.AutoButtonColor = true
 	peekHint.Visible = false
 	peekHint.Parent = gui
@@ -311,6 +332,22 @@ function PeekCamera:_attach(peekCF: CFrame, hideCF: CFrame?, zonePart: BasePart?
 		self.peekBillboard.Adornee = marker
 	end
 
+	-- Sembunyikan hotbar backpack bawaan agar ruang bawah layar bersih di HP/PC
+	pcall(function()
+		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+	end)
+
+	local touch = isTouch()
+	if self.exitHint then
+		self.exitHint.Text = touch and "LEAVE STALL" or "[E] LEAVE STALL"
+	end
+	if self.billboardLabel then
+		self.billboardLabel.Text = touch and "PEEK THROUGH HOLE" or "[F] PEEK THROUGH HOLE"
+	end
+	if self.peekHint then
+		self.peekHint.Text = touch and "STOP PEEKING" or "[F] STOP PEEKING"
+	end
+
 	-- Masuk = state HIDDEN: vignette gelap nyala, billboard [F] muncul
 	self:_applyHiddenVisual(true)
 
@@ -425,10 +462,14 @@ function PeekCamera:_applyHiddenVisual(isHidden: boolean)
 			end)
 		end
 	end
+	local touch = isTouch()
 	if isHidden then
 		-- State HIDDEN: Billboard [F] di lubang aktif, hint screen mati
 		if self.peekBillboard then
 			self.peekBillboard.Enabled = true
+		end
+		if self.billboardLabel then
+			self.billboardLabel.Text = touch and "PEEK THROUGH HOLE" or "[F] PEEK THROUGH HOLE"
 		end
 		if self.peekHint then
 			self.peekHint.Visible = false
@@ -439,6 +480,7 @@ function PeekCamera:_applyHiddenVisual(isHidden: boolean)
 			self.peekBillboard.Enabled = false
 		end
 		if self.peekHint then
+			self.peekHint.Text = touch and "STOP PEEKING" or "[F] STOP PEEKING"
 			self.peekHint.Visible = true
 		end
 	end
@@ -553,6 +595,11 @@ function PeekCamera:_detach()
 		self._tempMarker:Destroy()
 		self._tempMarker = nil
 	end
+
+	-- Pulihkan Hotbar Backpack bawaan
+	pcall(function()
+		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, true)
+	end)
 
 	-- Pulihkan Blur
 	if self.blur then
@@ -699,6 +746,9 @@ function PeekCamera:forceRelease()
 		self._tempMarker:Destroy()
 		self._tempMarker = nil
 	end
+	pcall(function()
+		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, true)
+	end)
 	if self.blur then
 		self.blur.Size = 0
 	end
