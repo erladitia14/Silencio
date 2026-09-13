@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Silencio — Clown & Breath Themed HUD</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Rye&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #080607;
+    color: #ded4cf;
+    font-family: 'Special Elite', cursive, monospace;
+    min-height: 100vh;
+    padding: 28px 24px 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 24px;
+    max-width: 880px;
+  }
+  h1 {
+    font-family: 'Rye', serif;
+    font-size: 26px;
+    letter-spacing: 0.08em;
+    color: #e0d0c8;
+    text-shadow: 0 0 16px rgba(180, 30, 40, 0.4);
+  }
+  .sub {
+    font-size: 13px;
+    color: #8c7670;
+    margin-top: 8px;
+    letter-spacing: 0.04em;
+    font-family: 'Cinzel', serif;
+  }
+
+  /* Control Panel */
+  .toolbar {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    background: #151012;
+    border: 1px solid #302025;
+    padding: 12px 24px;
+    border-radius: 6px;
+    margin-bottom: 28px;
+  }
+  .toolbar label {
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    color: #ad9b95;
+    font-family: 'Cinzel', serif;
+  }
+  .toolbar input[type=range] {
+    width: 240px;
+    accent-color: #a81c26;
+  }
+  .timer-val {
+    font-weight: 700;
+    color: #e63946;
+    width: 48px;
+    font-size: 15px;
+  }
+
+  /* Grid 3 Options */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    width: 100%;
+    max-width: 1420px;
+  }
+
+  .card {
+    background: #0f0b0d;
+    border: 1px solid #291c20;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .card-header {
+    padding: 16px 20px;
+    background: #171013;
+    border-bottom: 1px solid #291c20;
+  }
+  .card-title {
+    font-family: 'Rye', serif;
+    font-size: 16px;
+    color: #e8ded8;
+    letter-spacing: 0.06em;
+  }
+  .card-desc {
+    font-family: 'Cinzel', serif;
+    font-size: 11px;
+    color: #85726d;
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  /* Viewport Simulation */
+  .viewport {
+    position: relative;
+    height: 340px;
+    background: radial-gradient(ellipse 65% 55% at 50% 45%, #201317 0%, #0d070a 60%, #040203 100%);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 16px;
+  }
+
+  .stall-bg {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(90deg, transparent 0 25%, #080406 25% 26.5%, transparent 26.5% 73.5%, #080406 73.5% 75%, transparent 75%),
+      linear-gradient(180deg, rgba(40,10,18,0.06) 0%, rgba(0,0,0,0.75) 100%);
+    pointer-events: none;
+  }
+
+  .top-row {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .btn-sim {
+    background: rgba(22, 14, 18, 0.75);
+    border: 1px solid rgba(110, 30, 42, 0.5);
+    color: #d1c0b8;
+    font-size: 11px;
+    padding: 6px 14px;
+    border-radius: 4px;
+    letter-spacing: 0.08em;
+  }
+
+  .hud-area {
+    position: relative;
+    z-index: 10;
+    align-self: center;
+    width: 86%;
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ==========================================================
+     OPSI 1: THE DEFLATING CARNIVAL BALLOON (Balon Sirkus Mengempis)
+     ========================================================== */
+  .opt-balloon {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .balloon-wrapper {
+    position: relative;
+    width: 48px;
+    height: 58px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .balloon-shape {
+    width: 44px;
+    height: 52px;
+    background: radial-gradient(circle at 35% 30%, #ff5260 0%, #b81422 45%, #52060c 100%);
+    border-radius: 50% 50% 48% 48% / 55% 55% 45% 45%;
+    box-shadow: 0 0 14px rgba(184, 20, 34, 0.4), inset -4px -6px 10px rgba(0,0,0,0.6);
+    position: relative;
+    transition: transform 0.15s ease-out, filter 0.2s;
+  }
+  .balloon-knot {
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6px;
+    height: 5px;
+    background: #780a13;
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+  }
+  .balloon-string {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    width: 1px;
+    height: 18px;
+    background: #806b64;
+    transform: translateX(-50%);
+  }
+  .balloon-text {
+    font-size: 10.5px;
+    letter-spacing: 0.22em;
+    color: #e3d5cf;
+    text-transform: uppercase;
+    text-shadow: 0 0 6px rgba(0,0,0,0.8);
+  }
+  .balloon-subgauge {
+    width: 120px;
+    height: 3px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .balloon-subfill {
+    height: 100%;
+    width: 80%;
+    background: #b81422;
+    transition: width 0.15s;
+  }
+
+  /* ==========================================================
+     OPSI 2: CLOWN'S GRIN & ROTTEN TEETH (Seringai Gigi Badut)
+     ========================================================== */
+  .opt-teeth {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    background: rgba(16, 10, 13, 0.65);
+    border: 1px solid rgba(85, 25, 35, 0.4);
+    padding: 10px 14px;
+    border-radius: 6px;
+  }
+  .teeth-header {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: #a38f89;
+  }
+  .teeth-mouth {
+    display: flex;
+    gap: 4px;
+    height: 24px;
+    align-items: flex-start;
+    justify-content: center;
+    width: 100%;
+    position: relative;
+    padding: 0 4px;
+  }
+  .tooth {
+    flex: 1;
+    background: linear-gradient(180deg, #eae0cc 0%, #c4b091 55%, #66543d 100%);
+    border-radius: 0 0 3px 3px;
+    height: 18px;
+    box-shadow: inset 0 -2px 3px rgba(0,0,0,0.6);
+    transition: height 0.2s, opacity 0.2s, background 0.2s;
+  }
+  .tooth:nth-child(even) {
+    height: 22px;
+  }
+  .tooth.missing {
+    opacity: 0.12;
+    height: 8px;
+    background: #2b1f22;
+  }
+  .tooth.bloody {
+    background: linear-gradient(180deg, #ff4d5a 0%, #a6121f 60%, #4a060b 100%);
+    box-shadow: 0 0 6px rgba(255, 77, 90, 0.6);
+  }
+  .teeth-sub {
+    font-size: 8.5px;
+    color: #695652;
+    letter-spacing: 0.2em;
+  }
+
+  /* ==========================================================
+     OPSI 3: CARNIVAL BELLOWS / ACCORDION (Klakson & Pompa Sirkus)
+     ========================================================== */
+  .opt-horn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .horn-meter {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    justify-content: center;
+  }
+  .horn-bulb {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #bf2430 0%, #700c14 60%, #300307 100%);
+    box-shadow: 0 0 10px rgba(191, 36, 48, 0.4), inset -2px -4px 6px rgba(0,0,0,0.7);
+    transition: transform 0.15s ease-out;
+  }
+  .horn-tracks {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 150px;
+  }
+  .horn-label-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9.5px;
+    letter-spacing: 0.2em;
+    color: #ccbdb7;
+  }
+  .bellows-pleats {
+    display: flex;
+    gap: 3px;
+    height: 10px;
+    width: 100%;
+  }
+  .pleat {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.08);
+    transform: skewX(-15deg);
+    border-radius: 1px;
+    transition: background 0.15s, box-shadow 0.15s;
+  }
+  .pleat.active {
+    background: #b51c27;
+    box-shadow: 0 0 5px rgba(181, 28, 39, 0.5);
+  }
+  .pleat.warning {
+    background: #d4631e;
+    box-shadow: 0 0 5px rgba(212, 99, 30, 0.5);
+  }
+  .horn-foot {
+    font-size: 8.5px;
+    color: #63514d;
+    letter-spacing: 0.18em;
+  }
+
+  /* Vignette */
+  .vignette-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at center, transparent 38%, rgba(25, 0, 4, 0.65) 80%, rgba(10, 0, 2, 0.96) 100%);
+    opacity: 0.6;
+    transition: opacity 0.3s;
+  }
+  .vignette-layer.panic {
+    opacity: 0.96;
+    animation: clownTerror 0.35s infinite alternate;
+  }
+  @keyframes clownTerror {
+    0% { opacity: 0.78; }
+    100% { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Silencio — Clown & Breath Themed HUD</h1>
+  <p class="sub">3 Konsep Memadukan <strong>Karnaval Badut</strong> & <strong>Mekanik Nahan Napas</strong></p>
+</header>
+
+<div class="toolbar">
+  <label for="breathRange">Simulasi Napas Pemain:</label>
+  <input type="range" id="breathRange" min="0" max="20" step="0.5" value="16">
+  <span class="timer-val" id="timeDisplay">16.0s</span>
+</div>
+
+<div class="grid">
+
+  <!-- CARD 1 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">1. The Deflating Balloon</h2>
+      <p class="card-desc">Balon merah karnaval khas badut. Balon merepresentasikan udara di paru-paru: semakin lama nahan napas, balonnya mengkerut & mengempis kehabisan udara.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig1"></div>
+      <div class="top-row">
+        <div class="btn-sim">LEAVE STALL</div>
+        <div style="width:70px"></div>
+      </div>
+      <div class="hud-area">
+        <div class="opt-balloon">
+          <div class="balloon-wrapper">
+            <div class="balloon-shape" id="balloonObj">
+              <div class="balloon-knot"></div>
+              <div class="balloon-string"></div>
+            </div>
+          </div>
+          <span class="balloon-text" id="balloonLabel">HOLDING BREATH</span>
+          <div class="balloon-subgauge">
+            <div class="balloon-subfill" id="balloonFill"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 2 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">2. Clown's Grinning Teeth</h2>
+      <p class="card-desc">Seringai gigi busuk badut. Jatah napas = 16 gigi badut yang tanggal satu per satu. Saat napas hampir habis, sisa gigi berlumuran darah & senyum makin liar.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig2"></div>
+      <div class="top-row">
+        <div class="btn-sim">LEAVE STALL</div>
+        <div style="width:70px"></div>
+      </div>
+      <div class="hud-area">
+        <div class="opt-teeth">
+          <div class="teeth-header">
+            <span id="teethTitle">SILENT GRIN</span>
+            <span id="teethSec">16s</span>
+          </div>
+          <div class="teeth-mouth" id="mouthContainer"></div>
+          <div class="teeth-sub" id="teethSub">TEETH REMAINING: 13 / 16</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 3 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">3. Squeezed Clown Horn</h2>
+      <p class="card-desc">Klakson pompa sirkus badut. Bola karet tertekan/tergencet saat pemain menahan udara, garis akordeon bergetar panik sebelum desis napas bocor.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig3"></div>
+      <div class="top-row">
+        <div class="btn-sim">LEAVE STALL</div>
+        <div style="width:70px"></div>
+      </div>
+      <div class="hud-area">
+        <div class="opt-horn">
+          <div class="horn-meter">
+            <div class="horn-bulb" id="hornBulb"></div>
+            <div class="horn-tracks">
+              <div class="horn-label-row">
+                <span id="hornTitle">AIR BELLOWS</span>
+                <span id="hornPct">80%</span>
+              </div>
+              <div class="bellows-pleats" id="pleatsContainer"></div>
+              <div class="horn-foot" id="hornFoot">PRESSURE: SEALED</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const range = document.getElementById('breathRange');
+  const display = document.getElementById('timeDisplay');
+
+  // Generate 16 teeth
+  const mouth = document.getElementById('mouthContainer');
+  for (let i = 0; i < 16; i++) {
+    const t = document.createElement('div');
+    t.className = 'tooth';
+    mouth.appendChild(t);
+  }
+
+  // Generate 14 pleats
+  const pleats = document.getElementById('pleatsContainer');
+  for (let i = 0; i < 14; i++) {
+    const p = document.createElement('div');
+    p.className = 'pleat active';
+    pleats.appendChild(p);
+  }
+
+  function update(val) {
+    const frac = val / 20;
+    display.textContent = val.toFixed(1) + 's';
+
+    // 1. Balloon
+    const balloon = document.getElementById('balloonObj');
+    const bFill = document.getElementById('balloonFill');
+    const bLabel = document.getElementById('balloonLabel');
+    // Scale balloon from 1.0 down to 0.35
+    const scale = 0.35 + frac * 0.65;
+    balloon.style.transform = `scale(${scale})`;
+    bFill.style.width = (frac * 100) + '%';
+
+    if (frac <= 0.25) {
+      bLabel.textContent = "CAN'T HOLD ON!";
+      bLabel.style.color = "#ff3b4b";
+      balloon.style.filter = "saturate(1.8) drop-shadow(0 0 10px #ff1a2b)";
+    } else if (frac <= 0.5) {
+      bLabel.textContent = "LUNGS BURNING";
+      bLabel.style.color = "#d95f23";
+      balloon.style.filter = "none";
+    } else {
+      bLabel.textContent = "HOLDING BREATH";
+      bLabel.style.color = "#e3d5cf";
+      balloon.style.filter = "none";
+    }
+
+    // 2. Teeth
+    const teethArr = mouth.children;
+    const activeTeeth = Math.round(frac * 16);
+    const teethSec = document.getElementById('teethSec');
+    const teethSub = document.getElementById('teethSub');
+    teethSec.textContent = Math.round(val) + 's';
+    teethSub.textContent = `TEETH REMAINING: ${activeTeeth} / 16`;
+
+    for (let i = 0; i < 16; i++) {
+      teethArr[i].className = 'tooth';
+      if (i >= activeTeeth) {
+        teethArr[i].classList.add('missing');
+      } else if (frac <= 0.25) {
+        teethArr[i].classList.add('bloody');
+      }
+    }
+
+    // 3. Horn Bellows
+    const bulb = document.getElementById('hornBulb');
+    const hornPct = document.getElementById('hornPct');
+    const hornFoot = document.getElementById('hornFoot');
+    // Squeeze bulb horizontally when holding breath
+    const bulbScaleX = 0.5 + frac * 0.5;
+    const bulbScaleY = 1.2 - frac * 0.2;
+    bulb.style.transform = `scale(${bulbScaleX}, ${bulbScaleY})`;
+    hornPct.textContent = Math.round(frac * 100) + '%';
+
+    const pArr = pleats.children;
+    const activePleats = Math.round(frac * 14);
+    for (let i = 0; i < 14; i++) {
+      pArr[i].className = 'pleat';
+      if (i < activePleats) {
+        if (frac <= 0.25) {
+          pArr[i].classList.add('active');
+        } else if (frac <= 0.5) {
+          pArr[i].classList.add('warning');
+        } else {
+          pArr[i].classList.add('active');
+        }
+      }
+    }
+
+    if (frac <= 0.25) {
+      hornFoot.textContent = "PRESSURE: RUPTURING";
+      hornFoot.style.color = "#ff3b4b";
+    } else if (frac <= 0.5) {
+      hornFoot.textContent = "PRESSURE: STRAINING";
+      hornFoot.style.color = "#d95f23";
+    } else {
+      hornFoot.textContent = "PRESSURE: SEALED";
+      hornFoot.style.color = "#63514d";
+    }
+
+    // Vignettes
+    ['vig1', 'vig2', 'vig3'].forEach(id => {
+      const el = document.getElementById(id);
+      if (frac <= 0.25) {
+        el.classList.add('panic');
+      } else {
+        el.classList.remove('panic');
+      }
+    });
+  }
+
+  range.addEventListener('input', (e) => update(parseFloat(e.target.value)));
+  update(16);
+</script>
+
+</body>
+</html>
