@@ -88,6 +88,10 @@ function PeekCamera.new()
 	gui.ResetOnSpawn = false
 	gui.IgnoreGuiInset = true
 	gui.DisplayOrder = 25
+	pcall(function()
+		gui.ScreenInsets = Enum.ScreenInsets.None
+		gui.ClipToDeviceSafeArea = false
+	end)
 	gui.Parent = playerGui
 	gui:ClearAllChildren()
 

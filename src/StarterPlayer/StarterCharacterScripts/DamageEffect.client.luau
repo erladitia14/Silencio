@@ -65,6 +65,10 @@ if not horrorGui then
 	horrorGui = Instance.new("ScreenGui")
 	horrorGui.Name = GUI_NAME
 	horrorGui.IgnoreGuiInset = true
+	pcall(function()
+		horrorGui.ScreenInsets = Enum.ScreenInsets.None
+		horrorGui.ClipToDeviceSafeArea = false
+	end)
 	horrorGui.ResetOnSpawn = false
 	horrorGui.DisplayOrder = 10
 	horrorGui.Parent = playerGui

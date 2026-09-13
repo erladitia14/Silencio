@@ -70,6 +70,10 @@ function BreathBar.new()
 		DisplayOrder = 15,
 		Parent = playerGui,
 	})
+	pcall(function()
+		screen.ScreenInsets = Enum.ScreenInsets.None
+		screen.ClipToDeviceSafeArea = false
+	end)
 	screen:ClearAllChildren()
 
 	-- 1. Horror Vignette: 4-sisi bayangan gelap/merah pekat tanpa dependensi asset id
