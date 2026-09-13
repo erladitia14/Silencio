@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Silencio — Safe Zone Breath Bar V2 Redesign</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=JetBrains+Mono:wght@400;500;700&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #080708;
+    color: #ded6d0;
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    padding: 32px 24px 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 28px;
+    max-width: 800px;
+  }
+  h1 {
+    font-family: 'Cinzel', serif;
+    font-size: 24px;
+    letter-spacing: 0.22em;
+    color: #e5dad4;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .sub {
+    font-size: 13px;
+    color: #7d6e6a;
+    margin-top: 8px;
+    letter-spacing: 0.05em;
+  }
+
+  /* Control Panel */
+  .toolbar {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    background: #141113;
+    border: 1px solid #281f23;
+    padding: 12px 24px;
+    border-radius: 8px;
+    margin-bottom: 32px;
+  }
+  .toolbar label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #9c8e8a;
+  }
+  .toolbar input[type=range] {
+    width: 220px;
+    accent-color: #8a1520;
+  }
+  .timer-val {
+    font-weight: 700;
+    color: #d43b48;
+    width: 44px;
+  }
+
+  /* 3 Options Grid */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    width: 100%;
+    max-width: 1400px;
+  }
+
+  .card {
+    background: #0f0d0f;
+    border: 1px solid #241c20;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .card-header {
+    padding: 16px 20px;
+    background: #161214;
+    border-bottom: 1px solid #241c20;
+  }
+  .card-title {
+    font-family: 'Cinzel', serif;
+    font-size: 15px;
+    color: #eeddd8;
+    letter-spacing: 0.1em;
+  }
+  .card-desc {
+    font-size: 11px;
+    color: #7a6a66;
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  /* Viewport simulation (Dark Toilet Stall) */
+  .viewport {
+    position: relative;
+    height: 320px;
+    background:
+      radial-gradient(ellipse 65% 55% at 50% 45%, #1d1417 0%, #0d090b 60%, #030203 100%);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 18px;
+  }
+
+  /* Stall environment lines */
+  .stall-bg {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(90deg, transparent 0 25%, #080506 25% 26.5%, transparent 26.5% 73.5%, #080506 73.5% 75%, transparent 75%),
+      linear-gradient(180deg, rgba(30,10,15,0.08) 0%, rgba(0,0,0,0.7) 100%);
+    pointer-events: none;
+  }
+
+  /* Top bar simulation */
+  .top-row {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .btn-sim {
+    background: rgba(22, 16, 19, 0.7);
+    border: 1px solid rgba(90, 30, 38, 0.4);
+    color: #cfc1ba;
+    font-size: 11px;
+    padding: 6px 14px;
+    border-radius: 4px;
+    letter-spacing: 0.08em;
+    backdrop-filter: blur(4px);
+  }
+
+  /* Dynamic Island indicator */
+  .notch-sim {
+    width: 68px;
+    height: 16px;
+    background: #000;
+    border-radius: 12px;
+    margin: 0 auto;
+    border: 1px solid #1c1517;
+  }
+
+  /* HUD placement */
+  .hud-area {
+    position: relative;
+    z-index: 10;
+    align-self: center;
+    width: 82%;
+    margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ==========================================================
+     OPTION 1: CINEMATIC HAIRLINE (Outlast / Alien: Isolation)
+     ========================================================== */
+  .opt1-wrap {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .opt1-status {
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #ab9c96;
+    transition: color 0.3s;
+  }
+  .opt1-status.critical {
+    color: #e63946;
+    text-shadow: 0 0 8px rgba(230, 57, 70, 0.6);
+  }
+  .opt1-bar-frame {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    position: relative;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .opt1-fill {
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(90deg, #590d15, #b81d24);
+    box-shadow: 0 0 10px rgba(184, 29, 36, 0.5);
+    transition: width 0.1s ease-out;
+  }
+  .opt1-meta {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    color: #5c4e4a;
+    letter-spacing: 0.15em;
+  }
+
+  /* ==========================================================
+     OPTION 2: INDUSTRIAL PIP METER (Dead Space / Silent Hill)
+     ========================================================== */
+  .opt2-wrap {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    background: rgba(10, 8, 10, 0.6);
+    border: 1px solid rgba(60, 45, 50, 0.35);
+    padding: 10px 14px;
+    border-radius: 4px;
+  }
+  .opt2-header {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    font-size: 9.5px;
+    letter-spacing: 0.18em;
+    color: #8c7c77;
+  }
+  .opt2-pips {
+    width: 100%;
+    display: flex;
+    gap: 4px;
+    height: 14px;
+  }
+  .pip {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 1px;
+    transition: background 0.2s, box-shadow 0.2s;
+  }
+  .pip.active {
+    background: #a8202b;
+    box-shadow: 0 0 6px rgba(168, 32, 43, 0.6);
+  }
+  .pip.warning {
+    background: #cf621f;
+    box-shadow: 0 0 6px rgba(207, 98, 31, 0.6);
+  }
+  .opt2-footer {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    font-size: 8.5px;
+    color: #544440;
+    letter-spacing: 0.12em;
+  }
+
+  /* ==========================================================
+     OPTION 3: TACTICAL CARDIAC / PULSE (Amnesia / Phasmophobia)
+     ========================================================== */
+  .opt3-wrap {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .opt3-top {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .opt3-label {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: #b0a09a;
+  }
+  .opt3-bpm {
+    font-size: 12px;
+    font-weight: 700;
+    color: #d1303e;
+    letter-spacing: 0.05em;
+  }
+  .opt3-svg {
+    width: 100%;
+    height: 28px;
+    stroke: #b81d24;
+    stroke-width: 1.5;
+    fill: none;
+    filter: drop-shadow(0 0 4px rgba(184, 29, 36, 0.7));
+  }
+  .opt3-subbar {
+    width: 100%;
+    height: 2px;
+    background: rgba(255,255,255,0.07);
+    border-radius: 1px;
+    overflow: hidden;
+  }
+  .opt3-subfill {
+    height: 100%;
+    width: 100%;
+    background: #b81d24;
+    transition: width 0.1s ease-out;
+  }
+
+  /* Vignette simulation */
+  .vignette-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at center, transparent 40%, rgba(20, 0, 3, 0.6) 80%, rgba(10, 0, 2, 0.95) 100%);
+    transition: opacity 0.3s;
+    opacity: 0.6;
+  }
+  .vignette-layer.panic {
+    opacity: 0.95;
+    animation: pulse 0.5s infinite alternate;
+  }
+  @keyframes pulse {
+    0% { opacity: 0.75; }
+    100% { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Silencio — SafeZone HUD V2</h1>
+  <p class="sub">3 Desain Pengganti BreathBar Halloween Kartun (Bebas AI-Slop &middot; Taste Modern Horror)</p>
+</header>
+
+<div class="toolbar">
+  <label for="breathRange">Simulasi Napas:</label>
+  <input type="range" id="breathRange" min="0" max="20" step="0.5" value="16">
+  <span class="timer-val" id="timeDisplay">16.0s</span>
+</div>
+
+<div class="grid">
+
+  <!-- CARD 1 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">1. Cinematic Hairline</h2>
+      <p class="card-desc">Inspirasi: <em>Alien Isolation / Outlast</em>. Bar tipis 4px rapi, tipografi berjarak, elegan & fokus ke atmosfer horor.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig1"></div>
+      <div class="top-row">
+        <div class="btn-sim">LEAVE STALL</div>
+        <div class="notch-sim"></div>
+        <div style="width:70px"></div>
+      </div>
+      <div class="hud-area">
+        <div class="opt1-wrap">
+          <div class="opt1-status" id="opt1Status">Lungs Burning</div>
+          <div class="opt1-bar-frame">
+            <div class="opt1-fill" id="opt1Fill"></div>
+          </div>
+          <div class="opt1-meta">
+            <span>RESIDUAL AIR</span>
+            <span id="opt1Pct">80%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 2 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">2. Industrial Pip Meter</h2>
+      <p class="card-desc">Inspirasi: <em>Dead Space / Silent Hill</em>. 16 pip mekanikal berjejer rapi, berubah dari amber ke merah darah saat kritis.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig2"></div>
+      <div class="top-row">
+        <div class="btn-sim">LEAVE STALL</div>
+        <div class="notch-sim"></div>
+        <div style="width:70px"></div>
+      </div>
+      <div class="hud-area">
+        <div class="opt2-wrap">
+          <div class="opt2-header">
+            <span>O2 CONFINEMENT</span>
+            <span id="opt2Time">16s</span>
+          </div>
+          <div class="opt2-pips" id="pipsContainer"></div>
+          <div class="opt2-footer">
+            <span>AIRLOCK SEALED</span>
+            <span id="opt2Status">STABLE</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 3 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">3. Biometric Pulse (EKG)</h2>
+      <p class="card-desc">Inspirasi: <em>Amnesia / Phasmophobia</em>. Garis denyut jantung live; getaran garis makin panik & cepat saat napas habis.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig3"></div>
+      <div class="top-row">
+        <div class="btn-sim">LEAVE STALL</div>
+        <div class="notch-sim"></div>
+        <div style="width:70px"></div>
+      </div>
+      <div class="hud-area">
+        <div class="opt3-wrap">
+          <div class="opt3-top">
+            <span class="opt3-label" id="opt3Label">HEART RATE // NORMAL</span>
+            <span class="opt3-bpm" id="opt3Bpm">84 BPM</span>
+          </div>
+          <svg class="opt3-svg" viewBox="0 0 240 28" preserveAspectRatio="none">
+            <path id="ekgPath" d="M 0 14 L 60 14 L 70 8 L 80 20 L 90 4 L 100 24 L 110 14 L 240 14" />
+          </svg>
+          <div class="opt3-subbar">
+            <div class="opt3-subfill" id="opt3Fill"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const range = document.getElementById('breathRange');
+  const display = document.getElementById('timeDisplay');
+  const pipsContainer = document.getElementById('pipsContainer');
+
+  // Create 16 pips for Option 2
+  const TOTAL_PIPS = 16;
+  for (let i = 0; i < TOTAL_PIPS; i++) {
+    const pip = document.createElement('div');
+    pip.className = 'pip active';
+    pipsContainer.appendChild(pip);
+  }
+
+  function update(val) {
+    const frac = val / 20;
+    display.textContent = val.toFixed(1) + 's';
+
+    // 1. Option 1
+    const opt1Fill = document.getElementById('opt1Fill');
+    const opt1Pct = document.getElementById('opt1Pct');
+    const opt1Status = document.getElementById('opt1Status');
+    opt1Fill.style.width = (frac * 100) + '%';
+    opt1Pct.textContent = Math.round(frac * 100) + '%';
+
+    if (frac > 0.5) {
+      opt1Status.textContent = 'HOLDING BREATH';
+      opt1Status.classList.remove('critical');
+    } else if (frac > 0.25) {
+      opt1Status.textContent = 'LUNGS BURNING';
+      opt1Status.classList.add('critical');
+    } else {
+      opt1Status.textContent = 'CAN\'T HOLD ON';
+      opt1Status.classList.add('critical');
+    }
+
+    // 2. Option 2 (Pips)
+    const pips = pipsContainer.children;
+    const activeCount = Math.round(frac * TOTAL_PIPS);
+    const opt2Time = document.getElementById('opt2Time');
+    const opt2Status = document.getElementById('opt2Status');
+    opt2Time.textContent = Math.round(val) + 's';
+
+    for (let i = 0; i < TOTAL_PIPS; i++) {
+      pips[i].className = 'pip';
+      if (i < activeCount) {
+        if (frac <= 0.25) {
+          pips[i].classList.add('active'); // red
+        } else if (frac <= 0.5) {
+          pips[i].classList.add('warning'); // amber
+        } else {
+          pips[i].classList.add('active');
+        }
+      }
+    }
+    if (frac <= 0.25) {
+      opt2Status.textContent = 'CRITICAL';
+      opt2Status.style.color = '#e63946';
+    } else if (frac <= 0.5) {
+      opt2Status.textContent = 'DEPLETING';
+      opt2Status.style.color = '#cf621f';
+    } else {
+      opt2Status.textContent = 'STABLE';
+      opt2Status.style.color = '#8c7c77';
+    }
+
+    // 3. Option 3 (EKG)
+    const opt3Fill = document.getElementById('opt3Fill');
+    const opt3Bpm = document.getElementById('opt3Bpm');
+    const opt3Label = document.getElementById('opt3Label');
+    opt3Fill.style.width = (frac * 100) + '%';
+
+    const bpm = Math.round(72 + (1 - frac) * 90);
+    opt3Bpm.textContent = bpm + ' BPM';
+    if (frac <= 0.25) {
+      opt3Label.textContent = 'HEART RATE // TACHYCARDIA';
+      opt3Label.style.color = '#e63946';
+    } else if (frac <= 0.5) {
+      opt3Label.textContent = 'HEART RATE // ELEVATED';
+      opt3Label.style.color = '#cf621f';
+    } else {
+      opt3Label.textContent = 'HEART RATE // NORMAL';
+      opt3Label.style.color = '#b0a09a';
+    }
+
+    // Vignettes
+    ['vig1', 'vig2', 'vig3'].forEach(id => {
+      const el = document.getElementById(id);
+      if (frac <= 0.25) {
+        el.classList.add('panic');
+      } else {
+        el.classList.remove('panic');
+      }
+    });
+  }
+
+  range.addEventListener('input', (e) => update(parseFloat(e.target.value)));
+  update(16);
+</script>
+
+</body>
+</html>
