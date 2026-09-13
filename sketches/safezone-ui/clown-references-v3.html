@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Silencio — Clown Horror HUD Reference V3</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #060405;
+    color: #ded1cb;
+    font-family: 'Special Elite', monospace;
+    min-height: 100vh;
+    padding: 28px 20px 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 24px;
+    max-width: 860px;
+  }
+  h1 {
+    font-family: 'Cinzel', serif;
+    font-size: 24px;
+    letter-spacing: 0.16em;
+    color: #ede2dc;
+    text-transform: uppercase;
+  }
+  .sub {
+    font-size: 13px;
+    color: #8a736e;
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+
+  /* Toolbar */
+  .toolbar {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    background: #130d10;
+    border: 1px solid #2e1d24;
+    padding: 12px 24px;
+    border-radius: 6px;
+    margin-bottom: 28px;
+  }
+  .toolbar label {
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    color: #a8948e;
+  }
+  .toolbar input[type=range] {
+    width: 240px;
+    accent-color: #9e1a24;
+  }
+  .timer-val {
+    font-weight: 700;
+    color: #e63946;
+    width: 48px;
+    font-size: 15px;
+  }
+
+  /* Grid 3 Options */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    width: 100%;
+    max-width: 1420px;
+  }
+
+  .card {
+    background: #0d090b;
+    border: 1px solid #26181e;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .card-header {
+    padding: 16px 20px;
+    background: #140d10;
+    border-bottom: 1px solid #26181e;
+  }
+  .card-title {
+    font-family: 'Cinzel', serif;
+    font-size: 15px;
+    color: #eeded8;
+    letter-spacing: 0.08em;
+  }
+  .card-desc {
+    font-size: 11px;
+    color: #826e68;
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  /* Viewport (Dark Stall Interior) */
+  .viewport {
+    position: relative;
+    height: 340px;
+    background: radial-gradient(ellipse 65% 55% at 50% 45%, #1e1115 0%, #0b0608 60%, #030102 100%);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 16px;
+  }
+
+  .stall-bg {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(90deg, transparent 0 25%, #080305 25% 26.5%, transparent 26.5% 73.5%, #080305 73.5% 75%, transparent 75%),
+      linear-gradient(180deg, rgba(40,10,18,0.06) 0%, rgba(0,0,0,0.75) 100%);
+    pointer-events: none;
+  }
+
+  .top-row {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .btn-sim {
+    background: rgba(22, 13, 17, 0.75);
+    border: 1px solid rgba(110, 25, 38, 0.5);
+    color: #cfbfb8;
+    font-size: 11px;
+    padding: 6px 14px;
+    border-radius: 4px;
+    letter-spacing: 0.08em;
+  }
+
+  .hud-area {
+    position: relative;
+    z-index: 10;
+    align-self: center;
+    width: 86%;
+    margin-bottom: 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ==========================================================
+     OPSI 1: THE CRACKING PORCELAIN MASK (Topeng Badut Retak)
+     ========================================================== */
+  .opt-mask {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .mask-graphic-wrap {
+    position: relative;
+    width: 62px;
+    height: 62px;
+  }
+  .mask-face {
+    width: 100%;
+    height: 100%;
+    border-radius: 50% 50% 46% 46%;
+    background: radial-gradient(circle at 40% 35%, #f2eae4 0%, #cfbfb6 55%, #665049 100%);
+    box-shadow: 0 0 16px rgba(0,0,0,0.9), inset -4px -6px 12px rgba(0,0,0,0.6);
+    position: relative;
+    overflow: hidden;
+    border: 1px solid #3d2b27;
+  }
+  /* Eye holes & clown makeup */
+  .mask-eye-left, .mask-eye-right {
+    position: absolute;
+    top: 28%;
+    width: 11px;
+    height: 7px;
+    background: #11090c;
+    border-radius: 50%;
+  }
+  .mask-eye-left { left: 22%; }
+  .mask-eye-right { right: 22%; }
+  .clown-tear {
+    position: absolute;
+    top: 38%;
+    width: 3px;
+    height: 14px;
+    background: #801018;
+    border-radius: 0 0 2px 2px;
+  }
+  .clown-tear.l { left: 28%; }
+  .clown-tear.r { right: 28%; }
+  .mask-mouth {
+    position: absolute;
+    bottom: 20%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 26px;
+    height: 8px;
+    border-bottom: 2.5px solid #801018;
+    border-radius: 0 0 14px 14px;
+  }
+  /* Cracks overlay */
+  .mask-cracks {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    background:
+      radial-gradient(circle at 50% 50%, transparent 60%, rgba(120, 10, 20, 0.4) 100%),
+      repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(0,0,0,0.4) 5px, rgba(0,0,0,0.4) 7px);
+    transition: opacity 0.2s;
+  }
+  .mask-label {
+    font-size: 10.5px;
+    letter-spacing: 0.22em;
+    color: #d1c0b8;
+    text-transform: uppercase;
+  }
+  .mask-subgauge {
+    width: 140px;
+    height: 3px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .mask-subfill {
+    height: 100%;
+    width: 80%;
+    background: #9e1a24;
+    transition: width 0.15s;
+  }
+
+  /* ==========================================================
+     OPSI 2: BLOODSHOT CLOWN SCLERA (Mata Badut Melotot & Urat Darah)
+     ========================================================== */
+  .opt-eye {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .eye-graphic-wrap {
+    position: relative;
+    width: 66px;
+    height: 48px;
+    border-radius: 50% / 60% 60% 40% 40%;
+    background: radial-gradient(circle at 50% 50%, #f7ecd7 0%, #dbcbaf 55%, #8f7457 100%);
+    overflow: hidden;
+    border: 1px solid #4a3429;
+    box-shadow: 0 0 14px rgba(0,0,0,0.8);
+  }
+  .eye-veins {
+    position: absolute;
+    inset: 0;
+    opacity: 0.25;
+    background:
+      radial-gradient(circle at 50% 50%, transparent 35%, rgba(180, 20, 35, 0.7) 100%),
+      repeating-linear-gradient(135deg, transparent, transparent 4px, rgba(160, 20, 30, 0.4) 4px, rgba(160, 20, 30, 0.4) 5px);
+    transition: opacity 0.2s;
+  }
+  .eye-iris {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #e6a119 0%, #8f5809 65%, #2e1a02 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: width 0.15s, height 0.15s;
+  }
+  .eye-pupil {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #080305;
+  }
+  .eye-label {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: #c9b9b3;
+    text-transform: uppercase;
+  }
+  .eye-subgauge {
+    width: 140px;
+    height: 3px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .eye-subfill {
+    height: 100%;
+    width: 80%;
+    background: #b5202c;
+    transition: width 0.15s;
+  }
+
+  /* ==========================================================
+     OPSI 3: RUSTED CARNIVAL CHAIN (Rantai Sirkus Tercekik)
+     ========================================================== */
+  .opt-chain {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    background: rgba(15, 9, 12, 0.6);
+    border: 1px solid rgba(80, 25, 35, 0.35);
+    padding: 10px 14px;
+    border-radius: 6px;
+  }
+  .chain-header {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: #9c8a85;
+  }
+  .chain-links {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    width: 100%;
+    height: 18px;
+  }
+  .link {
+    flex: 1;
+    height: 8px;
+    border: 2px solid #574640;
+    border-radius: 4px;
+    background: #171012;
+    transition: border-color 0.2s, background 0.2s, transform 0.15s;
+  }
+  .link.locked {
+    border-color: #8c1f28;
+    background: #470d13;
+    box-shadow: 0 0 6px rgba(140, 31, 40, 0.5);
+  }
+  .link.snapped {
+    opacity: 0.15;
+    border-color: #2b1c20;
+    transform: translateY(3px);
+  }
+  .chain-sub {
+    font-size: 8.5px;
+    color: #63504c;
+    letter-spacing: 0.16em;
+  }
+
+  /* Vignette */
+  .vignette-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at center, transparent 38%, rgba(25, 0, 4, 0.65) 80%, rgba(10, 0, 2, 0.96) 100%);
+    opacity: 0.6;
+    transition: opacity 0.3s;
+  }
+  .vignette-layer.panic {
+    opacity: 0.96;
+    animation: choke 0.35s infinite alternate;
+  }
+  @keyframes choke {
+    0% { opacity: 0.78; }
+    100% { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Silencio — Clown Horror HUD Reference V3</h1>
+  <p class="sub">3 Konsep Alternatif: <strong>Horor Karnaval Murni, Tanpa Bentuk Permen/Kartun</strong></p>
+</header>
+
+<div class="toolbar">
+  <label for="breathRange">Simulasi Napas:</label>
+  <input type="range" id="breathRange" min="0" max="20" step="0.5" value="16">
+  <span class="timer-val" id="timeDisplay">16.0s</span>
+</div>
+
+<div class="grid">
+
+  <!-- CARD 1 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">1. The Cracking Porcelain Mask</h2>
+      <p class="card-desc">Khas Chapter 1 (<em>The Mask Maze</em>). Topeng porselen badut kusam. Semakin lama nahan napas, retakan menjalar; di detik terakhir topeng PECAH (shatter) sebagai transisi keluar bilik.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig1"></div>
+      <div class="top-row">
+        <div class="btn-sim">LEAVE STALL</div>
+        <div style="width:70px"></div>
+      </div>
+      <div class="hud-area">
+        <div class="opt-mask">
+          <div class="mask-graphic-wrap" id="maskWrap">
+            <div class="mask-face">
+              <div class="mask-eye-left"></div>
+              <div class="mask-eye-right"></div>
+              <div class="clown-tear l"></div>
+              <div class="clown-tear r"></div>
+              <div class="mask-mouth"></div>
+              <div class="mask-cracks" id="maskCracks"></div>
+            </div>
+          </div>
+          <span class="mask-label" id="maskLabel">HOLDING BREATH</span>
+          <div class="mask-subgauge">
+            <div class="mask-subfill" id="maskFill"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 2 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">2. Bloodshot Clown Eye</h2>
+      <p class="card-desc">Body horror psikologis: menahan napas bikin tekanan di kepala melonjak. Mata badut yang menatap dingin perlahan dipenuhi urat darah merah pekat, pupil mengecil panik.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig2"></div>
+      <div class="top-row">
+        <div class="btn-sim">LEAVE STALL</div>
+        <div style="width:70px"></div>
+      </div>
+      <div class="hud-area">
+        <div class="opt-eye">
+          <div class="eye-graphic-wrap" id="eyeWrap">
+            <div class="eye-veins" id="eyeVeins"></div>
+            <div class="eye-iris" id="eyeIris">
+              <div class="eye-pupil"></div>
+            </div>
+          </div>
+          <span class="eye-label" id="eyeLabel">AIR PRESSURE: NORMAL</span>
+          <div class="eye-subgauge">
+            <div class="eye-subfill" id="eyeFill"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 3 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">3. Rusted Carnival Chain</h2>
+      <p class="card-desc">Gritty & industrial. Rantai besi berkarat sirkus yang ditarik tegang menahan napas pemain. Mata rantai putus satu per satu; saat napas habis, rantai putus berdentang (SNAP!).</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig3"></div>
+      <div class="top-row">
+        <div class="btn-sim">LEAVE STALL</div>
+        <div style="width:70px"></div>
+      </div>
+      <div class="hud-area">
+        <div class="opt-chain">
+          <div class="chain-header">
+            <span>CHAIN TENSION</span>
+            <span id="chainSec">16s</span>
+          </div>
+          <div class="chain-links" id="linksContainer"></div>
+          <div class="chain-sub" id="chainSub">LINKS HOLDING: 13 / 16</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const range = document.getElementById('breathRange');
+  const display = document.getElementById('timeDisplay');
+
+  // Generate 16 chain links
+  const linksContainer = document.getElementById('linksContainer');
+  for (let i = 0; i < 16; i++) {
+    const l = document.createElement('div');
+    l.className = 'link locked';
+    linksContainer.appendChild(l);
+  }
+
+  function update(val) {
+    const frac = val / 20;
+    display.textContent = val.toFixed(1) + 's';
+
+    // 1. Mask
+    const maskCracks = document.getElementById('maskCracks');
+    const maskFill = document.getElementById('maskFill');
+    const maskLabel = document.getElementById('maskLabel');
+    maskFill.style.width = (frac * 100) + '%';
+    // Cracks opacity increases as breath depletes
+    maskCracks.style.opacity = Math.max(0, (1 - frac) * 1.2);
+
+    if (frac <= 0.25) {
+      maskLabel.textContent = "CRACKING / CAN'T HOLD!";
+      maskLabel.style.color = "#ff3b4b";
+    } else if (frac <= 0.5) {
+      maskLabel.textContent = "LUNGS BURNING...";
+      maskLabel.style.color = "#d95f23";
+    } else {
+      maskLabel.textContent = "HOLDING BREATH";
+      maskLabel.style.color = "#d1c0b8";
+    }
+
+    // 2. Eye
+    const eyeVeins = document.getElementById('eyeVeins');
+    const eyeIris = document.getElementById('eyeIris');
+    const eyeFill = document.getElementById('eyeFill');
+    const eyeLabel = document.getElementById('eyeLabel');
+    eyeFill.style.width = (frac * 100) + '%';
+    eyeVeins.style.opacity = 0.2 + (1 - frac) * 0.8;
+    // Pupil contracts under panic
+    const pupilSize = 18 + frac * 8;
+    eyeIris.style.width = pupilSize + 'px';
+    eyeIris.style.height = pupilSize + 'px';
+
+    if (frac <= 0.25) {
+      eyeLabel.textContent = "PRESSURE: RUPTURE IMMINENT";
+      eyeLabel.style.color = "#ff3b4b";
+    } else if (frac <= 0.5) {
+      eyeLabel.textContent = "PRESSURE: SCLERA BURNING";
+      eyeLabel.style.color = "#d95f23";
+    } else {
+      eyeLabel.textContent = "AIR PRESSURE: NORMAL";
+      eyeLabel.style.color = "#c9b9b3";
+    }
+
+    // 3. Chain
+    const linksArr = linksContainer.children;
+    const activeLinks = Math.round(frac * 16);
+    const chainSec = document.getElementById('chainSec');
+    const chainSub = document.getElementById('chainSub');
+    chainSec.textContent = Math.round(val) + 's';
+    chainSub.textContent = `LINKS HOLDING: ${activeLinks} / 16`;
+
+    for (let i = 0; i < 16; i++) {
+      linksArr[i].className = 'link';
+      if (i < activeLinks) {
+        linksArr[i].classList.add('locked');
+      } else {
+        linksArr[i].classList.add('snapped');
+      }
+    }
+
+    // Vignettes
+    ['vig1', 'vig2', 'vig3'].forEach(id => {
+      const el = document.getElementById(id);
+      if (frac <= 0.25) {
+        el.classList.add('panic');
+      } else {
+        el.classList.remove('panic');
+      }
+    });
+  }
+
+  range.addEventListener('input', (e) => update(parseFloat(e.target.value)));
+  update(16);
+</script>
+
+</body>
+</html>
