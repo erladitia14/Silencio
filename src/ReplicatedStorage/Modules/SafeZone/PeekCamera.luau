@@ -322,6 +322,9 @@ function PeekCamera:_attach(peekCF: CFrame, hideCF: CFrame?, zonePart: BasePart?
 		self._tempMarker = nil
 	end
 
+	-- Mainkan audio SafeZone (HeartBeat + BreathDeep) loop di client
+	self:playSafeZoneAudio()
+
 	local marker = zonePart and Anchors.peekMarker(zonePart)
 	if not marker and typeof(peekCF) == "CFrame" then
 		local tempAtt = Instance.new("Attachment")
@@ -605,6 +608,9 @@ function PeekCamera:_detach()
 		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, true)
 	end)
 
+	-- Hentikan audio SafeZone
+	self:stopSafeZoneAudio()
+
 	-- Pulihkan Blur
 	if self.blur then
 		TweenService:Create(self.blur, TweenInfo.new(0.3), { Size = 0 }):Play()
@@ -753,6 +759,7 @@ function PeekCamera:forceRelease()
 	pcall(function()
 		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, true)
 	end)
+	self:stopSafeZoneAudio()
 	if self.blur then
 		self.blur.Size = 0
 	end
@@ -764,6 +771,7 @@ end
 
 function PeekCamera:destroy()
 	self:forceRelease()
+	self:stopSafeZoneAudio()
 	if self.gui then
 		self.gui:Destroy()
 	end
@@ -776,6 +784,9 @@ function PeekCamera:destroy()
 	if self.blur then
 		self.blur:Destroy()
 	end
+	if self._audioContainer then
+		self._audioContainer:Destroy()
+	end
 	self.gui = nil
 	self.shade = nil
 	self.exitHint = nil
@@ -784,7 +795,63 @@ function PeekCamera:destroy()
 	self.peekBillboard = nil
 	self.billboardLabel = nil
 	self._tempMarker = nil
+	self._audioContainer = nil
 	self.blur = nil
+end
+
+---------------------------------------------------------------------
+-- AUDIO SAFEZONE (Client-side loop)
+---------------------------------------------------------------------
+
+--- Mainkan HeartBeat & BreathDeep loop saat pemain masuk bilik.
+function PeekCamera:playSafeZoneAudio()
+	self:stopSafeZoneAudio() -- bersihkan sisa audio lama
+
+	local audioRoot = ReplicatedStorage:FindFirstChild("Audio")
+	local safeZoneAudio = audioRoot and audioRoot:FindFirstChild("SafeZone")
+	if not safeZoneAudio then
+		return
+	end
+
+	local container = Instance.new("Folder")
+	container.Name = "SafeZoneAudio"
+	container.Parent = self.player:FindFirstChildOfClass("PlayerGui") or self.player
+
+	local heartbeat = safeZoneAudio:FindFirstChild("HeartBeat")
+	local breath = safeZoneAudio:FindFirstChild("BreathDeep")
+
+	if heartbeat and heartbeat:IsA("Sound") then
+		local hb = heartbeat:Clone()
+		hb.Name = "HeartBeat"
+		hb.Looped = true
+		hb.Volume = 0.5
+		hb.Parent = container
+		hb:Play()
+	end
+
+	if breath and breath:IsA("Sound") then
+		local bd = breath:Clone()
+		bd.Name = "BreathDeep"
+		bd.Looped = true
+		bd.Volume = 0.4
+		bd.Parent = container
+		bd:Play()
+	end
+
+	self._audioContainer = container
+end
+
+--- Hentikan dan bersihkan audio SafeZone.
+function PeekCamera:stopSafeZoneAudio()
+	if self._audioContainer then
+		for _, child in self._audioContainer:GetChildren() do
+			if child:IsA("Sound") then
+				child:Stop()
+			end
+		end
+		self._audioContainer:Destroy()
+		self._audioContainer = nil
+	end
 end
 
 return PeekCamera
