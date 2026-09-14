@@ -1,0 +1,737 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Silencio — 6 Konsep Breath HUD Setelah Dikejar Badut</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=JetBrains+Mono:wght@400;500;700&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #050304;
+    color: #dbd0ca;
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    padding: 28px 24px 70px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 24px;
+    max-width: 920px;
+  }
+  h1 {
+    font-family: 'Cinzel', serif;
+    font-size: 24px;
+    letter-spacing: 0.18em;
+    color: #ede2dc;
+    text-transform: uppercase;
+  }
+  .sub {
+    font-size: 13px;
+    color: #8c7670;
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+
+  /* Control Panel */
+  .toolbar {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    background: #110c0e;
+    border: 1px solid #291a20;
+    padding: 12px 26px;
+    border-radius: 6px;
+    margin-bottom: 30px;
+  }
+  .toolbar label {
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    color: #a8958f;
+  }
+  .toolbar input[type=range] {
+    width: 260px;
+    accent-color: #9e1a24;
+  }
+  .timer-val {
+    font-weight: 700;
+    color: #e63946;
+    width: 50px;
+    font-size: 15px;
+  }
+
+  /* Grid 6 Cards */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    width: 100%;
+    max-width: 1440px;
+  }
+
+  .card {
+    background: #0c080a;
+    border: 1px solid #24161b;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .card-header {
+    padding: 14px 18px;
+    background: #130d10;
+    border-bottom: 1px solid #24161b;
+  }
+  .card-title {
+    font-family: 'Cinzel', serif;
+    font-size: 14px;
+    color: #eeded8;
+    letter-spacing: 0.08em;
+  }
+  .card-desc {
+    font-size: 10.5px;
+    color: #806c66;
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  /* Viewport */
+  .viewport {
+    position: relative;
+    height: 250px;
+    background: radial-gradient(ellipse 65% 55% at 50% 45%, #1c0f13 0%, #0a0507 60%, #020102 100%);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 16px;
+  }
+
+  .stall-bg {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(90deg, transparent 0 25%, #080305 25% 26.5%, transparent 26.5% 73.5%, #080305 73.5% 75%, transparent 75%),
+      linear-gradient(180deg, rgba(40,10,18,0.06) 0%, rgba(0,0,0,0.75) 100%);
+    pointer-events: none;
+  }
+
+  .hud-area {
+    position: relative;
+    z-index: 10;
+    align-self: center;
+    width: 90%;
+    margin-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ==========================================================
+     1. CLOSED LIPS (Mulut Terkunci & Jahitan)
+     ========================================================== */
+  .opt-lips {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .lips-frame {
+    width: 150px;
+    height: 14px;
+    background: rgba(14, 8, 11, 0.7);
+    border: 1px solid rgba(80, 25, 35, 0.4);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .lips-fill {
+    height: 100%;
+    width: 80%;
+    background: linear-gradient(90deg, #5c0f16, #a61c27);
+    transition: width 0.15s;
+  }
+  .lips-stitches {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: space-evenly;
+    align-items: center;
+    pointer-events: none;
+  }
+  .stitch {
+    width: 2px;
+    height: 12px;
+    background: #211517;
+    opacity: 0.85;
+  }
+  .lips-label {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: #c4b5ae;
+    font-family: 'Special Elite', monospace;
+  }
+
+  /* ==========================================================
+     2. SHATTERED HAND MIRROR (Cermin Tangan Retak)
+     ========================================================== */
+  .opt-mirror {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .mirror-oval {
+    width: 46px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #221a1d 0%, #3e2b30 55%, #1c1215 100%);
+    border: 2px solid #4d3339;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 0 14px rgba(0,0,0,0.8);
+  }
+  .mirror-glass {
+    position: absolute;
+    inset: 3px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #5c4a50 0%, #2d1f24 65%, #100a0c 100%);
+    overflow: hidden;
+  }
+  .mirror-fog {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, rgba(255, 235, 240, 0.45) 0%, rgba(200, 40, 60, 0.3) 55%, transparent 100%);
+    filter: blur(4px);
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  .mirror-cracks {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    background:
+      repeating-linear-gradient(30deg, transparent, transparent 6px, rgba(255, 255, 255, 0.35) 6px, rgba(255, 255, 255, 0.35) 7px);
+    transition: opacity 0.2s;
+  }
+  .mirror-label {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: #c9bab4;
+    font-family: 'Special Elite', monospace;
+  }
+  .mirror-sub {
+    font-size: 8.5px;
+    color: #63504c;
+    letter-spacing: 0.16em;
+  }
+
+  /* ==========================================================
+     3. CLOWN PALM CLAMP (Telapak Badut Menutup Mulut)
+     ========================================================== */
+  .opt-hand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .hand-svg {
+    width: 52px;
+    height: 52px;
+    fill: none;
+    stroke: #8c1f28;
+    stroke-width: 2;
+    filter: drop-shadow(0 0 8px rgba(140, 31, 40, 0.4));
+    transition: transform 0.15s;
+  }
+  .hand-label {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: #cfbfb9;
+    font-family: 'Special Elite', monospace;
+  }
+  .hand-gauge {
+    width: 130px;
+    height: 3px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .hand-fill {
+    height: 100%;
+    width: 80%;
+    background: #9e1a24;
+    transition: width 0.15s;
+  }
+
+  /* ==========================================================
+     4. TEAR GAS GAUGE (Masker Air Mata & Tetesan)
+     ========================================================== */
+  .opt-tears {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    background: rgba(14, 8, 11, 0.6);
+    border: 1px solid rgba(80, 20, 30, 0.35);
+    padding: 10px 16px;
+    border-radius: 6px;
+  }
+  .tears-header {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: #a38f89;
+  }
+  .tears-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
+    height: 22px;
+  }
+  .drop {
+    width: 8px;
+    height: 14px;
+    background: linear-gradient(180deg, #d32a3a 0%, #570a11 100%);
+    border-radius: 50% 50% 50% 50% / 65% 65% 35% 35%;
+    box-shadow: 0 0 5px rgba(211, 42, 58, 0.4);
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  .drop.empty {
+    opacity: 0.12;
+    transform: translateY(4px);
+  }
+  .tears-sub {
+    font-size: 8.5px;
+    color: #63504c;
+    letter-spacing: 0.16em;
+  }
+
+  /* ==========================================================
+     5. HUSH BEACON (Simbol "Diam" Bergetar)
+     ========================================================== */
+  .opt-hush {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .hush-icon-wrap {
+    position: relative;
+    width: 60px;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .hush-face {
+    width: 44px;
+    height: 32px;
+    border: 2px solid #a81c26;
+    border-radius: 4px;
+    background: rgba(18, 9, 12, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: border-color 0.2s;
+  }
+  .hush-zigzag {
+    width: 28px;
+    height: 8px;
+    stroke: #a81c26;
+    stroke-width: 2;
+    fill: none;
+  }
+  .hush-label {
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    color: #cfbfb9;
+    font-family: 'Special Elite', monospace;
+  }
+  .hush-sub {
+    font-size: 8.5px;
+    color: #695652;
+    letter-spacing: 0.16em;
+  }
+
+  /* ==========================================================
+     6. LURKING SHADOW GAUGE (Bayangan Badut di Pintu)
+     ========================================================== */
+  .opt-shadow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .shadow-door-frame {
+    width: 180px;
+    height: 18px;
+    background: #0c0709;
+    border: 1px solid #3d1f26;
+    border-radius: 3px;
+    position: relative;
+    overflow: hidden;
+  }
+  .shadow-door-slit {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(80, 20, 30, 0.4), rgba(160, 30, 45, 0.7));
+    transition: width 0.15s;
+  }
+  .shadow-label {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: #c9bab4;
+    font-family: 'Special Elite', monospace;
+  }
+  .shadow-sub {
+    font-size: 8.5px;
+    color: #63504c;
+    letter-spacing: 0.16em;
+  }
+
+  /* Vignette */
+  .vignette-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at center, transparent 40%, rgba(20, 0, 3, 0.6) 80%, rgba(10, 0, 2, 0.95) 100%);
+    opacity: 0.55;
+    transition: opacity 0.3s;
+  }
+  .vignette-layer.panic {
+    opacity: 0.95;
+    animation: choke 0.35s infinite alternate;
+  }
+  @keyframes choke {
+    0% { opacity: 0.75; }
+    100% { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Silencio — 6 Konsep Breath HUD Setelah Dikejar Badut</h1>
+  <p class="sub">Eksplorasi Visual: <strong>Bekas Lari, Teror Badut di Luar Bilik, Tekanan Menahan Suara Napas</strong></p>
+</header>
+
+<div class="toolbar">
+  <label for="breathRange">Sisa Kapasitas Napas:</label>
+  <input type="range" id="breathRange" min="0" max="20" step="0.5" value="16">
+  <span class="timer-val" id="timeDisplay">16.0s</span>
+</div>
+
+<div class="grid">
+
+  <!-- CARD 1 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">1. Closed Lips (Mulut Terkunci)</h2>
+      <p class="card-desc">Mulut pemain yang dijahit rapat saat dikejar badut. Jahitan perlahan robek satu per satu seiring pemain sulit menahan napas.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig1"></div>
+      <div class="hud-area">
+        <div class="opt-lips">
+          <div class="lips-frame">
+            <div class="lips-fill" id="lipsFill"></div>
+            <div class="lips-stitches">
+              <div class="stitch"></div>
+              <div class="stitch"></div>
+              <div class="stitch"></div>
+              <div class="stitch"></div>
+              <div class="stitch"></div>
+              <div class="stitch"></div>
+              <div class="stitch"></div>
+            </div>
+          </div>
+          <span class="lips-label" id="lipsLabel">STAY SILENT</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 2 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">2. Shattered Hand Mirror</h2>
+      <p class="card-desc">Cermin tangan antik yang dipegang pemain. Napas mengembunkan kaca; makin lama makin kabut, dan kaca RETAK saat gagal menahan napas.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig2"></div>
+      <div class="hud-area">
+        <div class="opt-mirror">
+          <div class="mirror-oval">
+            <div class="mirror-glass">
+              <div class="mirror-fog" id="mirrorFog"></div>
+              <div class="mirror-cracks" id="mirrorCracks"></div>
+            </div>
+          </div>
+          <span class="mirror-label" id="mirrorLabel">CONDENSATION: 80%</span>
+          <span class="mirror-sub" id="mirrorSub">GLASS INTACT</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 3 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">3. Clown Palm Clamp</h2>
+      <p class="card-desc">Telapak tangan badut menutupi mulut pemain dari luar. Ikon genggaman menekan makin kuat seiring pemain gagal bernapas diam-diam.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig3"></div>
+      <div class="hud-area">
+        <div class="opt-hand">
+          <svg class="hand-svg" id="handSvg" viewBox="0 0 52 52">
+            <path d="M 12 28 L 14 16 L 20 16 L 22 26 M 20 26 L 24 12 L 28 12 L 28 26 M 28 26 L 32 16 L 36 16 L 36 26 M 36 26 L 40 18 L 44 18 L 40 32 C 40 40, 34 46, 26 46 C 18 46, 12 40, 12 32 Z" />
+          </svg>
+          <span class="hand-label" id="handLabel">GRIP: CONTAINED</span>
+          <div class="hand-gauge">
+            <div class="hand-fill" id="handFill"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 4 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">4. Tear Gas Drops (Air Mata Kaca)</h2>
+      <p class="card-desc">16 tetes air mata darah badut yang menetes ke bawah seiring waktu. Saat napas habis, semua tetes pecah berdarah di layar.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig4"></div>
+      <div class="hud-area">
+        <div class="opt-tears">
+          <div class="tears-header">
+            <span>TEAR RESERVOIR</span>
+            <span id="tearsPct">80%</span>
+          </div>
+          <div class="tears-row" id="tearsRow"></div>
+          <span class="tears-sub" id="tearsSub">DROPS HELD: 13 / 16</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 5 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">5. Hush Beacon (Sinyal Diam)</h2>
+      <p class="card-desc">Ikon muka dihush bergetar. Garis zigzag mulut tertutup berubah menjadi mulut menganga/berteriak saat napas habis.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig5"></div>
+      <div class="hud-area">
+        <div class="opt-hush">
+          <div class="hush-icon-wrap">
+            <div class="hush-face" id="hushFace">
+              <svg class="hush-zigzag" viewBox="0 0 28 8">
+                <path id="hushPath" d="M 0 4 L 6 1 L 12 4 L 18 1 L 24 4" />
+              </svg>
+            </div>
+          </div>
+          <span class="hush-label" id="hushLabel">NOISE: SILENCED</span>
+          <span class="hush-sub" id="hushSub">MONSTER PROXIMITY: LOW</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 6 -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">6. Lurking Shadow Gauge</h2>
+      <p class="card-desc">Bar bayangan badut yang melintas di balik pintu bilik. Bayangan menutupi cahaya seiring napas menipis.</p>
+    </div>
+    <div class="viewport">
+      <div class="stall-bg"></div>
+      <div class="vignette-layer" id="vig6"></div>
+      <div class="hud-area">
+        <div class="opt-shadow">
+          <div class="shadow-door-frame">
+            <div class="shadow-door-slit" id="shadowSlit"></div>
+          </div>
+          <span class="shadow-label" id="shadowLabel">IT IS STILL OUTSIDE</span>
+          <span class="shadow-sub" id="shadowSub">AIR: 80%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const range = document.getElementById('breathRange');
+  const display = document.getElementById('timeDisplay');
+
+  // Build 16 tear drops
+  const tearsRow = document.getElementById('tearsRow');
+  for (let i = 0; i < 16; i++) {
+    const d = document.createElement('div');
+    d.className = 'drop';
+    tearsRow.appendChild(d);
+  }
+
+  function update(val) {
+    const frac = val / 20;
+    display.textContent = val.toFixed(1) + 's';
+
+    // 1. Lips
+    const lipsFill = document.getElementById('lipsFill');
+    const lipsLabel = document.getElementById('lipsLabel');
+    lipsFill.style.width = (frac * 100) + '%';
+    if (frac <= 0.25) {
+      lipsLabel.textContent = "CAN'T HOLD ON!";
+      lipsLabel.style.color = "#ff3b4b";
+    } else if (frac <= 0.5) {
+      lipsLabel.textContent = "STITCHES TEARING...";
+      lipsLabel.style.color = "#d95f23";
+    } else {
+      lipsLabel.textContent = "STAY SILENT";
+      lipsLabel.style.color = "#c4b5ae";
+    }
+
+    // 2. Mirror
+    const mirrorFog = document.getElementById('mirrorFog');
+    const mirrorCracks = document.getElementById('mirrorCracks');
+    const mirrorLabel = document.getElementById('mirrorLabel');
+    const mirrorSub = document.getElementById('mirrorSub');
+    mirrorFog.style.opacity = 0.2 + (1 - frac) * 0.8;
+    mirrorFog.style.transform = `scale(${0.5 + frac * 0.5})`;
+    mirrorCracks.style.opacity = Math.max(0, (1 - frac) * 1.1);
+    mirrorLabel.textContent = "CONDENSATION: " + Math.round(frac * 100) + "%";
+    if (frac <= 0.25) {
+      mirrorLabel.style.color = "#ff3b4b";
+      mirrorSub.textContent = "GLASS SHATTERING!";
+      mirrorSub.style.color = "#ff3b4b";
+    } else if (frac <= 0.5) {
+      mirrorLabel.style.color = "#d95f23";
+      mirrorSub.textContent = "GLASS CRACKING";
+      mirrorSub.style.color = "#d95f23";
+    } else {
+      mirrorLabel.style.color = "#c9bab4";
+      mirrorSub.textContent = "GLASS INTACT";
+      mirrorSub.style.color = "#63504c";
+    }
+
+    // 3. Hand Clamp
+    const handSvg = document.getElementById('handSvg');
+    const handFill = document.getElementById('handFill');
+    const handLabel = document.getElementById('handLabel');
+    handFill.style.width = (frac * 100) + '%';
+    const handSqueeze = 0.85 + (1 - frac) * 0.3;
+    handSvg.style.transform = `scale(${handSqueeze})`;
+    if (frac <= 0.25) {
+      handLabel.textContent = "GRIP: CRUSHING!";
+      handLabel.style.color = "#ff3b4b";
+    } else if (frac <= 0.5) {
+      handLabel.textContent = "GRIP: STRAINING";
+      handLabel.style.color = "#d95f23";
+    } else {
+      handLabel.textContent = "GRIP: CONTAINED";
+      handLabel.style.color = "#cfbfb9";
+    }
+
+    // 4. Tears
+    const tearsArr = tearsRow.children;
+    const activeDrops = Math.round(frac * 16);
+    const tearsPct = document.getElementById('tearsPct');
+    const tearsSub = document.getElementById('tearsSub');
+    tearsPct.textContent = Math.round(frac * 100) + '%';
+    tearsSub.textContent = `DROPS HELD: ${activeDrops} / 16`;
+    for (let i = 0; i < 16; i++) {
+      if (i < activeDrops) {
+        tearsArr[i].className = 'drop';
+      } else {
+        tearsArr[i].className = 'drop empty';
+      }
+    }
+
+    // 5. Hush
+    const hushFace = document.getElementById('hushFace');
+    const hushLabel = document.getElementById('hushLabel');
+    const hushSub = document.getElementById('hushSub');
+    if (frac <= 0.25) {
+      hushFace.style.borderColor = "#ff3b4b";
+      hushLabel.textContent = "NOISE: SHOUTING!";
+      hushLabel.style.color = "#ff3b4b";
+      hushSub.textContent = "IT HEARD YOU!";
+      hushSub.style.color = "#ff3b4b";
+    } else if (frac <= 0.5) {
+      hushFace.style.borderColor = "#d95f23";
+      hushLabel.textContent = "NOISE: WHISPERING";
+      hushLabel.style.color = "#d95f23";
+      hushSub.textContent = "IT IS LISTENING...";
+      hushSub.style.color = "#d95f23";
+    } else {
+      hushFace.style.borderColor = "#a81c26";
+      hushLabel.textContent = "NOISE: SILENCED";
+      hushLabel.style.color = "#cfbfb9";
+      hushSub.textContent = "MONSTER PROXIMITY: LOW";
+      hushSub.style.color = "#695652";
+    }
+
+    // 6. Shadow
+    const shadowSlit = document.getElementById('shadowSlit');
+    const shadowLabel = document.getElementById('shadowLabel');
+    const shadowSub = document.getElementById('shadowSub');
+    shadowSlit.style.width = (frac * 100) + '%';
+    if (frac <= 0.25) {
+      shadowLabel.textContent = "IT IS COMING FOR YOU!";
+      shadowLabel.style.color = "#ff3b4b";
+      shadowSub.textContent = "AIR: " + Math.round(frac * 100) + "%";
+      shadowSub.style.color = "#ff3b4b";
+    } else if (frac <= 0.5) {
+      shadowLabel.textContent = "IT IS PACING...";
+      shadowLabel.style.color = "#d95f23";
+      shadowSub.textContent = "AIR: " + Math.round(frac * 100) + "%";
+      shadowSub.style.color = "#d95f23";
+    } else {
+      shadowLabel.textContent = "IT IS STILL OUTSIDE";
+      shadowLabel.style.color = "#c9bab4";
+      shadowSub.textContent = "AIR: " + Math.round(frac * 100) + "%";
+      shadowSub.style.color = "#63504c";
+    }
+
+    // Vignettes
+    ['vig1', 'vig2', 'vig3', 'vig4', 'vig5', 'vig6'].forEach(id => {
+      const el = document.getElementById(id);
+      if (frac <= 0.25) {
+        el.classList.add('panic');
+      } else {
+        el.classList.remove('panic');
+      }
+    });
+  }
+
+  range.addEventListener('input', (e) => update(parseFloat(e.target.value)));
+  update(16);
+</script>
+
+</body>
+</html>
