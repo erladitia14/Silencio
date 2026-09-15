@@ -42,6 +42,14 @@ local BIND_NAME   = "SilencioSafeZonePeek"
 local GUI_NAME    = "SafeZoneFade"
 local BLUR_NAME   = "SafeZoneSuffocationBlur"
 
+-- Nama Sound bisikan badut di ReplicatedStorage/Audio/SafeZone
+local TAUNT_SOUND_NAME = "I can hear your heartbeat"
+-- Fraksi sisa napas kapan bisikan mulai diputar.
+-- 0.40 = diputar saat sisa napas 40% (detik 12 dari 20s).
+-- Dipilih supaya klip 8 detik SELESAI tepat saat napas habis -> nyambung
+-- dengan efek balon MELETUS di BreathBar.
+local TAUNT_AT_FRACTION = 0.40
+
 function PeekCamera.new()
 	local self = setmetatable({}, PeekCamera)
 
@@ -62,6 +70,9 @@ function PeekCamera.new()
 	self.savedMouse = nil
 	self.inputConn = nil :: RBXScriptConnection?
 	self.keyConn = nil :: RBXScriptConnection?
+
+	-- Bisikan badut: penanda "sudah diputar" per sesi sembunyi
+	self.tauntPlayed = false
 
 	-- Nilai kepanikan napas (0 = penuh, 1 = habis)
 	self.panicIntensity = 0
@@ -611,6 +622,9 @@ function PeekCamera:_detach()
 	-- Hentikan audio SafeZone
 	self:stopSafeZoneAudio()
 
+	-- Hentikan bisikan badut & reset supaya bisa main lagi nanti
+	self:_stopTaunt()
+
 	-- Pulihkan Blur
 	if self.blur then
 		TweenService:Create(self.blur, TweenInfo.new(0.3), { Size = 0 }):Play()
@@ -644,6 +658,13 @@ function PeekCamera:setBreathFraction(fraction: number)
 		return
 	end
 
+	-- Bisikan badut: diputar SEKALI saat sisa napas menyentuh ambang.
+	-- Berbasis FRAKSI (bukan detik) supaya tetap benar kalau tim mengubah
+	-- attribute BreathTime di bilik (15s / 20s / 30s semua jalan).
+	if fraction <= TAUNT_AT_FRACTION then
+		self:_tryPlayTaunt()
+	end
+
 	-- Efek asfiksia mulai muncul ketika napas < 45%
 	if fraction <= 0.45 then
 		-- Intensity dari 0 (saat 45%) hingga 1.0 (saat 0%)
@@ -660,6 +681,79 @@ function PeekCamera:setBreathFraction(fraction: number)
 			self.blur.Size = 0
 		end
 	end
+end
+
+---------------------------------------------------------------------
+-- BISIKAN BADUT ("I can hear your heartbeat")
+---------------------------------------------------------------------
+
+--- Putar bisikan SEKALI per sesi sembunyi. Kalau Sound-nya tidak ada
+--- di ReplicatedStorage/Audio/SafeZone, fungsi ini keluar diam-diam
+--- (fitur opsional — sistem SafeZone tidak boleh mati karenanya).
+function PeekCamera:_tryPlayTaunt()
+	if self.tauntPlayed then
+		return
+	end
+	self.tauntPlayed = true
+
+	local audioRoot = ReplicatedStorage:FindFirstChild("Audio")
+	local safeZoneAudio = audioRoot and audioRoot:FindFirstChild("SafeZone")
+	local template = safeZoneAudio and safeZoneAudio:FindFirstChild(TAUNT_SOUND_NAME)
+	if not template or not template:IsA("Sound") then
+		return
+	end
+
+	-- Tempatkan di container audio SafeZone yang sama (2D, konsisten
+	-- dengan HeartBeat & BreathDeep). Kalau container belum ada
+	-- (urutan pemanggilan tak terduga), bikin sendiri.
+	local container = self._audioContainer
+	local ownContainer = false
+	if not container or not container.Parent then
+		container = Instance.new("Folder")
+		container.Name = "SafeZoneAudio"
+		container.Parent = self.player:FindFirstChildOfClass("PlayerGui") or self.player
+		self._audioContainer = container
+		ownContainer = true
+	end
+
+	local taunt = template:Clone()
+	taunt.Name = "Taunt"
+	taunt.Looped = false
+	taunt.Volume = 0.4
+	taunt.Parent = container
+	taunt:Play()
+
+	-- Bersihkan setelah selesai (jangan tinggalkan sampah di PlayerGui).
+	task.delay(taunt.TimeLength + 0.5, function()
+		if taunt and taunt.Parent then
+			taunt:Destroy()
+		end
+	end)
+
+	-- Kalau container ini yang bikin sendiri (kasus tepi), jangan
+	-- tinggalkan menumpuk di PlayerGui.
+	if ownContainer then
+		task.delay(taunt.TimeLength + 1, function()
+			if self._audioContainer == container and container.Parent then
+				container:Destroy()
+				self._audioContainer = nil
+			end
+		end)
+	end
+end
+
+--- Hentikan bisikan (dipanggil saat keluar bilik) & reset penanda
+--- supaya bisa diputar lagi di sesi sembunyi berikutnya.
+function PeekCamera:_stopTaunt()
+	local container = self._audioContainer
+	if container and container.Parent then
+		local taunt = container:FindFirstChild("Taunt")
+		if taunt and taunt:IsA("Sound") then
+			taunt:Stop()
+			taunt:Destroy()
+		end
+	end
+	self.tauntPlayed = false
 end
 
 ---------------------------------------------------------------------
