@@ -64,24 +64,29 @@ Semua model lulus verifikasi otomatis:
 
 ---
 
-## Desain Label
+## Desain — POLOS (tanpa teks)
 
-Tiap baterai punya label warna khas + teks yang konsisten secara teknis:
+Sesuai permintaan Aer: **tanpa teks, tanpa corak, warna polos** (1–3 warna per baterai).
 
-| Baterai | Warna | Teks |
+| Baterai | Warna 1 | Warna 2 |
 |---|---|---|
-| AA | Merah | SILENCIO / AA / 1.5V / ALKALINE |
-| 9V | Kuning | SILENCIO / 9V / ALKALINE / LONG LIFE |
-| 6V Lantern | Biru | SILENCIO / 6V / LANTERN / 4R25 ZINC |
-| SLA | Hijau | SILENCIO / 12V / 7Ah / LEAD ACID |
+| AA | biru | — |
+| 9V | abu medium | pita kuning |
+| 6V Lantern | hijau | — |
+| SLA | merah bata | pita terang |
 
-Semua nama merek fiktif (`SILENCIO`) — tidak ada merek berhak cipta.
-Tiap label juga punya: polaritas +/−, barcode, ikon peringatan.
+Yang **tidak ada** (sengaja dihapus):
+- Teks/merek/tegangan/kapasitas
+- Barcode, QR, atau pola garis rapat (pemicu flag moderasi Roblox)
+- Tanda polaritas +/− dan ikon peringatan
+- Noise, goresan, atau detail permukaan
 
-Teks ditempatkan di **tengah sisi depan** (bukan di sudut), supaya tidak terbelah
-dua sisi. Muncul di 2 sisi (depan + belakang) supaya terbaca dari berbagai sudut.
+Normal map dibuat **flat** (tanpa detail), jadi permukaannya benar-benar rata.
 
----
+Verifikasi: **3 warna unik, 0 tepi tajam** per tekstur.
+
+**Bonus:** ukuran file turun drastis — dari ~1,8 MB jadi **25–150 KB** per GLB,
+karena PNG warna rata terkompres jauh lebih baik.
 
 ## Kenapa Bentuk Ini Dipilih
 
