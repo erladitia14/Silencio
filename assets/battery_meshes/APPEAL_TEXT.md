@@ -6,31 +6,41 @@ Reason given: Directing Users Off-Platform
 
 ---
 
-## VERSI PANJANG (rekomendasi)
+## VERSI UTAMA — 1265 karakter (muat di Discord & form appeal)
 
-Hello,
+```
+APPEAL — Asset ID 104035705145934
+Asset name: "SLA / aki kecil"
+Removed: Sep 18, 2026, 1:41 AM
+Reason: Directing Users Off-Platform
 
-I am appealing the removal of asset ID 104035705145934 (asset name: "SLA / aki kecil"),
-removed on September 18, 2026 at 1:41 AM for "Directing Users Off-Platform".
+Hello Roblox Support,
 
-This asset is a 3D model texture for a battery prop used in my own Roblox experience.
-I created it myself; it was generated procedurally and contains no off-platform links
-of any kind — no URLs, no QR codes, no Discord, Guilded, YouTube, Twitter or Twitch
-references, and no text directing users anywhere off-platform.
+I am appealing the removal of asset ID 104035705145934 ("SLA / aki kecil").
 
-The only text on the texture reads: "SILENCIO", "12V", "7Ah", and "LEAD ACID".
-"SILENCIO" is the name of my own Roblox game, not an external brand, website or service.
-"12V" and "7Ah" are the standard electrical specifications of a sealed lead-acid battery,
-and "LEAD ACID" describes the battery chemistry. These are technical labels, not links.
+This asset is a 3D texture for a battery prop in my own Roblox experience. I made it
+myself. It contains NO off-platform links of any kind — no URLs, no QR codes, no Discord,
+Guilded, YouTube, Twitter or Twitch references, and no text directing users anywhere
+off-platform.
 
-I believe this was flagged by automated moderation because my label design included a
-decorative barcode-style stripe pattern. That pattern is purely visual artwork — it does
-not encode any data, URL, or readable information, and it cannot be scanned.
+The only text on the texture reads:
+- "SILENCIO" — the name of my own Roblox game, not an external brand or website
+- "12V" and "7Ah" — standard electrical specs of a sealed lead-acid battery
+- "LEAD ACID" — the battery chemistry
 
-I have already removed that decorative pattern from my texture file to prevent this false
-positive from happening again. The asset contains no rule-violating content.
+These are technical product labels, not links.
 
-Please review this asset manually and restore it. Thank you for your time.
+I believe this was flagged by automated moderation because my design included a decorative
+barcode-style stripe pattern. That pattern is purely visual artwork: it encodes no data,
+no URL, and no readable information, and it cannot be scanned.
+
+I have already removed that decorative pattern from my texture file so this false positive
+cannot happen again. The asset contains no rule-violating content.
+
+Please review this asset manually and restore it.
+
+Thank you for your time.
+```
 
 ---
 
