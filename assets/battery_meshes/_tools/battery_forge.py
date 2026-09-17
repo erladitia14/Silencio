@@ -280,184 +280,56 @@ METAL_V0, METAL_V1 = 0.82, 1.00       # region logam (cap) di texture
 
 
 def make_textures(spec, size=1024, seed=7):
-    """Hasilkan BaseColor, Roughness, Normal (semua PIL Image RGB)."""
-    rng = np.random.default_rng(seed)
+    """Texture POLOS: hanya blok warna rata. TANPA teks, corak, noise, atau tanda.
+    Sesuai permintaan Aer: warna polos saja (1-3 warna), tidak ada corak aneh.
+
+    Layout (v -> baris gambar):
+      v 0.00-0.80 = sisi badan   -> baris 204..1024
+      v 0.82-1.00 = logam (cap)  -> baris 0..184
+    """
     S = size
-    # BARIS GAMBAR dari koordinat v:  py = (1 - v) * S
-    # (v=0 di dasar badan -> baris bawah gambar; v=1 di puncak -> baris atas)
-    side_y0 = int((1.0 - SIDE_V1) * S)     # v=0.80 -> baris 204 (puncak badan)
-    side_y1 = int((1.0 - SIDE_V0) * S)     # v=0.00 -> baris 1024 (dasar badan)
-    met_y0 = int((1.0 - METAL_V1) * S)     # v=1.00 -> baris 0
-    met_y1 = int((1.0 - METAL_V0) * S)     # v=0.82 -> baris 184
+    side_y0 = int((1.0 - SIDE_V1) * S)      # 204 (puncak badan)
+    side_y1 = int((1.0 - SIDE_V0) * S)      # 1024 (dasar badan)
+    met_y0 = int((1.0 - METAL_V1) * S)      # 0
+    met_y1 = int((1.0 - METAL_V0) * S)      # 184
 
-    body = spec['body_color']
-    label = spec['label_color']
-    metal = spec['metal_color']
-
-    # ---- BaseColor ----
-    base = Image.new('RGB', (S, S), (60, 62, 66))
-    dr = ImageDraw.Draw(base)
-    # badan (sisi)
-    dr.rectangle([0, side_y0, S, side_y1], fill=body)
-    # band label
-    for (a, b) in spec.get('label_bands', []):
-        y0 = side_y0 + int(a * (side_y1 - side_y0))
-        y1 = side_y0 + int(b * (side_y1 - side_y0))
-        dr.rectangle([0, y0, S, y1], fill=label)
-    # band logam di sisi (kalau ada, mis. ujung AA)
-    for (a, b) in spec.get('metal_bands', []):
-        y0 = side_y0 + int(a * (side_y1 - side_y0))
-        y1 = side_y0 + int(b * (side_y1 - side_y0))
-        dr.rectangle([0, y0, S, y1], fill=metal)
-    # area logam untuk cap
-    dr.rectangle([0, met_y0, S, met_y1], fill=metal)
-
-    # noise brushed halus di area logam
-    arr = np.array(base).astype(np.float32)
-    lum_noise = rng.normal(0, 2.6, (S, S, 1))
-    metal_rows = np.zeros((S, S, 1), np.float32)
-    metal_rows[met_y0:met_y1, :, 0] = 1.0
-    for (a, b) in spec.get('metal_bands', []):
-        y0 = side_y0 + int(a * (side_y1 - side_y0)); y1 = side_y0 + int(b * (side_y1 - side_y0))
-        metal_rows[y0:y1, :, 0] = 1.0
-    arr = np.clip(arr + lum_noise * (0.35 + 0.65 * metal_rows), 0, 255)
-    base = Image.fromarray(arr.astype(np.uint8))
+    base = Image.new('RGB', (S, S), spec['metal_color'])
     dr = ImageDraw.Draw(base)
 
-    # garis pemisah band
-    for (a, b) in spec.get('label_bands', []) + spec.get('metal_bands', []):
-        for e in (a, b):
-            y = side_y0 + int(e * (side_y1 - side_y0))
-            dr.line([0, y, S, y], fill=tuple(max(0, c - 45) for c in base.getpixel((5, y))), width=3)
+    # --- sisi badan: warna polos ---
+    dr.rectangle([0, side_y0, S, side_y1], fill=spec['body_color'])
 
-    # ---- teks label ----
-    # Ukuran huruf proporsional terhadap ukuran nyata baterai (mm),
-    # dengan batas maksimum supaya tidak melengkung/pecah di silinder tipis.
-    body_h_mm = spec.get('body_h_mm', 50.0)
-    body_w_mm = spec.get('body_w_mm', 26.0)
-    side_px = side_y1 - side_y0
-    repeat = spec.get('text_repeat', 3)   # teks muncul N kali mengelilingi badan
-    # batas: teks tidak boleh lebih dari ~42% lebar keliling yang tersedia
-    max_fs_by_width = int(S / repeat * 0.42 / 0.62)   # 0.62 ~ lebar rata2 huruf
-    # u-center untuk teks: kalau spec kasih 'text_u', pakai itu (tengah sisi depan
-    # pada balok); kalau tidak, bagi rata sepanjang keliling (silinder).
-    text_u = spec.get('text_u')
-    # lebar maksimum teks dalam px = lebar sisi depan (fraksi u) x S
-    max_w_px = int(spec.get('max_u_width', 0.9) * S)
-    for (text, rel_y, mm_cap, col) in spec.get('texts', []):
-        fsize = max(8, int(mm_cap / body_h_mm * side_px))
-        fsize = min(fsize, max_fs_by_width)
-        # kecilkan font sampai teks muat di lebar sisi
-        while fsize > 8:
-            f = _font(fsize)
-            bb = dr.textbbox((0, 0), text, font=f)
-            if bb[2] - bb[0] <= max_w_px:
-                break
-            fsize = int(fsize * 0.92)
-        f = _font(fsize)
-        bb = dr.textbbox((0, 0), text, font=f)
-        w = bb[2] - bb[0]
-        y = side_y0 + int(rel_y * side_px)
-        out = tuple(max(0, int(c * 0.28)) for c in col)
-        if text_u is not None:
-            centers = [text_u] if repeat <= 1 else [text_u, text_u + 0.5]
-        else:
-            centers = [(r + 0.5) / repeat for r in range(repeat)]
-        for uc in centers:
-            cx = int((uc % 1.0) * S)
-            x = cx - w // 2
-            for dx, dy in ((-2,0),(2,0),(0,-2),(0,2),(-1,-1),(1,-1),(-1,1),(1,1)):
-                dr.text((x + dx, y + dy), text, font=f, fill=out)
-            dr.text((x, y), text, font=f, fill=col)
+    # --- pita warna kedua (opsional) ---
+    # band = (fraksi_awal, fraksi_akhir, warna) relatif terhadap tinggi badan
+    for (a, b, col) in spec.get('bands', []):
+        y0 = side_y0 + int(a * (side_y1 - side_y0))
+        y1 = side_y0 + int(b * (side_y1 - side_y0))
+        dr.rectangle([0, y0, S, y1], fill=col)
 
-    # detail: pita aksen
-    for (rel_y, hgt, col) in spec.get('stripes', []):
-        y = side_y0 + int(rel_y * (side_y1 - side_y0))
-        dr.rectangle([0, y, S, y + hgt], fill=col)
+    # --- area logam untuk cap ---
+    dr.rectangle([0, met_y0, S, met_y1], fill=spec['metal_color'])
 
-    # ---- polaritas +/- di area logam (muncul di cap atas/bawah) ----
-    pol = spec.get('polarity')
-    if pol:
-        px_, py_ = int(0.30 * S), int((1.0 - 0.91) * S)
-        col_p = pol
-        L_, T_ = int(0.055 * S), int(0.011 * S)
-        # plus
-        dr.rectangle([px_ - L_, py_ - T_, px_ + L_, py_ + T_], fill=col_p)
-        dr.rectangle([px_ - T_, py_ - L_, px_ + T_, py_ + L_], fill=col_p)
-        # minus
-        mx_ = int(0.70 * S)
-        dr.rectangle([mx_ - L_, py_ - T_, mx_ + L_, py_ + T_], fill=col_p)
+    base = base  # sengaja tanpa filter/noise
 
-    # ---- MOTIF HIAS: pita diagonal (bukan barcode!) ----
-    # CATATAN PENTING: pola garis-garis rapat menyerupai barcode/QR bisa memicu
-    # deteksi otomatis Roblox "Directing Users Off-Platform". Diganti motif
-    # geometris yang jelas bukan kode dan tidak bisa dipindai.
-    if spec.get('decor_stripes'):
-        dy0 = side_y0 + int(0.72 * (side_y1 - side_y0))
-        dh = max(10, int(0.06 * (side_y1 - side_y0)))
-        dcol = tuple(max(0, int(c * 0.55)) for c in spec['label_color'])
-        # pita diagonal lebar, jarak jauh -> jelas ornamen
-        step = int(0.075 * S)
-        for x in range(-dh, S + dh, step):
-            dr.polygon([(x, dy0 + dh), (x + dh, dy0), (x + dh + int(step * 0.45), dy0),
-                        (x + int(step * 0.45), dy0 + dh)], fill=dcol)
-
-    # ---- ikon peringatan kecil ----
-    if spec.get('warn'):
-        wy = side_y0 + int(0.78 * (side_y1 - side_y0))
-        wc = int(0.05 * S)
-        for i in range(2):
-            wx = int((0.18 + i * 0.10) * S)
-            dr.polygon([(wx, wy + wc), (wx + wc, wy + wc), (wx + wc // 2, wy)],
-                       outline=spec['warn'], width=3)
-            dr.line([wx + wc // 2, wy + int(wc * 0.30),
-                     wx + wc // 2, wy + int(wc * 0.70)], fill=spec['warn'], width=3)
-
-    # goresan halus
-    scr = Image.new('L', (S, S), 0)
-    sd = ImageDraw.Draw(scr)
-    for _ in range(int(S * 0.18)):
-        x1 = int(rng.integers(0, S)); y1 = int(rng.integers(0, S))
-        L = int(rng.integers(4, 26)); ang = rng.uniform(0, 2 * math.pi)
-        sd.line([x1, y1, x1 + L * math.cos(ang), y1 + L * math.sin(ang)],
-                fill=int(rng.integers(70, 150)), width=1)
-    scr = scr.filter(ImageFilter.GaussianBlur(0.5))
-    sm = np.array(scr).astype(np.float32) / 255
-    arr = np.array(base).astype(np.float32)
-    for k in range(3):
-        arr[:, :, k] = arr[:, :, k] * (1 - sm * 0.14) + 210 * (sm * 0.14)
-    base = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8)).filter(
-        ImageFilter.GaussianBlur(0.35))
-
-    # ---- Roughness (R) + Metallic (G) dipaket jadi satu (metallicRoughnessTexture) ----
-    rough = np.full((S, S), spec.get('rough_body', 0.62), np.float32)
+    # --- Roughness + Metallic dipaket (G=metallic, B=roughness) ---
+    rough = np.full((S, S), spec.get('rough_body', 0.55), np.float32)
     metal_mask = np.zeros((S, S), np.float32)
     metal_mask[met_y0:met_y1, :] = 1.0
-    for (a, b) in spec.get('metal_bands', []):
-        y0 = side_y0 + int(a * (side_y1 - side_y0)); y1 = side_y0 + int(b * (side_y1 - side_y0))
+    for (a, b, col) in spec.get('metal_bands', []):
+        y0 = side_y0 + int(a * (side_y1 - side_y0))
+        y1 = side_y0 + int(b * (side_y1 - side_y0))
         metal_mask[y0:y1, :] = 1.0
-    label_mask = np.zeros((S, S), np.float32)
-    for (a, b) in spec.get('label_bands', []):
-        y0 = side_y0 + int(a * (side_y1 - side_y0)); y1 = side_y0 + int(b * (side_y1 - side_y0))
-        label_mask[y0:y1, :] = 1.0
-    rough = np.where(metal_mask > 0.5, spec.get('rough_metal', 0.26), rough)
-    rough = np.where(label_mask > 0.5, spec.get('rough_label', 0.66), rough)
-    rough = np.clip(rough + rng.normal(0, 0.02, (S, S)), 0.05, 1.0)
-
-    met = np.where(metal_mask > 0.5, 0.92, 0.05).astype(np.float32)
-    mr = np.stack([np.zeros_like(rough), met, rough], axis=-1)   # R=0(occlusion), G=metallic, B=roughness
+    rough = np.where(metal_mask > 0.5, spec.get('rough_metal', 0.28), rough)
+    met = np.where(metal_mask > 0.5, 0.90, 0.04).astype(np.float32)
+    mr = np.stack([np.zeros_like(rough), met, rough], axis=-1)
     mr_img = Image.fromarray((np.clip(mr, 0, 1) * 255).astype(np.uint8), 'RGB')
 
-    # ---- Normal dari luminance BaseColor ----
-    g = np.array(base.convert('L')).astype(np.float32) / 255.0
-    g = np.array(Image.fromarray((g * 255).astype(np.uint8))
-                 .filter(ImageFilter.GaussianBlur(1.1))).astype(np.float32) / 255.0
-    gx = np.gradient(g, axis=1); gy = np.gradient(g, axis=0)
-    st = 1.7
-    nx, ny, nz = -gx * st, gy * st, np.ones_like(g)
-    ln = np.sqrt(nx * nx + ny * ny + nz * nz)
-    nrm = np.stack([nx / ln * 0.5 + 0.5, ny / ln * 0.5 + 0.5, nz / ln * 0.5 + 0.5], -1)
-    nrm_img = Image.fromarray((nrm * 255).astype(np.uint8), 'RGB')
+    # --- Normal map: DIBUAT DATAR (tanpa detail permukaan) ---
+    # Karena tidak ada corak, normal map cukup flat (128,128,255).
+    flat = np.zeros((S, S, 3), np.uint8)
+    flat[:, :, 0] = 128; flat[:, :, 1] = 128; flat[:, :, 2] = 255
+    # Pertahankan sedikit bevel di batas warna supaya tidak terlihat datar total
+    nrm_img = Image.fromarray(flat, 'RGB')
 
     return base, mr_img, nrm_img
 
@@ -620,60 +492,43 @@ def build_sla():
 
 SPECS = {
     'aa': dict(
-        file='baterai_AA.glb', label='AA 1.5V',
-        body_color=(58, 60, 68), label_color=(214, 74, 58), metal_color=(198, 200, 205),
-        label_bands=[(0.10, 0.70)], metal_bands=[(0.0, 0.10), (0.70, 0.80)],
-        rough_body=0.60, rough_label=0.68, rough_metal=0.24,
-        body_h_mm=50.5, body_w_mm=14.5, text_repeat=2, text_u=0.75, max_u_width=0.20,
-        texts=[('SILENCIO', 0.13, 2.0, (255, 252, 248)),
-               ('AA', 0.24, 6.2, (255, 255, 252)),
-               ('1.5V', 0.42, 3.6, (255, 252, 246)),
-               ('ALKALINE', 0.55, 2.0, (252, 240, 234))],
-        stripes=[(0.085, 10, (250, 248, 244)), (0.715, 8, (250, 248, 244))],
-        build=build_aa, size_mm=(14.5, 50.5, 14.5), metallic=0.85,
-        polarity=(58, 60, 66), decor_stripes=True, warn=(150, 42, 36),
+        file='baterai_AA.glb', label='AA',
+        # 2 warna polos: badan + pita. Tanpa teks/corak.
+        body_color=(38, 92, 176),           # biru
+        bands=[(0.0, 0.10, (196, 198, 203)),   # pita logam di dasar
+               (0.90, 1.0, (196, 198, 203))],  # pita logam di puncak
+        metal_color=(198, 200, 205),
+        rough_body=0.48, rough_metal=0.26,
+        metallic=0.85,
+        build=build_aa, size_mm=(14.5, 50.5, 14.5),
     ),
     '9v': dict(
         file='baterai_9V.glb', label='9V',
-        body_color=(52, 54, 62), label_color=(240, 188, 52), metal_color=(202, 204, 209),
-        label_bands=[(0.06, 0.74)], metal_bands=[],
-        rough_body=0.62, rough_label=0.64, rough_metal=0.22,
-        body_h_mm=45.0, body_w_mm=26.5, text_repeat=2, text_u=0.849, max_u_width=0.28,
-        texts=[('SILENCIO', 0.08, 2.2, (26, 20, 10)),
-               ('9V', 0.20, 7.4, (22, 16, 6)),
-               ('ALKALINE', 0.48, 2.4, (32, 24, 12)),
-               ('LONG LIFE', 0.60, 2.0, (40, 30, 16))],
-        stripes=[(0.055, 10, (250, 248, 244)), (0.735, 10, (250, 248, 244))],
-        build=build_9v, size_mm=(26.5, 48.5, 17.5), metallic=0.80,
-        polarity=(34, 28, 12), decor_stripes=True, warn=(140, 44, 30),
+        body_color=(96, 100, 110),          # abu medium
+        bands=[(0.38, 0.58, (236, 190, 66))],  # pita kuning di tengah (kelihatan dari atas)
+        metal_color=(202, 204, 209),
+        rough_body=0.52, rough_metal=0.24,
+        metallic=0.80,
+        build=build_9v, size_mm=(26.5, 48.5, 17.5),
     ),
     'lantern': dict(
         file='baterai_6V_lantern.glb', label='6V Lantern',
-        body_color=(50, 52, 60), label_color=(62, 118, 186), metal_color=(200, 202, 207),
-        label_bands=[(0.08, 0.70)], metal_bands=[],
-        rough_body=0.62, rough_label=0.60, rough_metal=0.24,
-        body_h_mm=103.2, body_w_mm=67.0, text_repeat=2, text_u=0.875, max_u_width=0.23,
-        texts=[('SILENCIO', 0.10, 3.4, (252, 254, 255)),
-               ('6V', 0.22, 10.0, (255, 255, 252)),
-               ('LANTERN', 0.44, 4.6, (244, 250, 255)),
-               ('4R25 ZINC', 0.58, 2.8, (228, 240, 250))],
-        stripes=[(0.075, 12, (246, 248, 252)), (0.695, 12, (246, 248, 252))],
-        build=build_lantern, size_mm=(67, 115, 67), metallic=0.75,
-        polarity=(58, 60, 66), decor_stripes=True, warn=(180, 62, 40),
+        body_color=(52, 138, 92),           # hijau
+        bands=[(0.0, 0.12, (206, 208, 213)),
+               (0.88, 1.0, (206, 208, 213))],
+        metal_color=(200, 202, 207),
+        rough_body=0.52, rough_metal=0.26,
+        metallic=0.75,
+        build=build_lantern, size_mm=(67, 115, 67),
     ),
     'sla': dict(
-        file='baterai_SLA.glb', label='SLA / aki kecil',
-        body_color=(48, 54, 58), label_color=(46, 126, 88), metal_color=(196, 198, 203),
-        label_bands=[(0.14, 0.66)], metal_bands=[],
-        rough_body=0.66, rough_label=0.62, rough_metal=0.30,
-        body_h_mm=88.0, body_w_mm=98.0, text_repeat=2, text_u=0.829, max_u_width=0.32,
-        texts=[('SILENCIO', 0.10, 3.2, (248, 252, 250)),
-               ('12V', 0.22, 9.4, (252, 255, 253)),
-               ('7Ah', 0.42, 5.0, (244, 250, 247)),
-               ('LEAD ACID', 0.56, 2.8, (232, 242, 238))],
-        stripes=[(0.135, 10, (250, 248, 244)), (0.655, 10, (250, 248, 244))],
-        build=build_sla, size_mm=(98, 100, 45), metallic=0.70,
-        polarity=(58, 60, 66), decor_stripes=True, warn=(196, 74, 42),
+        file='baterai_SLA.glb', label='SLA',
+        body_color=(168, 66, 56),           # merah bata
+        bands=[(0.38, 0.56, (206, 208, 213))],  # pita terang di tengah
+        metal_color=(196, 198, 203),
+        rough_body=0.56, rough_metal=0.30,
+        metallic=0.70,
+        build=build_sla, size_mm=(98, 100, 45),
     ),
 }
 
@@ -695,8 +550,6 @@ def build_one(key, outdir):
     rep['file'] = spec['file']
     rep['bytes'] = total
     rep['label'] = spec['label']
-    # simpan preview texture
-    base.save(os.path.join(outdir, f"_{key}_BaseColor.png"))
     return rep, (P, N, UV, F, base)
 
 
