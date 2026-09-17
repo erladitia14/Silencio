@@ -6,40 +6,20 @@ Reason given: Directing Users Off-Platform
 
 ---
 
-## VERSI UTAMA — 1265 karakter (muat di Discord & form appeal)
+## VERSI UTAMA — 883 karakter (muat di form appeal Roblox, batas 1000)
 
 ```
-APPEAL — Asset ID 104035705145934
-Asset name: "SLA / aki kecil"
-Removed: Sep 18, 2026, 1:41 AM
-Reason: Directing Users Off-Platform
+I am appealing asset ID 104035705145934 ("SLA / aki kecil"), removed Sep 18 2026 for "Directing Users Off-Platform".
 
-Hello Roblox Support,
+This is a 3D battery texture I created myself for my own Roblox game. It contains no off-platform links of any kind - no URLs, no QR codes, no Discord/Guilded/YouTube/Twitter/Twitch references.
 
-I am appealing the removal of asset ID 104035705145934 ("SLA / aki kecil").
+The only text on it is: "SILENCIO" (the name of my own Roblox game), plus "12V", "7Ah" and "LEAD ACID" (standard sealed lead-acid battery specs). These are technical labels, not links.
 
-This asset is a 3D texture for a battery prop in my own Roblox experience. I made it
-myself. It contains NO off-platform links of any kind — no URLs, no QR codes, no Discord,
-Guilded, YouTube, Twitter or Twitch references, and no text directing users anywhere
-off-platform.
+I believe it was flagged by automated moderation because my design included a decorative barcode-style stripe pattern. That pattern is purely visual artwork - it encodes no data and cannot be scanned.
 
-The only text on the texture reads:
-- "SILENCIO" — the name of my own Roblox game, not an external brand or website
-- "12V" and "7Ah" — standard electrical specs of a sealed lead-acid battery
-- "LEAD ACID" — the battery chemistry
+I have already removed that pattern from my texture so this false positive cannot recur. The asset contains no rule-violating content.
 
-These are technical product labels, not links.
-
-I believe this was flagged by automated moderation because my design included a decorative
-barcode-style stripe pattern. That pattern is purely visual artwork: it encodes no data,
-no URL, and no readable information, and it cannot be scanned.
-
-I have already removed that decorative pattern from my texture file so this false positive
-cannot happen again. The asset contains no rule-violating content.
-
-Please review this asset manually and restore it.
-
-Thank you for your time.
+Please review manually and restore. Thank you.
 ```
 
 ---
