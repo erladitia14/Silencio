@@ -388,19 +388,19 @@ def make_textures(spec, size=1024, seed=7):
         mx_ = int(0.70 * S)
         dr.rectangle([mx_ - L_, py_ - T_, mx_ + L_, py_ + T_], fill=col_p)
 
-    # ---- barcode + angka batch di label ----
-    if spec.get('barcode'):
-        rng_bc = np.random.default_rng(abs(hash(spec.get('file', 'x'))) % 9973)
-        by = side_y0 + int(0.70 * (side_y1 - side_y0))
-        bh = max(8, int(0.055 * (side_y1 - side_y0)))
-        bx = int(0.60 * S)
-        bw = int(0.30 * S)
-        xx = bx
-        while xx < bx + bw:
-            wbar = int(rng_bc.integers(2, 9))
-            if rng_bc.random() < 0.55:
-                dr.rectangle([xx, by, min(xx + wbar, bx + bw), by + bh], fill=(20, 20, 22))
-            xx += wbar + int(rng_bc.integers(1, 4))
+    # ---- MOTIF HIAS: pita diagonal (bukan barcode!) ----
+    # CATATAN PENTING: pola garis-garis rapat menyerupai barcode/QR bisa memicu
+    # deteksi otomatis Roblox "Directing Users Off-Platform". Diganti motif
+    # geometris yang jelas bukan kode dan tidak bisa dipindai.
+    if spec.get('decor_stripes'):
+        dy0 = side_y0 + int(0.72 * (side_y1 - side_y0))
+        dh = max(10, int(0.06 * (side_y1 - side_y0)))
+        dcol = tuple(max(0, int(c * 0.55)) for c in spec['label_color'])
+        # pita diagonal lebar, jarak jauh -> jelas ornamen
+        step = int(0.075 * S)
+        for x in range(-dh, S + dh, step):
+            dr.polygon([(x, dy0 + dh), (x + dh, dy0), (x + dh + int(step * 0.45), dy0),
+                        (x + int(step * 0.45), dy0 + dh)], fill=dcol)
 
     # ---- ikon peringatan kecil ----
     if spec.get('warn'):
@@ -631,7 +631,7 @@ SPECS = {
                ('ALKALINE', 0.55, 2.0, (252, 240, 234))],
         stripes=[(0.085, 10, (250, 248, 244)), (0.715, 8, (250, 248, 244))],
         build=build_aa, size_mm=(14.5, 50.5, 14.5), metallic=0.85,
-        polarity=(58, 60, 66), barcode=True, warn=(150, 42, 36),
+        polarity=(58, 60, 66), decor_stripes=True, warn=(150, 42, 36),
     ),
     '9v': dict(
         file='baterai_9V.glb', label='9V',
@@ -645,7 +645,7 @@ SPECS = {
                ('LONG LIFE', 0.60, 2.0, (40, 30, 16))],
         stripes=[(0.055, 10, (250, 248, 244)), (0.735, 10, (250, 248, 244))],
         build=build_9v, size_mm=(26.5, 48.5, 17.5), metallic=0.80,
-        polarity=(34, 28, 12), barcode=True, warn=(140, 44, 30),
+        polarity=(34, 28, 12), decor_stripes=True, warn=(140, 44, 30),
     ),
     'lantern': dict(
         file='baterai_6V_lantern.glb', label='6V Lantern',
@@ -659,7 +659,7 @@ SPECS = {
                ('4R25 ZINC', 0.58, 2.8, (228, 240, 250))],
         stripes=[(0.075, 12, (246, 248, 252)), (0.695, 12, (246, 248, 252))],
         build=build_lantern, size_mm=(67, 115, 67), metallic=0.75,
-        polarity=(58, 60, 66), barcode=True, warn=(180, 62, 40),
+        polarity=(58, 60, 66), decor_stripes=True, warn=(180, 62, 40),
     ),
     'sla': dict(
         file='baterai_SLA.glb', label='SLA / aki kecil',
@@ -673,7 +673,7 @@ SPECS = {
                ('LEAD ACID', 0.56, 2.8, (232, 242, 238))],
         stripes=[(0.135, 10, (250, 248, 244)), (0.655, 10, (250, 248, 244))],
         build=build_sla, size_mm=(98, 100, 45), metallic=0.70,
-        polarity=(58, 60, 66), barcode=True, warn=(196, 74, 42),
+        polarity=(58, 60, 66), decor_stripes=True, warn=(196, 74, 42),
     ),
 }
 
