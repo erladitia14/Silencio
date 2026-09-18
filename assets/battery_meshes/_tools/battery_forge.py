@@ -16,7 +16,10 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 # 1. MESH CORE
 # ============================================================
 
-def revolve(profile, seg=64, closed=False, side_v=(0.0, 0.80), metal_uv=(0.06, 0.26, 0.84, 0.98)):
+def revolve(profile, seg=64, closed=False, side_v=(0.0, 0.80), metal_uv=(0.06, 0.26, 0.84, 0.98),
+            metal_side=False):
+    # metal_side=True -> sisi ikut dipetakan ke area logam (v 0.82-1.00),
+    # bukan area badan. Dipakai untuk terminal/tiang yang harus terlihat metalik.
     """Putar profil (r,y) mengelilingi sumbu Y.
     closed=True  -> profil loop tertutup (torus/pegas), watertight tanpa cap.
     closed=False -> profil terbuka; ujung r=0 jadi pole (cap otomatis).
@@ -26,6 +29,8 @@ def revolve(profile, seg=64, closed=False, side_v=(0.0, 0.80), metal_uv=(0.06, 0
     rings = []
     n = len(profile)
 
+    if metal_side:
+        side_v = (0.84, 0.98)          # area logam, bukan badan
     for i, (r, y) in enumerate(profile):
         # closed=True: profil melingkar (torus/pegas) -> t = i/n, ring terakhir nyambung ke pertama
         t = (i / n) if closed else (i / (n - 1) if n > 1 else 0.0)
@@ -490,6 +495,19 @@ def build_sla():
     return merge(body, *tabs)
 
 
+def build_powercell():
+    """Power cell: balok 52 x 52 x 88 mm + 2 tiang terminal perak di atas."""
+    BODY_H = 76.0                      # 88 total - 12 terminal
+    body = build_box(52, 52, BODY_H, radius=4.0, seg_corner=6)
+    top = BODY_H / 2
+    posts = []
+    for sx in (-14.0, 14.0):
+        # tiang terminal perak (silinder kecil)
+        post = revolve([(0.0, 0.0), (6.0, 0.0), (6.0, 9.0), (5.4, 11.0), (0.0, 11.0)], seg=24, metal_side=True)
+        posts.append(([(x + sx, y + top, z) for (x, y, z) in post[0]], post[1], post[2]))
+    return merge(body, *posts)
+
+
 SPECS = {
     'aa': dict(
         file='baterai_AA.glb', label='AA',
@@ -520,6 +538,18 @@ SPECS = {
         rough_body=0.52, rough_metal=0.26,
         metallic=0.75,
         build=build_lantern, size_mm=(67, 115, 67),
+    ),
+    'powercell': dict(
+        file='baterai_powercell.glb', label='Power Cell',
+        # Power cell: badan gelap polos, kutub atas PERAK metalik.
+        body_color=(58, 62, 72),            # abu gelap (diterangkan sedikit)
+        # cincin perak DIPERLEBAR & DIPINDAH ke v 0.68-0.80 (lebih kelihatan, jauh dari plat)
+        bands=[(0.82, 0.96, (202, 204, 209))],  # cincin perak DEKAT PUNCAK
+        metal_color=(210, 212, 217),        # perak lebih terang
+        metal_bands=[(0.82, 0.96, (202, 204, 209))],  # cincin perak = logam
+        rough_body=0.46, rough_metal=0.14,  # roughness rendah = mengilap
+        metallic=0.92,
+        build=build_powercell, size_mm=(52, 88, 52),
     ),
     'sla': dict(
         file='baterai_SLA.glb', label='SLA',
