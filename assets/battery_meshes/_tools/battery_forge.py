@@ -544,9 +544,9 @@ SPECS = {
         # Power cell: badan gelap polos, kutub atas PERAK metalik.
         body_color=(58, 62, 72),            # abu gelap (diterangkan sedikit)
         # cincin perak DIPERLEBAR & DIPINDAH ke v 0.68-0.80 (lebih kelihatan, jauh dari plat)
-        bands=[(0.82, 0.96, (202, 204, 209))],  # cincin perak DEKAT PUNCAK
+        bands=[(0.04, 0.18, (202, 204, 209))],  # cincin perak dekat puncak
         metal_color=(210, 212, 217),        # perak lebih terang
-        metal_bands=[(0.82, 0.96, (202, 204, 209))],  # cincin perak = logam
+        metal_bands=[(0.04, 0.18, (202, 204, 209))],  # cincin perak = logam
         rough_body=0.46, rough_metal=0.14,  # roughness rendah = mengilap
         metallic=0.92,
         build=build_powercell, size_mm=(52, 88, 52),
