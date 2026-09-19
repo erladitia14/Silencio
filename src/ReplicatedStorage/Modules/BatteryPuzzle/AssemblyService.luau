@@ -104,7 +104,11 @@ end
 -- Refresh Prompts (Inti Gating)
 -- ----------------------------------------------------------------------
 
+local isRefreshing = false
 function AssemblyService.refreshPrompts()
+	if isRefreshing then return end
+	isRefreshing = true
+
 	local anyCarrying = false
 	for _ in pairs(carriedPart) do
 		anyCarrying = true
@@ -171,6 +175,7 @@ function AssemblyService.refreshPrompts()
 	if onCarryChanged then
 		onCarryChanged()
 	end
+	isRefreshing = false
 end
 
 -- ----------------------------------------------------------------------

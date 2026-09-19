@@ -61,7 +61,11 @@ end
 -- Refresh visibilitas prompt pickup:
 -- Jika ADA pemain yang sedang membawa baterai, matikan semua prompt pickup
 -- agar pemain tidak melihat / menekan prompt baterai lain saat tangannya penuh.
+local isRefreshing = false
 function BatteryService.refreshPickupPrompts()
+	if isRefreshing then return end
+	isRefreshing = true
+
 	local anyCarrying = false
 	for _ in pairs(carriedBy) do
 		anyCarrying = true
@@ -93,6 +97,7 @@ function BatteryService.refreshPickupPrompts()
 	if onCarryChanged then
 		onCarryChanged()
 	end
+	isRefreshing = false
 end
 
 -- ----------------------------------------------------------------------
