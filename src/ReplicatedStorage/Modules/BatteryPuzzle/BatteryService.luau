@@ -125,12 +125,13 @@ function BatteryService.pickup(player: Player, battery: BasePart): boolean
 
 	carriedBy[player] = battery
 
-	-- Simpan kecepatan & terapkan penalti berat
+	-- Baterai KECIL: masih bisa lari, cuma 0.9x kecepatan normal.
+	-- Simpan kecepatan asli DULU, lalu kali 0.9 (bukan angka tetap).
 	if not savedSpeed[player] then
 		savedSpeed[player] = { walk = hum.WalkSpeed, jump = hum.JumpPower }
 	end
-	hum.WalkSpeed = Config.CarryWalkSpeed
-	hum.JumpPower = Config.CarryJumpPower
+	hum.WalkSpeed = savedSpeed[player].walk * Config.CarryWalkSpeedMultiplier
+	-- Jump dibiarkan normal (baterai ringan)
 
 	if player.Character then
 		player.Character:SetAttribute(Config.CarryingAttribute, true)

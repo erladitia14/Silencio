@@ -34,6 +34,14 @@ if not remote then
 	remote.Parent = ReplicatedStorage
 end
 
+-- Event bersama: pemain menekan tombol "Simpan" (Q) untuk menaruh item yang dibawa.
+local storeEvent = ReplicatedStorage:FindFirstChild("PuzzleStoreEvent")
+if not storeEvent then
+	storeEvent = Instance.new("RemoteEvent")
+	storeEvent.Name = "PuzzleStoreEvent"
+	storeEvent.Parent = ReplicatedStorage
+end
+
 -- ============================================================
 -- START (hanya di server)
 -- ============================================================
@@ -71,6 +79,14 @@ end)
 
 -- BatteryService
 BatteryService.start()
+
+-- Tombol Simpan (Q): pemain menaruh baterai yang sedang dibawa.
+-- (drop() memindahkan baterai ke depan pemain + nyalakan lagi prompt-nya.)
+storeEvent.OnServerEvent:Connect(function(player)
+	if BatteryService.getCarried(player) then
+		BatteryService.drop(player)
+	end
+end)
 
 -- ============================================================
 -- SAAT GAME BERJALAN: sembunyikan placeholder

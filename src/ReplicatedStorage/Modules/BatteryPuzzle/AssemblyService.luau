@@ -46,6 +46,17 @@ local pickups: { [BasePart]: { kind: string, prompt: ProximityPrompt, homeCF: CF
 local generatorModel: Model? = nil
 
 local onAssembledCallback: ((genModel: Model) -> ())? = nil
+local onWarnCallback: ((player: Player, message: string) -> ())? = nil
+
+function AssemblyService.setWarnCallback(cb: (player: Player, message: string) -> ())
+	onWarnCallback = cb
+end
+
+local function warn_(player: Player, message: string)
+	if onWarnCallback then
+		onWarnCallback(player, message)
+	end
+end
 
 -- ----------------------------------------------------------------------
 -- Helpers
@@ -124,11 +135,12 @@ function AssemblyService.refreshPrompts()
 		if rec.filled then
 			rec.prompt.Enabled = false
 		elseif rec.kind == "Engine" then
-			-- Engine prompt: nyala HANYA kalau ada yang bawa Engine
+			-- Engine prompt: nyala kalau ada yang bawa Engine
 			rec.prompt.Enabled = (carriedKinds["Engine"] == true)
 		elseif rec.kind == "Panel" then
-			-- Panel prompt: nyala HANYA kalau Engine sudah masuk, bawa Panel, dan slot depan
-			if engineIn and carriedKinds["Panel"] == true and not firstEmptyPanelHandled then
+			-- Panel prompt: nyala kalau bawa Panel & slot depan yang kosong.
+			-- (Engine-first di-cek di tryInsert -> kasih WARNING, bukan disembunyikan.)
+			if carriedKinds["Panel"] == true and not firstEmptyPanelHandled then
 				rec.prompt.Enabled = true
 				firstEmptyPanelHandled = true
 			else
@@ -260,8 +272,9 @@ local function tryInsert(player: Player, slotPart: BasePart): boolean
 	local kind = carriedKind[player]
 	if not carried or kind ~= rec.kind then return false end
 
-	-- Engine gating: Panel tidak bisa dipasang sebelum Engine
+	-- Engine gating: Panel tidak bisa dipasang sebelum Engine -> WARNING, bukan diam.
 	if rec.kind == "Panel" and not isEngineInstalled() then
+		warn_(player, "Pasang Engine dulu sebelum Panel!")
 		return false
 	end
 

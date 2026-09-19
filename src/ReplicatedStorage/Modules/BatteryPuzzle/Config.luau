@@ -18,9 +18,16 @@ Config.PickupTag = "BatteryPickup"      -- BasePart baterai yang bisa diambil
 -- 1. BERAT — bawa baterai jadi lambat
 -- ============================================================
 
+-- BATERAI (kecil) — masih bisa lari, cuma sedikit lebih lambat.
+Config.CarryWalkSpeedMultiplier = 0.9   -- 0.9x kecepatan normal pemain (bukan angka tetap)
+
+-- ENGINE / PANEL (berat) — jauh lebih lambat, angka tetap.
 Config.CarryWalkSpeed = 8               -- dari default 16 -> setengah
 Config.CarryJumpPower = 30              -- dari default 50
 Config.RestoreSpeedOnDrop = true        -- pulihkan ke nilai SEBELUM bawa
+
+-- Tombol untuk MENARUH (store/drop) item yang sedang dibawa.
+Config.StoreKey = Enum.KeyCode.Q
 
 -- ============================================================
 -- 2. WAKTU PASANG — harus diam, gak bisa gerak
