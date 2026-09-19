@@ -106,40 +106,50 @@ end
 -- VISUAL SAAT DIBAWA
 -- ============================================================
 
-local function showCarriedVisual(player: Player, battery: BasePart): BasePart?
-	local root = rootOf(player)
-	if not root then
-		Config.log("showCarriedVisual: no root for", player.Name)
+local function getHand(player: Player): BasePart?
+	local c = characterOf(player)
+	if not c then
 		return nil
 	end
-	-- salinan visual (mesh sama, biar tetap mirip)
+	-- R15: RightHand, R6: Right Arm, fallback: HumanoidRootPart
+	return (c:FindFirstChild("RightHand") or c:FindFirstChild("Right Arm") or c:FindFirstChild("HumanoidRootPart")) :: BasePart?
+end
+
+local function showCarriedVisual(player: Player, battery: BasePart): BasePart?
+	local hand = getHand(player)
+	if not hand then
+		Config.log("showCarriedVisual: no hand/root for", player.Name)
+		return nil
+	end
+
+	-- Salinan visual: pastikan prompt DIBUANG dan transparansi 0
 	local vis = battery:Clone()
 	vis.Name = "CarriedBattery"
+	vis.Transparency = 0 -- JANGAN ikutan transparan dari part asli
 	vis.Anchored = false
 	vis.CanCollide = false
 	vis.CanTouch = false
 	vis.CanQuery = false
 	vis.Massless = true
-	if Config.CarryVisualScale ~= 1 then
-		vis.Size = vis.Size * Config.CarryVisualScale
-	end
-	-- buang prompt dari salinan
+
+	-- Hapus semua prompt agar tidak melayang di badan pemain
 	for _, d in ipairs(vis:GetDescendants()) do
 		if d:IsA("ProximityPrompt") then
 			d:Destroy()
 		end
 	end
-	-- Motor6D (bukan WeldConstraint) supaya C0 offset bisa disetel dari awal.
-	-- WeldConstraint tidak punya CFrame offset — mesh akan ngambang di posisi lama.
-	local m = Instance.new("Motor6D")
-	m.Name = "CarryWeld"
-	m.Part0 = root
-	m.Part1 = vis
-	m.C0 = Config.CarryOffset
-	m.Parent = vis
 
-	vis.CFrame = root.CFrame * Config.CarryOffset
-	vis.Parent = root
+	-- Weld ke tangan kanan pemain
+	local w = Instance.new("Weld")
+	w.Name = "CarryWeld"
+	w.Part0 = hand
+	w.Part1 = vis
+	-- Offset pas di genggaman tangan kanan
+	w.C0 = CFrame.new(0, -0.3, -0.2) * CFrame.Angles(math.rad(90), 0, 0)
+	w.Parent = vis
+
+	vis.CFrame = hand.CFrame * w.C0
+	vis.Parent = player.Character -- Parent ke Character Model, BUKAN ke Part
 
 	local rec = batteries[battery]
 	if rec then
