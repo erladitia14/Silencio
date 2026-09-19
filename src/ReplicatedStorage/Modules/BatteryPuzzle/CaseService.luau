@@ -74,12 +74,12 @@ end
 -- ============================================================
 
 local function ensureSlotPrompt(slot: BasePart)
-	local existing = slot:FindFirstChild("BatteryInsertPrompt")
-	if existing then
-		return existing :: ProximityPrompt
+	local p = slot:FindFirstChild("BatteryInsertPrompt") :: ProximityPrompt?
+	if not p then
+		p = Instance.new("ProximityPrompt")
+		p.Name = "BatteryInsertPrompt"
+		p.Parent = slot
 	end
-	local p = Instance.new("ProximityPrompt")
-	p.Name = "BatteryInsertPrompt"
 	p.ActionText = Config.InsertPromptText
 	p.ObjectText = "Slot"
 	p.KeyboardKeyCode = Config.InsertPromptKey
@@ -87,7 +87,6 @@ local function ensureSlotPrompt(slot: BasePart)
 	p.RequiresLineOfSight = Config.RequireLineOfSight
 	-- HoldDuration dipakai untuk "waktu pasang" (2 detik diam)
 	p.HoldDuration = Config.InsertDuration
-	p.Parent = slot
 	return p
 end
 
@@ -125,24 +124,23 @@ local function tryInsert(player: Player, case: Instance, slot: BasePart): boolea
 	-- KUNCI SLOT DULU (cegah dua pemain mengisi slot sama)
 	rec.filled[slot] = player
 
-	local cf = worldSlotCFrame(case, rec.slotLocal[slot] or CFrame.new())
-	if markInserted then
-		markInserted(player, battery, cf)
-	end
-	-- simpan referensi baterai yang terpasang
-	rec.inserted[slot] = battery
-
-	-- sembunyikan placeholder (bukan dihapus)
-	slot.Transparency = 1
+	-- Baterai di dalam case (placeholder) sekarang DITAMPILKAN
+	slot.Transparency = 0
 	slot.CanCollide = false
 	slot.CanQuery = false
 	slot.CanTouch = false
-	-- Prompt insert harus dimatikan eksplisit — sama seperti pickup,
-	-- ProximityPrompt tetap aktif walau part transparan.
+
+	-- Prompt insert harus dimatikan eksplisit
 	local prompt = slot:FindFirstChild("BatteryInsertPrompt")
 	if prompt and prompt:IsA("ProximityPrompt") then
 		prompt.Enabled = false
 	end
+
+	if markInserted then
+		markInserted(player, battery, slot.CFrame)
+	end
+	-- simpan referensi baterai yang terpasang
+	rec.inserted[slot] = battery
 
 	-- Buka slot kosong berikutnya (sequential)
 	if rec.updateSlotPrompts then

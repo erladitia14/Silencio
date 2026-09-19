@@ -232,6 +232,7 @@ function BatteryService.pickup(player: Player, battery: BasePart): boolean
 	if notifyCarryChanged then
 		notifyCarryChanged(player, true)
 	end
+	updateAllPickupPrompts()
 	Config.log("pickup", player.Name, battery:GetFullName())
 	return true
 end
@@ -267,6 +268,7 @@ function BatteryService.drop(player: Player, reason: string?): boolean
 	end
 
 	clearCarryEffects(player)
+	updateAllPickupPrompts()
 	if notifyCarryChanged then
 		notifyCarryChanged(player, false)
 	end
@@ -301,6 +303,7 @@ function BatteryService.returnHome(player: Player, reason: string?): boolean
 	end
 
 	clearCarryEffects(player)
+	updateAllPickupPrompts()
 	if notifyCarryChanged then
 		notifyCarryChanged(player, false)
 	end
@@ -309,20 +312,26 @@ function BatteryService.returnHome(player: Player, reason: string?): boolean
 end
 
 -- Dipanggil CaseService saat baterai berhasil dipasang
-function BatteryService.markInserted(player: Player, battery: BasePart, slotCFrame: CFrame)
+function BatteryService.markInserted(player: Player, battery: BasePart, slotCFrame: CFrame?)
 	local rec = batteries[battery]
 	carriedBy[player] = nil
 	if rec then
 		rec.carrier = nil
 		rec.inserted = true
 		clearCarriedVisual(battery)
-		battery.CFrame = slotCFrame
-		battery.Transparency = 0
+		-- Baterai asal di folder disembunyikan permanen (sudah terwakili di case)
+		battery.Transparency = 1
 		battery.CanCollide = false
 		battery.CanQuery = false
+		battery.CanTouch = false
 		battery.Anchored = true
+		local prompt = battery:FindFirstChild("BatteryPickupPrompt")
+		if prompt and prompt:IsA("ProximityPrompt") then
+			prompt.Enabled = false
+		end
 	end
 	clearCarryEffects(player)
+	updateAllPickupPrompts()
 	if notifyCarryChanged then
 		notifyCarryChanged(player, false)
 	end
@@ -340,6 +349,35 @@ end
 function BatteryService.isInserted(battery: BasePart): boolean
 	local rec = batteries[battery]
 	return rec ~= nil and rec.inserted == true
+end
+
+-- ============================================================
+-- PROMPT GLOBAL UPDATE
+-- ============================================================
+
+local function updateAllPickupPrompts()
+	local anyCarrying = false
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if carriedBy[plr] then
+			anyCarrying = true
+			break
+		end
+	end
+
+	for b, rec in pairs(batteries) do
+		local p = b:FindFirstChild("BatteryPickupPrompt")
+		if p and p:IsA("ProximityPrompt") then
+			if rec.inserted or rec.carrier ~= nil then
+				p.Enabled = false
+			elseif anyCarrying then
+				-- Jika pemain sedang membawa baterai, matikan prompt pickup lain
+				-- agar pemain tidak melihat prompt ambil lagi saat tangan penuh.
+				p.Enabled = false
+			else
+				p.Enabled = true
+			end
+		end
+	end
 end
 
 -- ============================================================
