@@ -36,8 +36,15 @@ Config.PanelCarryAnimId = "rbxassetid://71893510212987"
 
 -- PANEL di-weld ke TENGAH DEPAN badan (HumanoidRootPart), bukan satu tangan,
 -- supaya cocok dengan pose angkat 2 tangan. Offset relatif ke HumanoidRootPart.
--- (-Z = depan badan). Naikin Y biar setinggi dada, mundurin Z biar di depan.
-Config.PanelCarryOffset = CFrame.new(0, 0.4, -2.2) * CFrame.Angles(0, math.rad(90), 0)
+-- CATATAN posisi (biar gampang tune sendiri):
+--   Sumbu 1 (X) : geser KIRI(-)/KANAN(+)
+--   Sumbu 2 (Y) : geser TURUN(-)/NAIK(+)
+--   Sumbu 3 (Z) : -Z = MAJU ke depan badan, +Z = mundur
+--   Angles(pitch X, yaw Y, roll Z) dalam radian (math.rad(derajat))
+-- Tanpa rotasi = muka lebar panel ngadep depan (kayak nyangga papan besar).
+-- Sedikit tilt -10 biar atas panel condong ke badan. Panel gede -> dorong Z jauh
+-- biar gak nembus badan.
+Config.PanelCarryOffset = CFrame.new(0, -0.3, -2.6) * CFrame.Angles(math.rad(-10), 0, 0)
 
 -- Engine (berat, satu genggaman) tetap di tangan kanan.
 Config.HandCarryOffset = CFrame.new(0, -0.6, -0.4) * CFrame.Angles(math.rad(90), 0, 0)
