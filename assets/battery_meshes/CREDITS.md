@@ -124,3 +124,28 @@ mau overwrite warna** jadi warna solid per bentuk biar kontras jelas.
 - **Koreksi:** sebelumnya sempat gua sebut semua model ini "CC0" — itu **salah**. Setelah dicek
   per-halaman, hanya 4 yang CC0; 9 lainnya CC-BY 3.0.
 - Data mentah lisensi ada di `LISENSI.json` di folder yang sama.
+
+---
+
+## Aset Genset & Bahan Bakar (19 Sep 2026) — alur "starter genset"
+
+Untuk mekanik: kumpulin baterai → isi aki genset → isi bensin → start genset.
+
+| File | Judul | Pembuat | Lisensi | Tris | Wajib kredit? |
+|------|-------|---------|---------|------|---------------|
+| `aki_genset.glb` | Car Battery | J-Toastie | CC-BY 3.0 | 478 | YA |
+| `jerigen_bensin.glb` | Gas Can | Quaternius | **CC0** | 788 | tidak |
+| `genset.glb` | Generator (kecil) | KolosStudios | CC-BY 3.0 | 478 | YA |
+| `genset_besar.glb` | Large Electric Generator | miro_art_studio | CC-BY 3.0 | 15.874 | YA |
+
+Sumber: Poly Pizza (tanpa login). Semua GLB glTF 2.0 valid, texture belum embed
+(warna dari material — bisa di-overwrite di Studio).
+
+**Halaman sumber (kalau mau download manual / cek lisensi):**
+- Car Battery: https://poly.pizza/m/hLVNyFYOOX
+- Gas Can (CC0): https://poly.pizza/m/jRymgnHTTb
+- Generator kecil: https://poly.pizza/m/K58RQ63qR5
+- Large Generator: https://poly.pizza/m/ZPlQHwiqTp
+
+**Catatan:** `genset_besar.glb` 15.874 tris — dua kali lipat sisanya. Kalau dipakai
+cuma 1 di map, aman. `genset.glb` (478 tris) lebih ringan kalau mau yang simpel.
