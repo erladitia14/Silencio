@@ -24,6 +24,7 @@ local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 
 local Config = require(script.Parent.Config)
+local CarryAnimator = require(script.Parent.CarryAnimator)
 
 local AssemblyService = {}
 
@@ -216,6 +217,11 @@ function AssemblyService.pickup(player: Player, part: BasePart): boolean
 
 	part.CFrame = hand.CFrame * weld.C0
 
+	-- Animasi pose angkat 2 tangan: HANYA untuk PANEL.
+	if info.kind == "Panel" then
+		CarryAnimator.play(player)
+	end
+
 	AssemblyService.refreshPrompts()
 	return true
 end
@@ -237,6 +243,9 @@ function AssemblyService.drop(player: Player)
 	if player.Character then
 		player.Character:SetAttribute("CarryingAssemblyPart", nil)
 	end
+
+	-- Hentikan animasi pose (kalau tadi panel)
+	CarryAnimator.stop(player)
 
 	for _, child in ipairs(part:GetChildren()) do
 		if child:IsA("Weld") or child:IsA("Motor6D") or child:IsA("WeldConstraint") then
@@ -311,6 +320,9 @@ local function tryInsert(player: Player, slotPart: BasePart): boolean
 	if player.Character then
 		player.Character:SetAttribute("CarryingAssemblyPart", nil)
 	end
+
+	-- Hentikan animasi pose (kalau tadi panel)
+	CarryAnimator.stop(player)
 
 	carried:Destroy()
 

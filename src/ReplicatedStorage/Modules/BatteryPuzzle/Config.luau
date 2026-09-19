@@ -29,6 +29,11 @@ Config.RestoreSpeedOnDrop = true        -- pulihkan ke nilai SEBELUM bawa
 -- Tombol untuk MENARUH (store/drop) item yang sedang dibawa.
 Config.StoreKey = Enum.KeyCode.Q
 
+-- Animasi "pose angkat 2 tangan" — HANYA saat membawa PANEL.
+-- Baterai (kecil) & Engine TIDAK pakai animasi ini.
+-- Kosongkan ("") kalau tidak mau pakai animasi sama sekali.
+Config.PanelCarryAnimId = "rbxassetid://71893510212987"
+
 -- ============================================================
 -- 2. WAKTU PASANG — harus diam, gak bisa gerak
 -- ============================================================
