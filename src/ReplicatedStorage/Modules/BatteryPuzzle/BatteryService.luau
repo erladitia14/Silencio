@@ -32,6 +32,51 @@ local conns: { [BasePart]: { RBXScriptConnection } } = {}
 local notifyCarryChanged: ((player: Player, carrying: boolean) -> ())? = nil
 
 -- ============================================================
+-- PROMPT GLOBAL UPDATE (harus di atas agar bisa dipanggil fungsi lain)
+-- ============================================================
+
+local function updateAllPickupPrompts()
+	local anyCarrying = false
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if carriedBy[plr] then
+			anyCarrying = true
+			break
+		end
+	end
+
+	-- 1. Matikan/nyalakan prompt pada semua baterai di table
+	for b, rec in pairs(batteries) do
+		local p = b:FindFirstChild("BatteryPickupPrompt")
+		if p and p:IsA("ProximityPrompt") then
+			if rec.inserted or rec.carrier ~= nil then
+				p.Enabled = false
+			elseif anyCarrying then
+				p.Enabled = false
+			else
+				p.Enabled = true
+			end
+		end
+	end
+
+	-- 2. Fallback untuk semua part bertag "BatteryPickup" di workspace
+	for _, b in ipairs(CollectionService:GetTagged(Config.PickupTag)) do
+		if b:IsA("BasePart") then
+			local p = b:FindFirstChild("BatteryPickupPrompt")
+			if p and p:IsA("ProximityPrompt") then
+				local rec = batteries[b]
+				if rec and (rec.inserted or rec.carrier ~= nil) then
+					p.Enabled = false
+				elseif anyCarrying then
+					p.Enabled = false
+				elseif not rec or not rec.inserted then
+					p.Enabled = true
+				end
+			end
+		end
+	end
+end
+
+-- ============================================================
 -- UTIL
 -- ============================================================
 
@@ -349,35 +394,6 @@ end
 function BatteryService.isInserted(battery: BasePart): boolean
 	local rec = batteries[battery]
 	return rec ~= nil and rec.inserted == true
-end
-
--- ============================================================
--- PROMPT GLOBAL UPDATE
--- ============================================================
-
-local function updateAllPickupPrompts()
-	local anyCarrying = false
-	for _, plr in ipairs(Players:GetPlayers()) do
-		if carriedBy[plr] then
-			anyCarrying = true
-			break
-		end
-	end
-
-	for b, rec in pairs(batteries) do
-		local p = b:FindFirstChild("BatteryPickupPrompt")
-		if p and p:IsA("ProximityPrompt") then
-			if rec.inserted or rec.carrier ~= nil then
-				p.Enabled = false
-			elseif anyCarrying then
-				-- Jika pemain sedang membawa baterai, matikan prompt pickup lain
-				-- agar pemain tidak melihat prompt ambil lagi saat tangan penuh.
-				p.Enabled = false
-			else
-				p.Enabled = true
-			end
-		end
-	end
 end
 
 -- ============================================================
