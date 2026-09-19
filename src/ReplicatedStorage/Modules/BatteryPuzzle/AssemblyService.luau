@@ -235,18 +235,13 @@ function AssemblyService.canPickup(player: Player, part: BasePart): boolean
 	return true
 end
 
--- Hentikan loop penggerak engine & bersihkan resource runtime-nya.
+-- Hentikan runtime engine (weld sudah dihapus terpisah; di sini hanya bersihkan state).
 local function stopEngineRuntime(part: BasePart)
-	local rt = engineLockRuntimes[part]
-	if not rt then return end
-	if rt.conn then
-		rt.conn:Disconnect()
-	end
 	engineLockRuntimes[part] = nil
 end
 
 local function clearEngineCarrierWelds(player: Player)
-	-- Sisa weld dari versi lama (kalau ada) dibersihkan supaya pemain tidak nyangkut.
+	-- Weld bawa engine dipasang di RootPart karakter; dibersihkan supaya tidak nyangkut.
 	local char = player.Character
 	if not char then return end
 	for _, inst in ipairs(char:GetDescendants()) do
@@ -254,6 +249,14 @@ local function clearEngineCarrierWelds(player: Player)
 			inst:Destroy()
 		end
 	end
+end
+
+-- Bersihkan weld engine dari SEMUA carrier yang terdaftar.
+local function clearAllEngineWelds(part: BasePart)
+	local ec = engineCarriers[part]
+	if not ec then return end
+	if ec.left then clearEngineCarrierWelds(ec.left) end
+	if ec.right then clearEngineCarrierWelds(ec.right) end
 end
 
 local function detachPlayer(player: Player)
@@ -267,7 +270,6 @@ local function detachPlayer(player: Player)
 		local rt = engineLockRuntimes[part]
 		if rt then
 			rt.offsets[player] = nil
-			-- Driver utama lepas -> alihkan driver ke carrier yang tersisa.
 			if rt.driver == player then
 				local ec = engineCarriers[part]
 				rt.driver = ec and (ec.left or ec.right) or nil
@@ -280,10 +282,13 @@ local function detachPlayer(player: Player)
 
 	-- Kembalikan properti fisik karakter ke kondisi semula.
 	local hum = getHumanoid(player)
-	if hum and savedSpeed[player] then
-		hum.WalkSpeed = savedSpeed[player].walk
-		hum.JumpPower = savedSpeed[player].jump
-		hum.AutoRotate = savedSpeed[player].autoRotate
+	if hum then
+		hum.PlatformStand = false
+		if savedSpeed[player] then
+			hum.WalkSpeed = savedSpeed[player].walk
+			hum.JumpPower = savedSpeed[player].jump
+			hum.AutoRotate = savedSpeed[player].autoRotate
+		end
 	end
 	savedSpeed[player] = nil
 
@@ -299,8 +304,7 @@ local function detachPlayer(player: Player)
 	CarryAnimator.stop(player)
 end
 
--- Posisi carrier RELATIF terhadap Attachment sisi (world), diukur dari rig Aer.
--- Dipakai untuk menempatkan pemain di sisi engine SAAT mulai membawa (snap sekali).
+-- Offset menempatkan pemain di sisi engine (diukur dari rig Aer).
 local function getCarrierSnapOffset(side: "Left" | "Right"): CFrame
 	if side == "Left" then
 		return CFrame.new(-1.2783, -0.0648, 0.0032) * CFrame.Angles(0, math.rad(-90), 0)
@@ -308,9 +312,14 @@ local function getCarrierSnapOffset(side: "Left" | "Right"): CFrame
 	return CFrame.new(0.9781, -0.0648, 0.0032) * CFrame.Angles(0, math.rad(90), 0)
 end
 
--- TANPA WELD. Engine tetap Anchored & rotasinya DIKUNCI (tidak ikut muter arah player).
--- Engine hanya BERGESER mengikuti perpindahan carrier utama; pemain jalan bebas
--- sehingga animasi jalan tetap main.
+-- OPSI A: WELD + NETWORK OWNERSHIP.
+-- Engine di-weld ke badan carrier -> physics disimulasikan di client carrier
+-- sehingga TIDAK ADA DELAY (mulus). Engine ikut berputar mengikuti arah pemain
+-- (natural seperti mengangkat barang).
+--
+-- Anti-jitter 2 orang: hanya DRIVER yang menggerakkan assembly & memegang
+-- network ownership. Pemain kedua di-PlatformStand + Massless supaya ikut
+-- terbawa lewat weld tanpa melawan driver (dua humanoid tidak saling tarik).
 local function attachEngineCarrier(part: BasePart, player: Player, side: "Left" | "Right")
 	local info = pickups[part]
 	if not info then return false end
@@ -320,31 +329,63 @@ local function attachEngineCarrier(part: BasePart, player: Player, side: "Left" 
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not root then return false end
-
-	part.Anchored = true -- Engine tidak jatuh; digerakkan lewat CFrame.
-
-	-- Snap pemain ke sisi engine sekali di awal (biar berdiri di posisi pegangan).
-	root.CFrame = att.WorldCFrame * getCarrierSnapOffset(side)
+	local hum = getHumanoid(player)
 
 	local rt = engineLockRuntimes[part]
 	if not rt then
-		rt = {
-			offsets = {},
-			driver = player,
-			lockedRotation = part.CFrame.Rotation,
-		}
+		rt = { offsets = {}, driver = player }
 		engineLockRuntimes[part] = rt
 	end
-	-- Simpan delta WORLD engine terhadap carrier ini saat mulai bawa.
-	rt.offsets[player] = CFrame.new(part.Position - root.Position)
-
 	if not rt.driver then
 		rt.driver = player
 	end
+	local isDriver = (rt.driver == player)
 
-	-- Terbitkan JUMLAH carrier ke part, supaya CLIENT bisa memutuskan
-	-- menampilkan prompt "Help Carry" secara lokal (Enabled global di server
-	-- bikin carrier sendiri ikut melihat prompt itu).
+	-- Engine jadi bagian dari assembly: tidak anchored, tidak menabrak, Massless
+	-- supaya beratnya tidak memperlambat (kecepatan diatur manual).
+	part.Anchored = false
+	part.CanCollide = false
+	part.CanTouch = false
+	part.CanQuery = false
+	part.Massless = true
+
+	local offset = getCarrierSnapOffset(side)
+	if isDriver then
+		-- Driver: snap ke posisi pegangan DULU supaya engine tidak melompat.
+		root.CFrame = att.WorldCFrame * offset
+	end
+
+	-- C0 dihitung dari data Attachment: posisi engine terhadap pemain persis
+	-- seperti posisi snap (engine = root * C0).
+	local c0 = offset:Inverse() * att.CFrame:Inverse()
+
+	local weld = Instance.new("Weld")
+	weld.Name = "EngineCarryWeld_" .. side
+	weld.Part0 = root
+	weld.Part1 = part
+	weld.C0 = c0
+	weld.C1 = CFrame.new()
+	weld.Parent = root
+
+	if isDriver then
+		-- Network ownership ke driver -> simulasi lokal, nol delay.
+		pcall(function()
+			part:SetNetworkOwner(player)
+		end)
+	end
+
+	-- Pemain pendukung: tidak menggerakkan assembly sendiri, cuma ikut terbawa.
+	if hum then
+		hum.PlatformStand = not isDriver
+	end
+	if not isDriver then
+		root.Massless = true
+	end
+
+	rt.offsets[player] = c0
+
+	-- Jumlah carrier dipakai CLIENT untuk menyembunyikan prompt Help Carry dari
+	-- carrier sendiri (ProximityPrompt.Enabled bersifat global di server).
 	local ecNow = engineCarriers[part]
 	local count = 0
 	if ecNow then
@@ -352,38 +393,6 @@ local function attachEngineCarrier(part: BasePart, player: Player, side: "Left" 
 		if ecNow.right then count += 1 end
 	end
 	part:SetAttribute("EngineCarrierCount", count)
-
-	-- Loop: engine mengikuti PERGESERAN driver (translasi), rotasi tetap terkunci.
-	if not rt.conn then
-		local RunService = game:GetService("RunService")
-		local lastDriverPos: Vector3? = nil
-		rt.conn = RunService.Heartbeat:Connect(function()
-			local ec = engineCarriers[part]
-			if not ec or not part.Parent then
-				if rt.conn then rt.conn:Disconnect(); rt.conn = nil end
-				return
-			end
-
-			-- Pilih driver aktif (carrier utama; fallback ke yang tersisa).
-			local driver = rt.driver
-			if driver ~= ec.left and driver ~= ec.right then
-				driver = ec.left or ec.right
-				rt.driver = driver
-				lastDriverPos = nil
-			end
-
-			local dChar = driver and driver.Character
-			local dRoot = dChar and dChar:FindFirstChild("HumanoidRootPart") :: BasePart?
-			if dRoot and rt.lockedRotation then
-				if lastDriverPos then
-					local delta = dRoot.Position - lastDriverPos
-					-- Hanya translasi horizontal; abaikan komponen naik-turun bob animasi.
-					part.CFrame = CFrame.new(part.Position + Vector3.new(delta.X, 0, delta.Z)) * rt.lockedRotation
-				end
-				lastDriverPos = dRoot.Position
-			end
-		end)
-	end
 
 	return true
 end
@@ -562,17 +571,17 @@ function AssemblyService.drop(player: Player)
 
 		if otherPlayer and (otherPlayer.Parent ~= nil or otherPlayer.Character ~= nil) then
 			-- ADA PEMAIN LAIN: TETAP BAWA SENDIRI JANGAN JATOH (Keputusan Aer #1)
-			-- 1. Lepas pemain yang drop
+			-- 1. Lepas pemain yang drop (weld-nya dibersihkan di dalam detachPlayer)
 			detachPlayer(player)
 
 			-- 2. Kosongkan slot pemain yang drop
 			if ec.left == player then ec.left = nil end
 			if ec.right == player then ec.right = nil end
 
-			-- 3. Hapus weld engine carrier (weld berada pada RootPart carrier)
-			clearEngineCarrierWelds(player)
+			-- 3. Pastikan tidak ada weld sisa di kedua sisi
+			clearAllEngineWelds(part)
 
-			-- 4. Pemain tersisa tetap di Attachment-nya; Engine tetap tidak bergerak
+			-- 4. Pemain tersisa jadi carrier tunggal; engine tetap di-weld ke dia
 			local otherSide = carrierSide[otherPlayer] or "Left"
 			attachEngineCarrier(part, otherPlayer, otherSide)
 
@@ -596,25 +605,23 @@ function AssemblyService.drop(player: Player)
 			stopEngineRuntime(part)
 			part:SetAttribute("EngineCarrierCount", 0)
 			detachPlayer(player)
+			clearAllEngineWelds(part)
 
-			for _, child in ipairs(part:GetChildren()) do
-				if child:IsA("Weld") or child:IsA("Motor6D") or child:IsA("WeldConstraint") then
-					child:Destroy()
-				end
-			end
-
-			local char = player.Character
-			local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-			if root then
-				part.CFrame = root.CFrame * CFrame.new(0, -1.2, -3)
-			elseif info then
-				part.CFrame = info.homeCF
-			end
-
+			-- Engine dikembalikan jadi anchored & solid saat di tanah.
+			part.Massless = false
 			part.Anchored = true
 			part.CanCollide = true
 			part.CanTouch = true
 			part.CanQuery = true
+			pcall(function() part:SetNetworkOwner(nil) end)
+
+			local char = player.Character
+			local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if root then
+				part.CFrame = CFrame.new(root.Position + root.CFrame.LookVector * 3 - Vector3.new(0, 1.2, 0)) * part.CFrame.Rotation
+			elseif info then
+				part.CFrame = info.homeCF
+			end
 
 			if info and info.helpPrompt then
 				info.helpPrompt.Enabled = false
