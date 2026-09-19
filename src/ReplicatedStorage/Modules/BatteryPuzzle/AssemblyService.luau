@@ -33,7 +33,13 @@ local carriedPart: { [Player]: BasePart } = {}
 local carriedKind: { [Player]: string } = {}
 local carrierSide: { [Player]: "Left" | "Right" } = {}
 local engineCarriers: { [BasePart]: { left: Player?, right: Player? } } = {}
-local savedSpeed: { [Player]: { walk: number, jump: number } } = {}
+local savedSpeed: { [Player]: { walk: number, jump: number, autoRotate: boolean } } = {}
+local engineLockRuntimes: { [BasePart]: {
+	conn: RBXScriptConnection?,
+	offsets: {[Player]: CFrame},
+	driver: Player?,
+	lockedRotation: CFrame?,
+} } = {}
 
 -- Registrasi slot & pickup
 type SlotRecord = {
@@ -43,7 +49,7 @@ type SlotRecord = {
 	prompt: ProximityPrompt,
 }
 local slots: { [BasePart]: SlotRecord } = {}
-local pickups: { [BasePart]: { kind: string, prompt: ProximityPrompt, homeCF: CFrame, helpPrompt: ProximityPrompt? } } = {}
+local pickups: { [BasePart]: { kind: string, prompt: ProximityPrompt, homeCF: CFrame, helpPrompt: ProximityPrompt?, attachments: {left: Attachment?, right: Attachment?} } } = {}
 
 -- Model generator pemilik (dideteksi dari parent slot)
 local generatorModel: Model? = nil
@@ -229,23 +235,144 @@ function AssemblyService.canPickup(player: Player, part: BasePart): boolean
 	return true
 end
 
+local function clearEngineCarrierWelds(player: Player)
+	local char = player.Character
+	if not char then return end
+	for _, inst in ipairs(char:GetDescendants()) do
+		if inst:IsA("Weld") and string.find(inst.Name, "EngineCarryWeld", 1, true) then
+			inst:Destroy()
+		end
+	end
+end
+
 local function detachPlayer(player: Player)
+	local part = carriedPart[player]
+	clearEngineCarrierWelds(player)
 	carriedPart[player] = nil
 	carriedKind[player] = nil
 	carrierSide[player] = nil
+
+	if part then
+		local rt = engineLockRuntimes[part]
+		if rt then
+			rt.offsets[player] = nil
+			if next(rt.offsets) == nil and rt.conn then
+				rt.conn:Disconnect()
+				rt.conn = nil
+			end
+		end
+	end
 
 	local hum = getHumanoid(player)
 	if hum and savedSpeed[player] then
 		hum.WalkSpeed = savedSpeed[player].walk
 		hum.JumpPower = savedSpeed[player].jump
+		hum.AutoRotate = savedSpeed[player].autoRotate
 	end
 	savedSpeed[player] = nil
 
-	if player.Character then
-		player.Character:SetAttribute("CarryingAssemblyPart", nil)
+	local char = player.Character
+	if char then
+		char:SetAttribute("CarryingAssemblyPart", nil)
+		local root = char:FindFirstChild("HumanoidRootPart")
+		if root then
+			root.Massless = false
+		end
 	end
 
 	CarryAnimator.stop(player)
+end
+
+local function getAttachmentOffset(part: BasePart, side: "Left" | "Right"): CFrame?
+	local info = pickups[part]
+	if not info then return nil end
+	local att = (side == "Left") and info.attachments.left or info.attachments.right
+	if not att then return nil end
+
+	-- Diukur dari rig Left/Right Aer relatif ke Attachment Engine.
+	-- Karakter dipindah ke sisi engine; rotasi/arah Engine sendiri tidak berubah.
+	if side == "Left" then
+		return CFrame.new(-1.2783, -0.0648, 0.0032) * CFrame.Angles(0, math.rad(-90), 0)
+	end
+	return CFrame.new(0.9781, -0.0648, 0.0032) * CFrame.Angles(0, math.rad(90), 0)
+end
+
+local function attachEngineCarrier(part: BasePart, player: Player, side: "Left" | "Right")
+	local info = pickups[part]
+	if not info then return false end
+	local att = (side == "Left") and info.attachments.left or info.attachments.right
+	local offset = getAttachmentOffset(part, side)
+	if not (att and offset) then return false end
+
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not root then return false end
+
+	root.Massless = true
+	local hum = getHumanoid(player)
+	if hum then
+		hum.AutoRotate = false
+	end
+	part.Anchored = true -- Engine dibawa dengan translasi saja; rotasinya dikunci.
+
+	-- Attachment adalah posisi pegangan/prompt. Weld tetap harus Part↔Part,
+	-- jadi C1 dikonversi dari CFrame lokal attachment terhadap Engine.
+	local weld = Instance.new("Weld")
+	weld.Name = "EngineCarryWeld_" .. side
+	weld.Part0 = root
+	weld.Part1 = part
+	weld.C0 = CFrame.new()
+	weld.C1 = att.CFrame * offset
+	weld.Parent = root
+
+	-- Snap karakter ke pegangan; tidak menyentuh/merotasi CFrame Engine.
+	root.CFrame = att.WorldCFrame * offset
+
+	local rt = engineLockRuntimes[part]
+	if not rt then
+		rt = {
+			offsets = {},
+			driver = player,
+			lockedRotation = part.CFrame.Rotation,
+		}
+		engineLockRuntimes[part] = rt
+	end
+	rt.offsets[player] = offset
+
+	-- Saat ada input, Engine bergerak TRANSLASI mengikuti carrier utama.
+	-- Rotasi Engine selalu dikembalikan ke orientasi awal (tidak muter ikut player).
+	if not rt.driver then
+		rt.driver = player
+	end
+
+	if not rt.conn then
+		local RunService = game:GetService("RunService")
+		rt.conn = RunService.Heartbeat:Connect(function(dt)
+			local ec = engineCarriers[part]
+			if not ec or not part.Parent then return end
+
+			local driver = rt.driver
+			if driver ~= ec.left and driver ~= ec.right then
+				driver = ec.left or ec.right
+				rt.driver = driver
+			end
+
+			local driverHum = driver and getHumanoid(driver)
+			if driverHum and rt.lockedRotation then
+				local move = driverHum.MoveDirection
+				if move.Magnitude > 0.01 then
+					local delta = move.Unit * driverHum.WalkSpeed * dt
+					part.CFrame = CFrame.new(part.Position + delta) * rt.lockedRotation
+				else
+					part.CFrame = CFrame.new(part.Position) * rt.lockedRotation
+				end
+			elseif rt.lockedRotation then
+				part.CFrame = CFrame.new(part.Position) * rt.lockedRotation
+			end
+		end)
+	end
+
+	return true
 end
 
 function AssemblyService.pickup(player: Player, part: BasePart): boolean
@@ -266,7 +393,7 @@ function AssemblyService.pickup(player: Player, part: BasePart): boolean
 	carriedKind[player] = info.kind
 
 	if not savedSpeed[player] then
-		savedSpeed[player] = { walk = hum.WalkSpeed, jump = hum.JumpPower }
+		savedSpeed[player] = { walk = hum.WalkSpeed, jump = hum.JumpPower, autoRotate = hum.AutoRotate }
 	end
 
 	if player.Character then
@@ -300,21 +427,23 @@ function AssemblyService.pickup(player: Player, part: BasePart): boolean
 		part.CFrame = root.CFrame * weld.C0
 		CarryAnimator.play(player, Config.PanelCarryAnimId)
 	else
-		-- Engine: carrier 1 mulai dari slot Left
+		-- Engine: carrier 1 mulai dari Attachment Left.
 		carrierSide[player] = "Left"
 		engineCarriers[part] = { left = player, right = nil }
 
 		hum.WalkSpeed = Config.EngineSoloSpeed
 		hum.JumpPower = Config.CarryJumpPower
 
-		local weld = Instance.new("Weld")
-		weld.Name = "AssemblyCarryWeld_Left"
-		weld.Part0 = root
-		weld.Part1 = part
-		weld.C0 = Config.EngineLeftCarryOffset
-		weld.Parent = part
+		if not attachEngineCarrier(part, player, "Left") then
+			engineCarriers[part] = nil
+			detachPlayer(player)
+			part.Anchored = true
+			part.CanCollide = true
+			part.CanTouch = true
+			part.CanQuery = true
+			return false
+		end
 
-		part.CFrame = root.CFrame * weld.C0
 		CarryAnimator.play(player, Config.EngineLeftAnimId)
 
 		-- Nyalakan prompt Help Carry untuk pemain kedua
@@ -371,22 +500,16 @@ function AssemblyService.helpCarry(player: Player, part: BasePart): boolean
 	carrierSide[player] = side
 
 	if not savedSpeed[player] then
-		savedSpeed[player] = { walk = hum.WalkSpeed, jump = hum.JumpPower }
+		savedSpeed[player] = { walk = hum.WalkSpeed, jump = hum.JumpPower, autoRotate = hum.AutoRotate }
 	end
 
 	char:SetAttribute("CarryingAssemblyPart", "Engine")
 
-	-- Weld helper ke engine
-	local offset = (side == "Left") and Config.EngineLeftCarryOffset or Config.EngineRightCarryOffset
-	local weld = Instance.new("Weld")
-	weld.Name = "AssemblyCarryWeld_" .. side
-	weld.Part0 = part
-	weld.Part1 = root
-	weld.C0 = CFrame.new()
-	weld.C1 = offset
-	weld.Parent = part
-
-	root.CFrame = part.CFrame * offset:Inverse()
+	if not attachEngineCarrier(part, player, side) then
+		if side == "Left" then ec.left = nil else ec.right = nil end
+		detachPlayer(player)
+		return false
+	end
 
 	local animId = (side == "Left") and Config.EngineLeftAnimId or Config.EngineRightAnimId
 	CarryAnimator.play(player, animId)
@@ -431,26 +554,12 @@ function AssemblyService.drop(player: Player)
 			if ec.left == player then ec.left = nil end
 			if ec.right == player then ec.right = nil end
 
-			-- 3. Hapus weld-weld lama
-			for _, child in ipairs(part:GetChildren()) do
-				if child:IsA("Weld") or child:IsA("Motor6D") or child:IsA("WeldConstraint") then
-					child:Destroy()
-				end
-			end
+			-- 3. Hapus weld engine carrier (weld berada pada RootPart carrier)
+			clearEngineCarrierWelds(player)
 
-			-- 4. Jadikan otherPlayer primary carrier tunggal
+			-- 4. Pemain tersisa tetap di Attachment-nya; Engine tetap tidak bergerak
 			local otherSide = carrierSide[otherPlayer] or "Left"
-			local otherRoot = otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
-			if otherRoot then
-				local otherOffset = (otherSide == "Left") and Config.EngineLeftCarryOffset or Config.EngineRightCarryOffset
-				local weld = Instance.new("Weld")
-				weld.Name = "AssemblyCarryWeld_" .. otherSide
-				weld.Part0 = otherRoot
-				weld.Part1 = part
-				weld.C0 = otherOffset
-				weld.Parent = part
-				part.CFrame = otherRoot.CFrame * otherOffset
-			end
+			attachEngineCarrier(part, otherPlayer, otherSide)
 
 			-- 5. Turunkan kecepatan otherPlayer ke EngineSoloSpeed (8)
 			local otherHum = getHumanoid(otherPlayer)
@@ -647,12 +756,29 @@ local function registerPickup(part: BasePart)
 
 	part.Anchored = true
 
-	local prompt = part:FindFirstChild("AssemblyPickupPrompt") :: ProximityPrompt?
+	local prompt = part:FindFirstChild("AssemblyPickupPrompt", true) :: ProximityPrompt?
 	if not prompt then
 		prompt = Instance.new("ProximityPrompt")
 		prompt.Name = "AssemblyPickupPrompt"
 		prompt.Parent = part
 	end
+	-- Engine memiliki Attachment "Left" dan "Right" buatan Aer.
+	-- Pickup pertama tampil di sisi Left; pemain kedua menerima Help Carry di Right.
+	local leftAttachment: Attachment? = nil
+	local rightAttachment: Attachment? = nil
+	if kind == "Engine" then
+		local candidateLeft = part:FindFirstChild("Left")
+		local candidateRight = part:FindFirstChild("Right")
+		if candidateLeft and candidateLeft:IsA("Attachment") then
+			leftAttachment = candidateLeft
+		end
+		if candidateRight and candidateRight:IsA("Attachment") then
+			rightAttachment = candidateRight
+		end
+	end
+
+	-- Fallback parent tetap ke part bila Attachment belum ada, supaya engine tidak deadlock.
+	prompt.Parent = leftAttachment or part
 	prompt.ActionText = Config.PickupPromptText
 	prompt.ObjectText = kind
 	prompt.KeyboardKeyCode = Enum.KeyCode.E
@@ -667,7 +793,7 @@ local function registerPickup(part: BasePart)
 
 	local helpPrompt: ProximityPrompt? = nil
 	if kind == "Engine" then
-		helpPrompt = part:FindFirstChild("EngineHelpCarryPrompt") :: ProximityPrompt?
+		helpPrompt = part:FindFirstChild("EngineHelpCarryPrompt", true) :: ProximityPrompt?
 		if not helpPrompt then
 			helpPrompt = Instance.new("ProximityPrompt")
 			helpPrompt.Name = "EngineHelpCarryPrompt"
@@ -675,6 +801,8 @@ local function registerPickup(part: BasePart)
 		end
 		helpPrompt.ActionText = "Help Carry"
 		helpPrompt.ObjectText = "Engine"
+		-- Prompt bantuan ditempatkan di Attachment Right (bukan di tengah Engine).
+		helpPrompt.Parent = rightAttachment or part
 		helpPrompt.KeyboardKeyCode = Enum.KeyCode.E
 		helpPrompt.MaxActivationDistance = Config.PickupPromptDistance + 4
 		helpPrompt.HoldDuration = 0.5
@@ -690,6 +818,7 @@ local function registerPickup(part: BasePart)
 		kind = kind,
 		prompt = prompt,
 		helpPrompt = helpPrompt,
+		attachments = {left = leftAttachment, right = rightAttachment},
 		homeCF = part.CFrame,
 	}
 end
