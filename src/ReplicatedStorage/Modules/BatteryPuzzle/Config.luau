@@ -42,9 +42,10 @@ Config.PanelCarryAnimId = "rbxassetid://71893510212987"
 --   Sumbu 3 (Z) : -Z = MAJU ke depan badan, +Z = mundur
 --   Angles(pitch X, yaw Y, roll Z) dalam radian (math.rad(derajat))
 -- Tanpa rotasi = muka lebar panel ngadep depan (kayak nyangga papan besar).
--- Sedikit tilt -10 biar atas panel condong ke badan. Panel gede -> dorong Z jauh
--- biar gak nembus badan.
-Config.PanelCarryOffset = CFrame.new(0, -0.3, -2.6) * CFrame.Angles(math.rad(-10), 0, 0)
+-- Panel gede (4.87 stud) -> pasti nembus badan; sengaja dipeluk DEKAT di dada
+-- biar keliatan "dipeluk 2 tangan", bukan ngambang jauh. Collision sudah mati
+-- saat dibawa jadi tembusan tak mendorong physics.
+Config.PanelCarryOffset = CFrame.new(0, 0.2, -1.0) * CFrame.Angles(math.rad(-8), 0, 0)
 
 -- Engine (berat, satu genggaman) tetap di tangan kanan.
 Config.HandCarryOffset = CFrame.new(0, -0.6, -0.4) * CFrame.Angles(math.rad(90), 0, 0)
