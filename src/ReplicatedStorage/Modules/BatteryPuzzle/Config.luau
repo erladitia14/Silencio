@@ -41,11 +41,11 @@ Config.PanelCarryAnimId = "rbxassetid://71893510212987"
 --   Sumbu 2 (Y) : geser TURUN(-)/NAIK(+)
 --   Sumbu 3 (Z) : -Z = MAJU ke depan badan, +Z = mundur
 --   Angles(pitch X, yaw Y, roll Z) dalam radian (math.rad(derajat))
--- Tanpa rotasi = muka lebar panel ngadep depan (kayak nyangga papan besar).
--- Panel gede (4.87 stud) -> pasti nembus badan; sengaja dipeluk DEKAT di dada
--- biar keliatan "dipeluk 2 tangan", bukan ngambang jauh. Collision sudah mati
--- saat dibawa jadi tembusan tak mendorong physics.
-Config.PanelCarryOffset = CFrame.new(0, 0.2, -1.0) * CFrame.Angles(math.rad(-8), 0, 0)
+-- PanelCarryOffset: HASIL PENGUKURAN LANGSUNG DARI PLAYTEST AER (19 Sep 2026).
+-- Diukur saat Aer memposisikan panel paling pas di tangannya:
+--   Posisi: X = +0.21 (sedikit kanan), Y = +1.20 (setinggi dada/bahu), Z = -1.84 (di depan tangan)
+--   Sudut: pitch = -7.8°, yaw = -6.3°, roll = 1.8°
+Config.PanelCarryOffset = CFrame.new(0.207, 1.198, -1.844) * CFrame.Angles(math.rad(-7.8), math.rad(-6.3), math.rad(1.8))
 
 -- Engine (berat, satu genggaman) tetap di tangan kanan.
 Config.HandCarryOffset = CFrame.new(0, -0.6, -0.4) * CFrame.Angles(math.rad(90), 0, 0)
