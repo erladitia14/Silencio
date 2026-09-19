@@ -32,6 +32,7 @@ local savedSpeed: { [Player]: { walk: number, jump: number } } = {}
 -- Dipasang orchestrator: dipanggil tiap status bawa baterai berubah,
 -- supaya prompt Insert di case ikut ter-refresh (nyala hanya saat bawa baterai).
 local onCarryChanged: (() -> ())? = nil
+local isAssemblyCarrying: (() -> boolean)? = nil
 
 -- ----------------------------------------------------------------------
 -- Helpers
@@ -121,7 +122,6 @@ function BatteryService.isAnyoneCarrying(): boolean
 	return false
 end
 
-local isAssemblyCarrying: (() -> boolean)? = nil
 function BatteryService.setAssemblyCarryingChecker(fn: () -> boolean)
 	isAssemblyCarrying = fn
 end
