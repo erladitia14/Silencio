@@ -25,6 +25,7 @@ end
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 local BatteryPuzzle = Modules:WaitForChild("BatteryPuzzle")
 local AssemblyService = require(BatteryPuzzle:WaitForChild("AssemblyService"))
+local BatteryService = require(BatteryPuzzle:WaitForChild("BatteryService"))
 
 -- Event bersama untuk tombol Simpan (Q) + warning ke layar.
 local storeEvent = ReplicatedStorage:FindFirstChild("PuzzleStoreEvent")
@@ -52,6 +53,12 @@ AssemblyService.start({
 -- Warning (mis. "Pasang Engine dulu") dikirim ke client pemain terkait.
 AssemblyService.setWarnCallback(function(player, message)
 	warnEvent:FireClient(player, message)
+end)
+
+-- Bila status bawa assembly berubah, refresh juga prompt baterai di lantai
+-- (saat membawa engine/panel, pemain tidak boleh dan tidak bisa melihat prompt baterai)
+AssemblyService.setCarryChangedCallback(function()
+	BatteryService.refreshPickupPrompts()
 end)
 
 -- Tombol Simpan (Q): pemain menaruh part assembly yang sedang dibawa.

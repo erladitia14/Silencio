@@ -48,9 +48,14 @@ local generatorModel: Model? = nil
 
 local onAssembledCallback: ((genModel: Model) -> ())? = nil
 local onWarnCallback: ((player: Player, message: string) -> ())? = nil
+local onCarryChanged: (() -> ())? = nil
 
 function AssemblyService.setWarnCallback(cb: (player: Player, message: string) -> ())
 	onWarnCallback = cb
+end
+
+function AssemblyService.setCarryChangedCallback(cb: () -> ())
+	onCarryChanged = cb
 end
 
 local function warn_(player: Player, message: string)
@@ -106,8 +111,19 @@ function AssemblyService.refreshPrompts()
 		break
 	end
 
+	-- Juga cek apakah ada pemain yang sedang membawa baterai
+	if not anyCarrying then
+		for _, plr in ipairs(Players:GetPlayers()) do
+			local char = plr.Character
+			if char and char:GetAttribute(Config.CarryingAttribute) == true then
+				anyCarrying = true
+				break
+			end
+		end
+	end
+
 	-- 1. Refresh prompt pickup:
-	-- Jika ada pemain yang sedang bawa part assembly, matikan semua pickup lain.
+	-- Jika ada pemain yang sedang bawa part assembly / baterai, matikan semua pickup lain.
 	for part, info in pairs(pickups) do
 		if part.Parent == nil then
 			pickups[part] = nil
@@ -151,6 +167,10 @@ function AssemblyService.refreshPrompts()
 			rec.prompt.Enabled = false
 		end
 	end
+
+	if onCarryChanged then
+		onCarryChanged()
+	end
 end
 
 -- ----------------------------------------------------------------------
@@ -167,6 +187,13 @@ function AssemblyService.canPickup(player: Player, part: BasePart): boolean
 	for _, p in pairs(carriedPart) do
 		if p == part then return false end
 	end
+
+	-- Tidak boleh ambil part assembly jika sedang membawa baterai
+	local char = player.Character
+	if char and char:GetAttribute(Config.CarryingAttribute) == true then
+		return false
+	end
+
 	return true
 end
 

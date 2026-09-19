@@ -22,6 +22,7 @@ local Config = require(BatteryPuzzle:WaitForChild("Config"))
 local BatteryService = require(BatteryPuzzle:WaitForChild("BatteryService"))
 local CaseService = require(BatteryPuzzle:WaitForChild("CaseService"))
 local PuzzleService = require(BatteryPuzzle:WaitForChild("PuzzleService"))
+local AssemblyService = require(BatteryPuzzle:WaitForChild("AssemblyService"))
 
 -- ============================================================
 -- RemoteEvent (progress ke client; opsional dipakai UI)
@@ -71,10 +72,12 @@ CaseService.start({
 	end,
 })
 
--- Tiap status bawa baterai berubah, refresh prompt Insert di case
--- (Insert hanya boleh muncul kalau ada yang sedang membawa baterai).
+-- Tiap status bawa baterai berubah:
+-- 1. Refresh prompt Insert di case (hanya muncul kalau bawa baterai)
+-- 2. Refresh prompt assembly (sembunyikan pickup engine/panel kalau bawa baterai)
 BatteryService.setCarryChangedCallback(function()
 	CaseService.refresh()
+	AssemblyService.refreshPrompts()
 end)
 
 -- BatteryService

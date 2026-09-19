@@ -68,6 +68,17 @@ function BatteryService.refreshPickupPrompts()
 		break
 	end
 
+	-- Juga cek apakah ada pemain yang sedang membawa part assembly (Engine/Panel)
+	if not anyCarrying then
+		for _, plr in ipairs(Players:GetPlayers()) do
+			local char = plr.Character
+			if char and char:GetAttribute("CarryingAssemblyPart") ~= nil then
+				anyCarrying = true
+				break
+			end
+		end
+	end
+
 	for part, info in pairs(batteries) do
 		if part.Parent == nil then
 			batteries[part] = nil
@@ -109,6 +120,13 @@ function BatteryService.canPickup(player: Player, battery: BasePart): boolean
 	if carriedBy[player] ~= nil then return false end
 	if batteries[battery] == nil then return false end
 	if isCarriedBySomeone(battery) then return false end
+
+	-- Tidak boleh ambil baterai jika sedang membawa part assembly (Engine/Panel)
+	local char = player.Character
+	if char and char:GetAttribute("CarryingAssemblyPart") ~= nil then
+		return false
+	end
+
 	return true
 end
 
