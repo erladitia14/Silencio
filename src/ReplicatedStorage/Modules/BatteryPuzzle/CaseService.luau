@@ -1,33 +1,34 @@
 --!strict
 --[[
-	CaseService — mengelola wadah baterai (tag "BatteryCase") dan slot-nya
-	(tag "BatterySlot").
+	CaseService — v2 rebuild (pragmatic)
 
-	PENTING soal placeholder:
-	Slot = BasePart placeholder yang SUDAH diposisikan Aer di dalam case.
-	Posisi & arah tiap slot dibaca RELATIF ke case, jadi kalau case digeser
-	atau diputar, titik pasangnya tetap ikut.
+	Slot = BasePart placeholder yang SUDAH diposisikan Aer di dalam case
+	(tag "BatterySlot"). Baterai placeholder ini juga jadi visual "baterai
+	terpasang" begitu diisi.
 
-	Di Studio (edit mode) placeholder tetap kelihatan supaya bisa ditata.
-	Saat game BERJALAN baru disembunyikan + collision dimatikan.
-	Placeholder TIDAK PERNAH dihapus.
+	Alur insert:
+	1. Prompt "Insert" hanya muncul di slot kosong BERIKUTNYA (kiri->kanan).
+	2. Saat pemain punya baterai & tekan prompt (tahan 2 detik):
+	   - placeholder slot DITAMPILKAN (Transparency 0) = keliatan terisi.
+	   - baterai di tangan pemain DIHANCURKAN via BatteryService.consume().
+	   - prompt slot ini MATI, slot berikutnya NYALA.
+	3. Progress diterbitkan; kalau semua slot terisi -> puzzle Complete.
+
+	Placeholder default disembunyikan saat game jalan (belum terisi).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
-local Players = game:GetService("Players")
 
 local Config = require(script.Parent.Config)
 
 local CaseService = {}
 
 local cases: { [Instance]: any } = {}
-local slotOwners: { [BasePart]: Instance } = {}       -- slot -> case
 
--- dipasang orchestrator
-local onSlotFilled: ((player: Player, case: Instance, slot: BasePart, battery: BasePart) -> ())? = nil
-local isBatteryInserted: ((battery: BasePart) -> boolean)? = nil
-local markInserted: ((player: Player, battery: BasePart, cf: CFrame) -> ())? = nil
+-- callback dipasang orchestrator
+local onSlotFilled: ((player: Player, case: Instance, slot: BasePart) -> ())? = nil
 local getCarried: ((player: Player) -> BasePart?)? = nil
+local consumeCarried: ((player: Player) -> BasePart?)? = nil
 
 -- ============================================================
 -- UTIL
@@ -44,36 +45,11 @@ local function findCaseOf(slot: BasePart): Instance?
 	return nil
 end
 
--- Posisi slot relatif ke case (tahan geser/putar case)
-local function localSlotCFrame(case: Instance, slot: BasePart): CFrame
-	local caseCF: CFrame
-	if case:IsA("Model") then
-		caseCF = case:GetPivot()
-	elseif case:IsA("BasePart") then
-		caseCF = case.CFrame
-	else
-		caseCF = CFrame.new()
-	end
-	return caseCF:ToObjectSpace(slot.CFrame)
-end
-
-local function worldSlotCFrame(case: Instance, localCF: CFrame): CFrame
-	local caseCF: CFrame
-	if case:IsA("Model") then
-		caseCF = case:GetPivot()
-	elseif case:IsA("BasePart") then
-		caseCF = case.CFrame
-	else
-		caseCF = CFrame.new()
-	end
-	return caseCF * localCF
-end
-
 -- ============================================================
 -- PROMPT SLOT
 -- ============================================================
 
-local function ensureSlotPrompt(slot: BasePart)
+local function ensureSlotPrompt(slot: BasePart): ProximityPrompt
 	local p = slot:FindFirstChild("BatteryInsertPrompt") :: ProximityPrompt?
 	if not p then
 		p = Instance.new("ProximityPrompt")
@@ -85,9 +61,25 @@ local function ensureSlotPrompt(slot: BasePart)
 	p.KeyboardKeyCode = Config.InsertPromptKey
 	p.MaxActivationDistance = Config.InsertPromptDistance
 	p.RequiresLineOfSight = Config.RequireLineOfSight
-	-- HoldDuration dipakai untuk "waktu pasang" (2 detik diam)
 	p.HoldDuration = Config.InsertDuration
 	return p
+end
+
+-- Hanya slot KOSONG paling depan (kiri->kanan) yang prompt-nya nyala.
+local function updateSlotPrompts(rec: any)
+	local nextIndex = 0
+	for i, slot in ipairs(rec.slots) do
+		if not rec.filled[slot] then
+			nextIndex = i
+			break
+		end
+	end
+	for i, slot in ipairs(rec.slots) do
+		local prompt = slot:FindFirstChild("BatteryInsertPrompt")
+		if prompt and prompt:IsA("ProximityPrompt") then
+			prompt.Enabled = (i == nextIndex)
+		end
+	end
 end
 
 -- ============================================================
@@ -96,61 +88,58 @@ end
 
 local function tryInsert(player: Player, case: Instance, slot: BasePart): boolean
 	local rec = cases[case]
-	if not rec then
-		return false
-	end
-	if rec.filled[slot] then
-		return false                        -- slot sudah terisi
-	end
+	if not rec then return false end
+	if rec.filled[slot] then return false end          -- slot sudah terisi
 
-	-- pemain harus benar-benar membawa baterai
+	-- pemain harus membawa baterai
 	local battery = getCarried and getCarried(player) or nil
-	if not battery then
-		return false
-	end
-	if isBatteryInserted and isBatteryInserted(battery) then
-		return false
-	end
+	if not battery then return false end
 
-	-- validasi jarak (anti-exploit ringan): pemain masih dekat slot?
+	-- validasi jarak (anti-exploit ringan)
 	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 	if root and root:IsA("BasePart") then
-		local dist = (root.Position - slot.Position).Magnitude
-		if dist > (Config.InsertPromptDistance + 6) then
+		if (root.Position - slot.Position).Magnitude > (Config.InsertPromptDistance + 6) then
 			return false
 		end
 	end
 
-	-- KUNCI SLOT DULU (cegah dua pemain mengisi slot sama)
+	-- KUNCI SLOT
 	rec.filled[slot] = player
 
-	-- Baterai di dalam case (placeholder) sekarang DITAMPILKAN
+	-- Placeholder slot ditampilkan = baterai terlihat terpasang
 	slot.Transparency = 0
 	slot.CanCollide = false
 	slot.CanQuery = false
 	slot.CanTouch = false
 
-	-- Prompt insert harus dimatikan eksplisit
+	-- Matikan prompt slot ini
 	local prompt = slot:FindFirstChild("BatteryInsertPrompt")
 	if prompt and prompt:IsA("ProximityPrompt") then
 		prompt.Enabled = false
 	end
 
-	if markInserted then
-		markInserted(player, battery, slot.CFrame)
+	-- Hancurkan baterai di tangan pemain
+	if consumeCarried then
+		consumeCarried(player)
 	end
-	-- simpan referensi baterai yang terpasang
-	rec.inserted[slot] = battery
 
-	-- Buka slot kosong berikutnya (sequential)
-	if rec.updateSlotPrompts then
-		rec.updateSlotPrompts(rec)
+	-- Buka slot berikutnya
+	updateSlotPrompts(rec)
+
+	-- Progress
+	local filled = 0
+	for _ in pairs(rec.filled) do filled += 1 end
+	if case:IsA("Model") or case:IsA("BasePart") then
+		case:SetAttribute(Config.ProgressAttribute, string.format("%d/%d", filled, rec.total))
+		if filled >= rec.total then
+			case:SetAttribute(Config.CompletedAttribute, true)
+		end
 	end
 
 	if onSlotFilled then
-		onSlotFilled(player, case, slot, battery)
+		onSlotFilled(player, case, slot)
 	end
-	Config.log("slot filled", slot.Name, "by", player.Name)
+	Config.log("slot filled", slot.Name, "by", player.Name, filled .. "/" .. rec.total)
 	return true
 end
 
@@ -158,24 +147,16 @@ end
 -- PROGRESS
 -- ============================================================
 
-local function countFilled(case: Instance): (number, number)
+function CaseService.getProgress(case: Instance): (number, number)
 	local rec = cases[case]
-	if not rec then
-		return 0, 0
-	end
+	if not rec then return 0, 0 end
 	local n = 0
-	for _, _ in pairs(rec.filled) do
-		n += 1
-	end
+	for _ in pairs(rec.filled) do n += 1 end
 	return n, rec.total
 end
 
-function CaseService.getProgress(case: Instance): (number, number)
-	return countFilled(case)
-end
-
 function CaseService.isComplete(case: Instance): boolean
-	local n, total = countFilled(case)
+	local n, total = CaseService.getProgress(case)
 	return total > 0 and n >= total
 end
 
@@ -184,11 +165,9 @@ end
 -- ============================================================
 
 local function registerCase(case: Instance)
-	if cases[case] then
-		return
-	end
+	if cases[case] then return end
 
-	-- kumpulkan slot: descendant ber-tag BatterySlot yang berada di bawah case ini
+	-- kumpulkan slot bertag di bawah case ini
 	local slots: { BasePart } = {}
 	for _, s in ipairs(CollectionService:GetTagged(Config.SlotTag)) do
 		if s:IsA("BasePart") and findCaseOf(s) == case then
@@ -196,58 +175,28 @@ local function registerCase(case: Instance)
 		end
 	end
 
-	-- Urutkan slot secara SPASIAL (kiri->kanan) supaya nomor slot stabil
-	-- dan tidak bergantung urutan GetChildren.
+	-- urutkan kiri->kanan (sumbu X relatif ke case)
 	local caseCF: CFrame = case:IsA("Model") and case:GetPivot() or (case :: any).CFrame
 	table.sort(slots, function(a, b)
-		local la = caseCF:PointToObjectSpace(a.Position)
-		local lb = caseCF:PointToObjectSpace(b.Position)
-		return la.X < lb.X
+		return caseCF:PointToObjectSpace(a.Position).X < caseCF:PointToObjectSpace(b.Position).X
 	end)
-
-	-- Enable prompt HANYA untuk slot kosong berikutnya (kiri->kanan).
-	-- Yang sudah terisi atau bukan gilirannya = dimatikan, supaya pemain
-	-- tidak melihat 4 prompt sekaligus.
-	local function updateSlotPrompts(rec: any)
-		local nextIndex = 0
-		for i, slot in ipairs(rec.slots) do
-			if not rec.filled[slot] then
-				nextIndex = i
-				break
-			end
-		end
-		for i, slot in ipairs(rec.slots) do
-			local prompt = slot:FindFirstChild("BatteryInsertPrompt")
-			if prompt and prompt:IsA("ProximityPrompt") then
-				prompt.Enabled = (i == nextIndex and not rec.filled[slot])
-			end
-		end
-	end
 
 	local rec = {
 		total = #slots,
 		filled = {} :: { [BasePart]: Player },
-		inserted = {} :: { [BasePart]: BasePart },
-		slotLocal = {} :: { [BasePart]: CFrame },
 		slots = slots,
-		updateSlotPrompts = updateSlotPrompts,
 	}
 
 	for _, slot in ipairs(slots) do
-		rec.slotLocal[slot] = localSlotCFrame(case, slot)
-		slotOwners[slot] = case
 		local p = ensureSlotPrompt(slot)
 		p.Triggered:Connect(function(player)
 			tryInsert(player, case, slot)
 		end)
 	end
 
-	-- Sequential: hanya slot kosong pertama yang prompt-nya aktif
+	cases[case] = rec
 	updateSlotPrompts(rec)
 
-	cases[case] = rec
-
-	-- Terbitkan progress awal
 	if case:IsA("Model") or case:IsA("BasePart") then
 		case:SetAttribute(Config.ProgressAttribute, string.format("0/%d", rec.total))
 	end
@@ -255,18 +204,13 @@ local function registerCase(case: Instance)
 	Config.log("registered case", case:GetFullName(), "with", rec.total, "slots")
 end
 
-local function unregisterCase(case: Instance)
-	cases[case] = nil
-end
-
 -- ============================================================
--- SAAT GAME BERJALAN: sembunyikan placeholder
+-- SAAT GAME BERJALAN: sembunyikan placeholder kosong
 -- ============================================================
 
 function CaseService.hidePlaceholders()
-	for case, rec in pairs(cases) do
+	for _, rec in pairs(cases) do
 		for _, slot in ipairs(rec.slots) do
-			-- Kalau slot sudah terisi, biarkan (baterai asli terlihat).
 			if not rec.filled[slot] then
 				slot.Transparency = 1
 				slot.CanCollide = false
@@ -281,52 +225,18 @@ end
 -- ============================================================
 
 function CaseService.start(opts: {
-	onSlotFilled: ((player: Player, case: Instance, slot: BasePart, battery: BasePart) -> ())?,
-	isBatteryInserted: ((battery: BasePart) -> boolean)?,
-	markInserted: ((player: Player, battery: BasePart, cf: CFrame) -> ())?,
+	onSlotFilled: ((player: Player, case: Instance, slot: BasePart) -> ())?,
 	getCarried: ((player: Player) -> BasePart?)?,
+	consumeCarried: ((player: Player) -> BasePart?)?,
 })
 	onSlotFilled = opts.onSlotFilled
-	isBatteryInserted = opts.isBatteryInserted
-	markInserted = opts.markInserted
 	getCarried = opts.getCarried
+	consumeCarried = opts.consumeCarried
 
 	for _, case in ipairs(CollectionService:GetTagged(Config.CaseTag)) do
 		registerCase(case)
 	end
-	CollectionService:GetInstanceAddedSignal(Config.CaseTag):Connect(function(case)
-		registerCase(case)
-	end)
-	CollectionService:GetInstanceRemovedSignal(Config.CaseTag):Connect(function(case)
-		unregisterCase(case)
-	end)
-
-	-- Slot yang ditambah runtime
-	CollectionService:GetInstanceAddedSignal(Config.SlotTag):Connect(function(slot)
-		if slot:IsA("BasePart") then
-			local case = findCaseOf(slot)
-			if case and cases[case] then
-				-- case sudah terdaftar -> daftarkan slot tambahan
-				local rec = cases[case]
-				if not rec.slotLocal[slot] then
-					rec.slotLocal[slot] = localSlotCFrame(case, slot)
-					rec.total += 1
-					slotOwners[slot] = case
-					local p = ensureSlotPrompt(slot)
-					p.Triggered:Connect(function(player)
-						tryInsert(player, case, slot)
-					end)
-					-- slot baru ikut aturan sequential (default mati)
-					p.Enabled = false
-					if rec.updateSlotPrompts then
-						rec.updateSlotPrompts(rec)
-					end
-				end
-			elseif case then
-				registerCase(case)
-			end
-		end
-	end)
+	CollectionService:GetInstanceAddedSignal(Config.CaseTag):Connect(registerCase)
 
 	Config.log("CaseService started,", #CollectionService:GetTagged(Config.CaseTag), "cases")
 end

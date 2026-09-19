@@ -48,28 +48,20 @@ PuzzleService.start()
 -- CaseService butuh fungsi dari BatteryService (lewat orchestrator,
 -- supaya modul tidak saling require)
 CaseService.start({
-	isBatteryInserted = function(battery)
-		return BatteryService.isInserted(battery)
-	end,
 	getCarried = function(player)
 		return BatteryService.getCarried(player)
 	end,
-	markInserted = function(player, battery, cf)
-		BatteryService.markInserted(player, battery, cf)
+	consumeCarried = function(player)
+		return BatteryService.consume(player)
 	end,
-	onSlotFilled = function(player, case, slot, battery)
+	onSlotFilled = function(player, case, slot)
 		local filled, total = CaseService.getProgress(case)
 		PuzzleService.reportSlotFilled(case, slot, filled, total)
 	end,
 })
 
 -- BatteryService
-BatteryService.start(function(player, carrying)
-	-- Terbitkan status bawa baterai ke semua client (UI boleh pakai)
-	if remote and remote:IsA("RemoteEvent") then
-		remote:FireAllClients("carry", player, carrying)
-	end
-end)
+BatteryService.start()
 
 -- ============================================================
 -- SAAT GAME BERJALAN: sembunyikan placeholder
