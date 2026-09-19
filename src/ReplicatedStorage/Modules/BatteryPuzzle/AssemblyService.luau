@@ -422,7 +422,7 @@ function AssemblyService.drop(player: Player)
 		local ec = engineCarriers[part]
 		local otherPlayer = (ec.left == player) and ec.right or ((ec.right == player) and ec.left or nil)
 
-		if otherPlayer and otherPlayer.Parent ~= nil then
+		if otherPlayer and (otherPlayer.Parent ~= nil or otherPlayer.Character ~= nil) then
 			-- ADA PEMAIN LAIN: TETAP BAWA SENDIRI JANGAN JATOH (Keputusan Aer #1)
 			-- 1. Lepas pemain yang drop
 			detachPlayer(player)
