@@ -141,6 +141,11 @@ local function tryInsert(player: Player, case: Instance, slot: BasePart): boolea
 		prompt.Enabled = false
 	end
 
+	-- Buka slot kosong berikutnya (sequential)
+	if rec.updateSlotPrompts then
+		rec.updateSlotPrompts(rec)
+	end
+
 	if onSlotFilled then
 		onSlotFilled(player, case, slot, battery)
 	end
@@ -199,12 +204,32 @@ local function registerCase(case: Instance)
 		return la.X < lb.X
 	end)
 
+	-- Enable prompt HANYA untuk slot kosong berikutnya (kiri->kanan).
+	-- Yang sudah terisi atau bukan gilirannya = dimatikan, supaya pemain
+	-- tidak melihat 4 prompt sekaligus.
+	local function updateSlotPrompts(rec: any)
+		local nextIndex = 0
+		for i, slot in ipairs(rec.slots) do
+			if not rec.filled[slot] then
+				nextIndex = i
+				break
+			end
+		end
+		for i, slot in ipairs(rec.slots) do
+			local prompt = slot:FindFirstChild("BatteryInsertPrompt")
+			if prompt and prompt:IsA("ProximityPrompt") then
+				prompt.Enabled = (i == nextIndex and not rec.filled[slot])
+			end
+		end
+	end
+
 	local rec = {
 		total = #slots,
 		filled = {} :: { [BasePart]: Player },
 		inserted = {} :: { [BasePart]: BasePart },
 		slotLocal = {} :: { [BasePart]: CFrame },
 		slots = slots,
+		updateSlotPrompts = updateSlotPrompts,
 	}
 
 	for _, slot in ipairs(slots) do
@@ -215,6 +240,9 @@ local function registerCase(case: Instance)
 			tryInsert(player, case, slot)
 		end)
 	end
+
+	-- Sequential: hanya slot kosong pertama yang prompt-nya aktif
+	updateSlotPrompts(rec)
 
 	cases[case] = rec
 
@@ -287,6 +315,11 @@ function CaseService.start(opts: {
 					p.Triggered:Connect(function(player)
 						tryInsert(player, case, slot)
 					end)
+					-- slot baru ikut aturan sequential (default mati)
+					p.Enabled = false
+					if rec.updateSlotPrompts then
+						rec.updateSlotPrompts(rec)
+					end
 				end
 			elseif case then
 				registerCase(case)

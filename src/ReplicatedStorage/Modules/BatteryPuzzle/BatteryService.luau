@@ -106,10 +106,11 @@ end
 -- VISUAL SAAT DIBAWA
 -- ============================================================
 
-local function showCarriedVisual(player: Player, battery: BasePart)
+local function showCarriedVisual(player: Player, battery: BasePart): BasePart?
 	local root = rootOf(player)
 	if not root then
-		return
+		Config.log("showCarriedVisual: no root for", player.Name)
+		return nil
 	end
 	-- salinan visual (mesh sama, biar tetap mirip)
 	local vis = battery:Clone()
@@ -128,18 +129,23 @@ local function showCarriedVisual(player: Player, battery: BasePart)
 			d:Destroy()
 		end
 	end
+	-- Motor6D (bukan WeldConstraint) supaya C0 offset bisa disetel dari awal.
+	-- WeldConstraint tidak punya CFrame offset — mesh akan ngambang di posisi lama.
+	local m = Instance.new("Motor6D")
+	m.Name = "CarryWeld"
+	m.Part0 = root
+	m.Part1 = vis
+	m.C0 = Config.CarryOffset
+	m.Parent = vis
+
 	vis.CFrame = root.CFrame * Config.CarryOffset
 	vis.Parent = root
-
-	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = root
-	weld.Part1 = vis
-	weld.Parent = vis
 
 	local rec = batteries[battery]
 	if rec then
 		rec.visual = vis
 	end
+	return vis
 end
 
 local function clearCarriedVisual(battery: BasePart)
@@ -191,7 +197,10 @@ function BatteryService.pickup(player: Player, battery: BasePart): boolean
 		battery.Transparency = 1
 		battery.CanCollide = false
 		battery.CanQuery = false
-		showCarriedVisual(player, battery)
+		local vis = showCarriedVisual(player, battery)
+		if not vis then
+			Config.log("pickup: visual gagal untuk", player.Name, "— batalkan? tidak, tetap pickup")
+		end
 	end
 
 	if notifyCarryChanged then
