@@ -47,7 +47,23 @@ Config.PanelCarryAnimId = "rbxassetid://71893510212987"
 --   Sudut: pitch = -7.8°, yaw = -6.3°, roll = 1.8°
 Config.PanelCarryOffset = CFrame.new(0.207, 1.198, -1.844) * CFrame.Angles(math.rad(-7.8), math.rad(-6.3), math.rad(1.8))
 
--- Engine (berat, satu genggaman) tetap di tangan kanan.
+-- ============================================================
+-- ENGINE CO-OP CARRY (1 ORANG VS 2 ORANG)
+-- Diukur langsung dari posisi Rig Left & Rig Right buatan Aer (19 Sep 2026).
+-- ============================================================
+
+Config.EngineSoloSpeed = 8                 -- WalkSpeed saat engine dibawa 1 orang (lambat)
+Config.EngineCoopSpeed = 14                -- WalkSpeed saat engine dibawa 2 orang (cepat)
+
+-- Animasi Engine Carry per sisi
+Config.EngineLeftAnimId = "rbxassetid://87931635446245"
+Config.EngineRightAnimId = "rbxassetid://124217715255364"
+
+-- Offset relatif Engine terhadap HumanoidRootPart masing-masing carrier
+Config.EngineLeftCarryOffset = CFrame.new(0.145, -1.266, -3.298) * CFrame.Angles(0, math.rad(90), 0)
+Config.EngineRightCarryOffset = CFrame.new(-0.145, -1.266, -2.958) * CFrame.Angles(0, math.rad(-90), 0)
+
+-- Offset bawa tangan satu (baterai kecil)
 Config.HandCarryOffset = CFrame.new(0, -0.6, -0.4) * CFrame.Angles(math.rad(90), 0, 0)
 
 -- ============================================================

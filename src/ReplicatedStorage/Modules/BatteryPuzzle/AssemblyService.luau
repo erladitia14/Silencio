@@ -31,6 +31,8 @@ local AssemblyService = {}
 -- State
 local carriedPart: { [Player]: BasePart } = {}
 local carriedKind: { [Player]: string } = {}
+local carrierSide: { [Player]: "Left" | "Right" } = {}
+local engineCarriers: { [BasePart]: { left: Player?, right: Player? } } = {}
 local savedSpeed: { [Player]: { walk: number, jump: number } } = {}
 
 -- Registrasi slot & pickup
@@ -41,7 +43,7 @@ type SlotRecord = {
 	prompt: ProximityPrompt,
 }
 local slots: { [BasePart]: SlotRecord } = {}
-local pickups: { [BasePart]: { kind: string, prompt: ProximityPrompt, homeCF: CFrame } } = {}
+local pickups: { [BasePart]: { kind: string, prompt: ProximityPrompt, homeCF: CFrame, helpPrompt: ProximityPrompt? } } = {}
 
 -- Model generator pemilik (dideteksi dari parent slot)
 local generatorModel: Model? = nil
@@ -142,15 +144,24 @@ function AssemblyService.refreshPrompts()
 		end
 	end
 
-	-- 1. Refresh prompt pickup:
+	-- 1. Refresh prompt pickup & help carry:
 	-- Jika ada pemain yang sedang bawa part assembly / baterai, matikan semua pickup lain.
 	for part, info in pairs(pickups) do
 		if part.Parent == nil then
 			pickups[part] = nil
 		elseif anyCarrying then
 			info.prompt.Enabled = false
+			-- Jika part ini adalah Engine yang sedang dibawa tepat 1 orang, nyalakan prompt Help Carry
+			local ec = engineCarriers[part]
+			if info.helpPrompt then
+				local isSoloEngine = ec and ((ec.left ~= nil and ec.right == nil) or (ec.left == nil and ec.right ~= nil))
+				info.helpPrompt.Enabled = (isSoloEngine == true)
+			end
 		else
 			info.prompt.Enabled = true
+			if info.helpPrompt then
+				info.helpPrompt.Enabled = false
+			end
 		end
 	end
 
@@ -218,6 +229,25 @@ function AssemblyService.canPickup(player: Player, part: BasePart): boolean
 	return true
 end
 
+local function detachPlayer(player: Player)
+	carriedPart[player] = nil
+	carriedKind[player] = nil
+	carrierSide[player] = nil
+
+	local hum = getHumanoid(player)
+	if hum and savedSpeed[player] then
+		hum.WalkSpeed = savedSpeed[player].walk
+		hum.JumpPower = savedSpeed[player].jump
+	end
+	savedSpeed[player] = nil
+
+	if player.Character then
+		player.Character:SetAttribute("CarryingAssemblyPart", nil)
+	end
+
+	CarryAnimator.stop(player)
+end
+
 function AssemblyService.pickup(player: Player, part: BasePart): boolean
 	if not AssemblyService.canPickup(player, part) then
 		return false
@@ -228,17 +258,9 @@ function AssemblyService.pickup(player: Player, part: BasePart): boolean
 
 	local hum = getHumanoid(player)
 	if not hum then return false end
-
-	-- Panel = weld ke tengah depan badan (2 tangan). Engine = weld ke tangan kanan.
-	local isPanel = (info.kind == "Panel")
-	local anchor: BasePart?
-	if isPanel then
-		local char = player.Character
-		anchor = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-	else
-		anchor = getHand(player)
-	end
-	if not anchor then return false end
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not root then return false end
 
 	carriedPart[player] = part
 	carriedKind[player] = info.kind
@@ -246,8 +268,6 @@ function AssemblyService.pickup(player: Player, part: BasePart): boolean
 	if not savedSpeed[player] then
 		savedSpeed[player] = { walk = hum.WalkSpeed, jump = hum.JumpPower }
 	end
-	hum.WalkSpeed = Config.CarryWalkSpeed
-	hum.JumpPower = Config.CarryJumpPower
 
 	if player.Character then
 		player.Character:SetAttribute("CarryingAssemblyPart", info.kind)
@@ -266,18 +286,125 @@ function AssemblyService.pickup(player: Player, part: BasePart): boolean
 		end
 	end
 
+	if info.kind == "Panel" then
+		hum.WalkSpeed = Config.CarryWalkSpeed
+		hum.JumpPower = Config.CarryJumpPower
+
+		local weld = Instance.new("Weld")
+		weld.Name = "AssemblyCarryWeld"
+		weld.Part0 = root
+		weld.Part1 = part
+		weld.C0 = Config.PanelCarryOffset
+		weld.Parent = part
+
+		part.CFrame = root.CFrame * weld.C0
+		CarryAnimator.play(player, Config.PanelCarryAnimId)
+	else
+		-- Engine: carrier 1 mulai dari slot Left
+		carrierSide[player] = "Left"
+		engineCarriers[part] = { left = player, right = nil }
+
+		hum.WalkSpeed = Config.EngineSoloSpeed
+		hum.JumpPower = Config.CarryJumpPower
+
+		local weld = Instance.new("Weld")
+		weld.Name = "AssemblyCarryWeld_Left"
+		weld.Part0 = root
+		weld.Part1 = part
+		weld.C0 = Config.EngineLeftCarryOffset
+		weld.Parent = part
+
+		part.CFrame = root.CFrame * weld.C0
+		CarryAnimator.play(player, Config.EngineLeftAnimId)
+
+		-- Nyalakan prompt Help Carry untuk pemain kedua
+		if info.helpPrompt then
+			info.helpPrompt.Enabled = true
+		end
+	end
+
+	AssemblyService.refreshPrompts()
+	return true
+end
+
+function AssemblyService.canHelpCarry(player: Player, part: BasePart): boolean
+	if carriedPart[player] ~= nil then return false end
+	if pickups[part] == nil then return false end
+	local ec = engineCarriers[part]
+	if not ec then return false end
+
+	-- Harus ada tepat 1 carrier yang sedang bawa, dan 1 slot kosong
+	local hasOne = (ec.left ~= nil and ec.right == nil) or (ec.left == nil and ec.right ~= nil)
+	if not hasOne then return false end
+	if ec.left == player or ec.right == player then return false end
+
+	local char = player.Character
+	if not char then return false end
+	if char:GetAttribute(Config.CarryingAttribute) == true then return false end
+	return true
+end
+
+function AssemblyService.helpCarry(player: Player, part: BasePart): boolean
+	if not AssemblyService.canHelpCarry(player, part) then
+		return false
+	end
+	local ec = engineCarriers[part]
+	if not ec then return false end
+
+	local hum = getHumanoid(player)
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not (hum and root) then return false end
+
+	-- Pilih sisi yang kosong
+	local side: "Left" | "Right"
+	if ec.left == nil then
+		side = "Left"
+		ec.left = player
+	else
+		side = "Right"
+		ec.right = player
+	end
+
+	carriedPart[player] = part
+	carriedKind[player] = "Engine"
+	carrierSide[player] = side
+
+	if not savedSpeed[player] then
+		savedSpeed[player] = { walk = hum.WalkSpeed, jump = hum.JumpPower }
+	end
+
+	char:SetAttribute("CarryingAssemblyPart", "Engine")
+
+	-- Weld helper ke engine
+	local offset = (side == "Left") and Config.EngineLeftCarryOffset or Config.EngineRightCarryOffset
 	local weld = Instance.new("Weld")
-	weld.Name = "AssemblyCarryWeld"
-	weld.Part0 = anchor
-	weld.Part1 = part
-	weld.C0 = isPanel and Config.PanelCarryOffset or Config.HandCarryOffset
+	weld.Name = "AssemblyCarryWeld_" .. side
+	weld.Part0 = part
+	weld.Part1 = root
+	weld.C0 = CFrame.new()
+	weld.C1 = offset
 	weld.Parent = part
 
-	part.CFrame = anchor.CFrame * weld.C0
+	root.CFrame = part.CFrame * offset:Inverse()
 
-	-- Animasi pose angkat 2 tangan: HANYA untuk PANEL.
-	if isPanel then
-		CarryAnimator.play(player)
+	local animId = (side == "Left") and Config.EngineLeftAnimId or Config.EngineRightAnimId
+	CarryAnimator.play(player, animId)
+
+	-- Update walkspeed KEDUA pemain ke EngineCoopSpeed (14)
+	if ec.left and ec.left.Character then
+		local hL = ec.left.Character:FindFirstChildOfClass("Humanoid")
+		if hL then hL.WalkSpeed = Config.EngineCoopSpeed end
+	end
+	if ec.right and ec.right.Character then
+		local hR = ec.right.Character:FindFirstChildOfClass("Humanoid")
+		if hR then hR.WalkSpeed = Config.EngineCoopSpeed end
+	end
+
+	-- Matikan prompt Help Carry karena slot sudah penuh (2 orang)
+	local info = pickups[part]
+	if info and info.helpPrompt then
+		info.helpPrompt.Enabled = false
 	end
 
 	AssemblyService.refreshPrompts()
@@ -288,22 +415,91 @@ function AssemblyService.drop(player: Player)
 	local part = carriedPart[player]
 	if not part then return end
 
-	carriedPart[player] = nil
-	carriedKind[player] = nil
+	local info = pickups[part]
+	local kind = carriedKind[player]
 
-	local hum = getHumanoid(player)
-	if hum and savedSpeed[player] then
-		hum.WalkSpeed = savedSpeed[player].walk
-		hum.JumpPower = savedSpeed[player].jump
+	if kind == "Engine" and engineCarriers[part] then
+		local ec = engineCarriers[part]
+		local otherPlayer = (ec.left == player) and ec.right or ((ec.right == player) and ec.left or nil)
+
+		if otherPlayer and otherPlayer.Parent ~= nil then
+			-- ADA PEMAIN LAIN: TETAP BAWA SENDIRI JANGAN JATOH (Keputusan Aer #1)
+			-- 1. Lepas pemain yang drop
+			detachPlayer(player)
+
+			-- 2. Kosongkan slot pemain yang drop
+			if ec.left == player then ec.left = nil end
+			if ec.right == player then ec.right = nil end
+
+			-- 3. Hapus weld-weld lama
+			for _, child in ipairs(part:GetChildren()) do
+				if child:IsA("Weld") or child:IsA("Motor6D") or child:IsA("WeldConstraint") then
+					child:Destroy()
+				end
+			end
+
+			-- 4. Jadikan otherPlayer primary carrier tunggal
+			local otherSide = carrierSide[otherPlayer] or "Left"
+			local otherRoot = otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if otherRoot then
+				local otherOffset = (otherSide == "Left") and Config.EngineLeftCarryOffset or Config.EngineRightCarryOffset
+				local weld = Instance.new("Weld")
+				weld.Name = "AssemblyCarryWeld_" .. otherSide
+				weld.Part0 = otherRoot
+				weld.Part1 = part
+				weld.C0 = otherOffset
+				weld.Parent = part
+				part.CFrame = otherRoot.CFrame * otherOffset
+			end
+
+			-- 5. Turunkan kecepatan otherPlayer ke EngineSoloSpeed (8)
+			local otherHum = getHumanoid(otherPlayer)
+			if otherHum then
+				otherHum.WalkSpeed = Config.EngineSoloSpeed
+			end
+
+			-- 6. Nyalakan lagi Help Carry prompt agar pemain lain bisa bantu
+			if info and info.helpPrompt then
+				info.helpPrompt.Enabled = true
+			end
+
+			AssemblyService.refreshPrompts()
+			return
+		else
+			-- TIDAK ADA PEMAIN LAIN: Engine jatuh ke tanah di depan pemain
+			engineCarriers[part] = nil
+			detachPlayer(player)
+
+			for _, child in ipairs(part:GetChildren()) do
+				if child:IsA("Weld") or child:IsA("Motor6D") or child:IsA("WeldConstraint") then
+					child:Destroy()
+				end
+			end
+
+			local char = player.Character
+			local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if root then
+				part.CFrame = root.CFrame * CFrame.new(0, -1.2, -3)
+			elseif info then
+				part.CFrame = info.homeCF
+			end
+
+			part.Anchored = true
+			part.CanCollide = true
+			part.CanTouch = true
+			part.CanQuery = true
+
+			if info and info.helpPrompt then
+				info.helpPrompt.Enabled = false
+			end
+
+			AssemblyService.refreshPrompts()
+			return
+		end
 	end
-	savedSpeed[player] = nil
 
-	if player.Character then
-		player.Character:SetAttribute("CarryingAssemblyPart", nil)
-	end
-
-	-- Hentikan animasi pose (kalau tadi panel)
-	CarryAnimator.stop(player)
+	-- Panel drop (normal solo)
+	detachPlayer(player)
 
 	for _, child in ipairs(part:GetChildren()) do
 		if child:IsA("Weld") or child:IsA("Motor6D") or child:IsA("WeldConstraint") then
@@ -315,8 +511,8 @@ function AssemblyService.drop(player: Player)
 	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if root then
 		part.CFrame = root.CFrame * CFrame.new(0, -1.5, -3)
-	elseif pickups[part] then
-		part.CFrame = pickups[part].homeCF
+	elseif info then
+		part.CFrame = info.homeCF
 	end
 
 	part.Anchored = true
@@ -363,24 +559,16 @@ local function tryInsert(player: Player, slotPart: BasePart): boolean
 	slotPart.CanTouch = false
 	rec.prompt.Enabled = false
 
-	-- Bersihkan part bawaan
-	carriedPart[player] = nil
-	carriedKind[player] = nil
+	-- Bersihkan part bawaan untuk SEMUA carrier yang membawa part ini (Engine bisa 2 orang)
+	local ec = engineCarriers[carried]
+	if ec then
+		if ec.left then detachPlayer(ec.left) end
+		if ec.right then detachPlayer(ec.right) end
+		engineCarriers[carried] = nil
+	else
+		detachPlayer(player)
+	end
 	pickups[carried] = nil
-
-	local hum = getHumanoid(player)
-	if hum and savedSpeed[player] then
-		hum.WalkSpeed = savedSpeed[player].walk
-		hum.JumpPower = savedSpeed[player].jump
-	end
-	savedSpeed[player] = nil
-
-	if player.Character then
-		player.Character:SetAttribute("CarryingAssemblyPart", nil)
-	end
-
-	-- Hentikan animasi pose (kalau tadi panel)
-	CarryAnimator.stop(player)
 
 	carried:Destroy()
 
@@ -477,9 +665,31 @@ local function registerPickup(part: BasePart)
 		AssemblyService.pickup(player, part)
 	end)
 
+	local helpPrompt: ProximityPrompt? = nil
+	if kind == "Engine" then
+		helpPrompt = part:FindFirstChild("EngineHelpCarryPrompt") :: ProximityPrompt?
+		if not helpPrompt then
+			helpPrompt = Instance.new("ProximityPrompt")
+			helpPrompt.Name = "EngineHelpCarryPrompt"
+			helpPrompt.Parent = part
+		end
+		helpPrompt.ActionText = "Help Carry"
+		helpPrompt.ObjectText = "Engine"
+		helpPrompt.KeyboardKeyCode = Enum.KeyCode.E
+		helpPrompt.MaxActivationDistance = Config.PickupPromptDistance + 4
+		helpPrompt.HoldDuration = 0.5
+		helpPrompt.RequiresLineOfSight = false
+		helpPrompt.Enabled = false
+
+		helpPrompt.Triggered:Connect(function(player)
+			AssemblyService.helpCarry(player, part)
+		end)
+	end
+
 	pickups[part] = {
 		kind = kind,
 		prompt = prompt,
+		helpPrompt = helpPrompt,
 		homeCF = part.CFrame,
 	}
 end

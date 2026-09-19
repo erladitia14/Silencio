@@ -34,16 +34,20 @@ local function getAnimator(player: Player): Animator?
 	return animator
 end
 
-function CarryAnimator.play(player: Player)
-	local animId = Config.PanelCarryAnimId
+function CarryAnimator.play(player: Player, customAnimId: string?)
+	local animId = customAnimId or Config.PanelCarryAnimId
 	if not animId or animId == "" then
 		return
+	end
+
+	if not string.find(animId, "://") then
+		animId = "rbxassetid://" .. animId
 	end
 
 	local animator = getAnimator(player)
 	if not animator then return end
 
-	-- kalau track lama masih ada (respawn), buang dulu
+	-- kalau track lama masih ada (respawn / ganti sisi), buang dulu
 	if tracks[player] then
 		tracks[player]:Stop(0.1)
 		tracks[player] = nil
