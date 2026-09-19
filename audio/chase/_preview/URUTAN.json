@@ -1,0 +1,240 @@
+{
+ "detect": {
+  "file": "_preview/reel_detect.mp3",
+  "durasi_s": 44.2,
+  "catatan": "jumlah pip = nomor klip",
+  "klip": [
+   {
+    "no": 1,
+    "nama": "detect_riser_hit",
+    "file": "detect\\detect_riser_hit__fs647430.mp3",
+    "judul": "Riser Hit sfx 034.wav",
+    "alasan": "puncak di 11% durasi, crest 13.1 - attack paling tajam"
+   },
+   {
+    "no": 2,
+    "nama": "detect_boom",
+    "file": "detect\\detect_boom__fs559529.mp3",
+    "judul": "Cinematic Boom",
+    "alasan": "'Cinematic Boom' bass 0.96, puncak di frame pertama"
+   },
+   {
+    "no": 3,
+    "nama": "detect_braam",
+    "file": "detect\\detect_braam__fs647712.mp3",
+    "judul": "Braam",
+    "alasan": "braam ala Inception - bass 0.89, lebih 'besar'"
+   },
+   {
+    "no": 4,
+    "nama": "detect_piano",
+    "file": "detect\\detect_piano__fs636194.mp3",
+    "judul": "Piano Stinger 3a",
+    "alasan": "piano stinger horror - bernada, bukan cuma dentum"
+   },
+   {
+    "no": 5,
+    "nama": "detect_jumpscare",
+    "file": "detect\\detect_jumpscare__fs846789.mp3",
+    "judul": "Sting/jumpscare",
+    "alasan": "tag jumpscare+horror langsung"
+   }
+  ]
+ },
+ "chase": {
+  "file": "_preview/reel_chase.mp3",
+  "durasi_s": 106.0,
+  "catatan": "jumlah pip = nomor klip",
+  "klip": [
+   {
+    "no": 1,
+    "nama": "chase_dark_action",
+    "file": "chase\\chase_dark_action__fs155139.mp3",
+    "judul": "Action music loop with dark ambient drones",
+    "alasan": "loop 29s gap 4.9dB, tag action+chase+dark+drone, 10.5rb unduhan"
+   },
+   {
+    "no": 2,
+    "nama": "chase_maze",
+    "file": "chase\\chase_maze__fs558250.mp3",
+    "judul": "Lost in the Maze.wav",
+    "alasan": "'Lost in the Maze' 29.5s gap 0.0dB - paling mulus, bass 0.87"
+   },
+   {
+    "no": 3,
+    "nama": "chase_tension_syn",
+    "file": "chase\\chase_tension_syn__fs727059.mp3",
+    "judul": "Tension Synth Loop",
+    "alasan": "'Tension Synth Loop' 16s gap 0.0dB"
+   },
+   {
+    "no": 4,
+    "nama": "chase_orchestral",
+    "file": "chase\\chase_orchestral__fs755409.mp3",
+    "judul": "Orchestral Loop 2",
+    "alasan": "orkestra 40s - kalau mau lebih sinematik"
+   },
+   {
+    "no": 5,
+    "nama": "chase_electro",
+    "file": "chase\\chase_electro__fs550933.mp3",
+    "judul": "The chase - 27:12:2020, 19.mp3",
+    "alasan": "electro/techno 59.5s - kalau mau tempo tinggi"
+   },
+   {
+    "no": 6,
+    "nama": "chase_shadow",
+    "file": "chase\\chase_shadow__fs641099.mp3",
+    "judul": "Shadow dancers",
+    "alasan": "'Shadow dancers' tag creature+creepy+dark 56s"
+   },
+   {
+    "no": 7,
+    "nama": "chase_8bit",
+    "file": "chase\\chase_8bit__fs405220.mp3",
+    "judul": "Playground Runaround",
+    "alasan": "skor tertinggi TAPI chiptune 8bit - hanya kalau mau retro"
+   }
+  ]
+ },
+ "heartbeat": {
+  "file": "_preview/reel_heartbeat.mp3",
+  "durasi_s": 55.8,
+  "catatan": "jumlah pip = nomor klip",
+  "klip": [
+   {
+    "no": 1,
+    "nama": "heartbeat_1",
+    "file": "heartbeat\\heartbeat_1__fs369017.mp3",
+    "judul": "Heartbeats 61.wav",
+    "alasan": "skor 100.0 | 125.83s | periode 1.0s/0.99 | loop gap 5.9dB"
+   },
+   {
+    "no": 2,
+    "nama": "heartbeat_2",
+    "file": "heartbeat\\heartbeat_2__fs332821.mp3",
+    "judul": "heartbeat-60bpm.wav",
+    "alasan": "skor 100.0 | 30.02s | periode 1.0s/0.90 | loop gap 50.5dB"
+   },
+   {
+    "no": 3,
+    "nama": "heartbeat_3",
+    "file": "heartbeat\\heartbeat_3__fs250846.mp3",
+    "judul": "Hearbeat sound (with gurgling)",
+    "alasan": "skor 100.0 | 168.23s | periode 0.86s/0.93 | loop gap 4.1dB"
+   },
+   {
+    "no": 4,
+    "nama": "heartbeat_4",
+    "file": "heartbeat\\heartbeat_4__fs688735.mp3",
+    "judul": "Heartbeat 97 BPM",
+    "alasan": "skor 100.0 | 9.9s | periode 1.24s/0.87 | loop gap 181.7dB"
+   }
+  ]
+ },
+ "drone": {
+  "file": "_preview/reel_drone.mp3",
+  "durasi_s": 59.9,
+  "catatan": "jumlah pip = nomor klip",
+  "klip": [
+   {
+    "no": 1,
+    "nama": "drone_1",
+    "file": "drone\\drone_1__fs856213.mp3",
+    "judul": "Steel Cathedral Cinematic Drone by Mantice",
+    "alasan": "skor 95.6 | 168.91s | periode 0.32s/0.10 | loop gap 0.0dB"
+   },
+   {
+    "no": 2,
+    "nama": "drone_2",
+    "file": "drone\\drone_2__fs860847.mp3",
+    "judul": "Dark Whisper Collage with Reverb",
+    "alasan": "skor 93.1 | 73.92s | periode 0.7s/0.13 | loop gap 0.3dB"
+   },
+   {
+    "no": 3,
+    "nama": "drone_3",
+    "file": "drone\\drone_3__fs826597.mp3",
+    "judul": "Dark Tension Drone",
+    "alasan": "skor 87.1 | 19.2s | periode 0.3s/0.35 | loop gap 2.6dB"
+   },
+   {
+    "no": 4,
+    "nama": "drone_4",
+    "file": "drone\\drone_4__fs851226.mp3",
+    "judul": "droning air circulation system",
+    "alasan": "skor 86.6 | 47.57s | periode 1.28s/0.08 | loop gap 0.4dB"
+   }
+  ]
+ },
+ "alarm": {
+  "file": "_preview/reel_alarm.mp3",
+  "durasi_s": 52.8,
+  "catatan": "jumlah pip = nomor klip",
+  "klip": [
+   {
+    "no": 1,
+    "nama": "alarm_1",
+    "file": "alarm\\alarm_1__fs819716.mp3",
+    "judul": "Sci-Fi/Horror Alarm 4",
+    "alasan": "skor 97.3 | 8.05s | periode 1.0s/0.77 | loop gap 1.8dB"
+   },
+   {
+    "no": 2,
+    "nama": "alarm_2",
+    "file": "alarm\\alarm_2__fs381957.mp3",
+    "judul": "Security Alarm",
+    "alasan": "skor 97.0 | 12.83s | periode 1.6s/0.87 | loop gap 24.2dB"
+   },
+   {
+    "no": 3,
+    "nama": "alarm_3",
+    "file": "alarm\\alarm_3__fs859449.mp3",
+    "judul": "Alien Ship Alarm - Escape Detected",
+    "alasan": "skor 95.3 | 15.02s | periode 1.5s/0.55 | loop gap 2.2dB"
+   },
+   {
+    "no": 4,
+    "nama": "alarm_4",
+    "file": "alarm\\alarm_4__fs673061.mp3",
+    "judul": "deathalarm2.mp3",
+    "alasan": "skor 93.3 | 36.19s | periode 1.35s/0.83 | loop gap 69.5dB"
+   }
+  ]
+ },
+ "relief": {
+  "file": "_preview/reel_relief.mp3",
+  "durasi_s": 14.7,
+  "catatan": "jumlah pip = nomor klip",
+  "klip": [
+   {
+    "no": 1,
+    "nama": "relief_1",
+    "file": "relief\\relief_1__fs543669.mp3",
+    "judul": "breathe.mp3",
+    "alasan": "skor 100.0 | 3.03s | periode 0.3s/0.41 | loop gap 12.1dB"
+   },
+   {
+    "no": 2,
+    "nama": "relief_2",
+    "file": "relief\\relief_2__fs668830.mp3",
+    "judul": "Blowing raspberry singing exercise 2",
+    "alasan": "skor 62.4 | 1.06s | periode 0.0s/0.00 | loop gap 1.4dB"
+   },
+   {
+    "no": 3,
+    "nama": "relief_3",
+    "file": "relief\\relief_3__fs632229.mp3",
+    "judul": "Female OOOFFFF sound",
+    "alasan": "skor 56.3 | 1.83s | periode 0.0s/0.00 | loop gap 1.4dB"
+   },
+   {
+    "no": 4,
+    "nama": "relief_4",
+    "file": "relief\\relief_4__fs666212.mp3",
+    "judul": "Trailer transition SFX",
+    "alasan": "skor 56.0 | 4.91s | periode 0.3s/0.21 | loop gap 15.2dB"
+   }
+  ]
+ }
+}

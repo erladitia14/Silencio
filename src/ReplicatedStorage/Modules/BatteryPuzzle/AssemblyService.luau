@@ -235,7 +235,18 @@ function AssemblyService.canPickup(player: Player, part: BasePart): boolean
 	return true
 end
 
+-- Hentikan loop penggerak engine & bersihkan resource runtime-nya.
+local function stopEngineRuntime(part: BasePart)
+	local rt = engineLockRuntimes[part]
+	if not rt then return end
+	if rt.conn then
+		rt.conn:Disconnect()
+	end
+	engineLockRuntimes[part] = nil
+end
+
 local function clearEngineCarrierWelds(player: Player)
+	-- Sisa weld dari versi lama (kalau ada) dibersihkan supaya pemain tidak nyangkut.
 	local char = player.Character
 	if not char then return end
 	for _, inst in ipairs(char:GetDescendants()) do
@@ -256,13 +267,18 @@ local function detachPlayer(player: Player)
 		local rt = engineLockRuntimes[part]
 		if rt then
 			rt.offsets[player] = nil
-			if next(rt.offsets) == nil and rt.conn then
-				rt.conn:Disconnect()
-				rt.conn = nil
+			-- Driver utama lepas -> alihkan driver ke carrier yang tersisa.
+			if rt.driver == player then
+				local ec = engineCarriers[part]
+				rt.driver = ec and (ec.left or ec.right) or nil
+			end
+			if next(rt.offsets) == nil then
+				stopEngineRuntime(part)
 			end
 		end
 	end
 
+	-- Kembalikan properti fisik karakter ke kondisi semula.
 	local hum = getHumanoid(player)
 	if hum and savedSpeed[player] then
 		hum.WalkSpeed = savedSpeed[player].walk
@@ -275,7 +291,7 @@ local function detachPlayer(player: Player)
 	if char then
 		char:SetAttribute("CarryingAssemblyPart", nil)
 		local root = char:FindFirstChild("HumanoidRootPart")
-		if root then
+		if root and root:IsA("BasePart") then
 			root.Massless = false
 		end
 	end
@@ -283,50 +299,32 @@ local function detachPlayer(player: Player)
 	CarryAnimator.stop(player)
 end
 
-local function getAttachmentOffset(part: BasePart, side: "Left" | "Right"): CFrame?
-	local info = pickups[part]
-	if not info then return nil end
-	local att = (side == "Left") and info.attachments.left or info.attachments.right
-	if not att then return nil end
-
-	-- Diukur dari rig Left/Right Aer relatif ke Attachment Engine.
-	-- Karakter dipindah ke sisi engine; rotasi/arah Engine sendiri tidak berubah.
+-- Posisi carrier RELATIF terhadap Attachment sisi (world), diukur dari rig Aer.
+-- Dipakai untuk menempatkan pemain di sisi engine SAAT mulai membawa (snap sekali).
+local function getCarrierSnapOffset(side: "Left" | "Right"): CFrame
 	if side == "Left" then
 		return CFrame.new(-1.2783, -0.0648, 0.0032) * CFrame.Angles(0, math.rad(-90), 0)
 	end
 	return CFrame.new(0.9781, -0.0648, 0.0032) * CFrame.Angles(0, math.rad(90), 0)
 end
 
+-- TANPA WELD. Engine tetap Anchored & rotasinya DIKUNCI (tidak ikut muter arah player).
+-- Engine hanya BERGESER mengikuti perpindahan carrier utama; pemain jalan bebas
+-- sehingga animasi jalan tetap main.
 local function attachEngineCarrier(part: BasePart, player: Player, side: "Left" | "Right")
 	local info = pickups[part]
 	if not info then return false end
 	local att = (side == "Left") and info.attachments.left or info.attachments.right
-	local offset = getAttachmentOffset(part, side)
-	if not (att and offset) then return false end
+	if not att then return false end
 
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not root then return false end
 
-	root.Massless = true
-	local hum = getHumanoid(player)
-	if hum then
-		hum.AutoRotate = false
-	end
-	part.Anchored = true -- Engine dibawa dengan translasi saja; rotasinya dikunci.
+	part.Anchored = true -- Engine tidak jatuh; digerakkan lewat CFrame.
 
-	-- Attachment adalah posisi pegangan/prompt. Weld tetap harus Part↔Part,
-	-- jadi C1 dikonversi dari CFrame lokal attachment terhadap Engine.
-	local weld = Instance.new("Weld")
-	weld.Name = "EngineCarryWeld_" .. side
-	weld.Part0 = root
-	weld.Part1 = part
-	weld.C0 = CFrame.new()
-	weld.C1 = att.CFrame * offset
-	weld.Parent = root
-
-	-- Snap karakter ke pegangan; tidak menyentuh/merotasi CFrame Engine.
-	root.CFrame = att.WorldCFrame * offset
+	-- Snap pemain ke sisi engine sekali di awal (biar berdiri di posisi pegangan).
+	root.CFrame = att.WorldCFrame * getCarrierSnapOffset(side)
 
 	local rt = engineLockRuntimes[part]
 	if not rt then
@@ -337,37 +335,52 @@ local function attachEngineCarrier(part: BasePart, player: Player, side: "Left" 
 		}
 		engineLockRuntimes[part] = rt
 	end
-	rt.offsets[player] = offset
+	-- Simpan delta WORLD engine terhadap carrier ini saat mulai bawa.
+	rt.offsets[player] = CFrame.new(part.Position - root.Position)
 
-	-- Saat ada input, Engine bergerak TRANSLASI mengikuti carrier utama.
-	-- Rotasi Engine selalu dikembalikan ke orientasi awal (tidak muter ikut player).
 	if not rt.driver then
 		rt.driver = player
 	end
 
+	-- Terbitkan JUMLAH carrier ke part, supaya CLIENT bisa memutuskan
+	-- menampilkan prompt "Help Carry" secara lokal (Enabled global di server
+	-- bikin carrier sendiri ikut melihat prompt itu).
+	local ecNow = engineCarriers[part]
+	local count = 0
+	if ecNow then
+		if ecNow.left then count += 1 end
+		if ecNow.right then count += 1 end
+	end
+	part:SetAttribute("EngineCarrierCount", count)
+
+	-- Loop: engine mengikuti PERGESERAN driver (translasi), rotasi tetap terkunci.
 	if not rt.conn then
 		local RunService = game:GetService("RunService")
-		rt.conn = RunService.Heartbeat:Connect(function(dt)
+		local lastDriverPos: Vector3? = nil
+		rt.conn = RunService.Heartbeat:Connect(function()
 			local ec = engineCarriers[part]
-			if not ec or not part.Parent then return end
+			if not ec or not part.Parent then
+				if rt.conn then rt.conn:Disconnect(); rt.conn = nil end
+				return
+			end
 
+			-- Pilih driver aktif (carrier utama; fallback ke yang tersisa).
 			local driver = rt.driver
 			if driver ~= ec.left and driver ~= ec.right then
 				driver = ec.left or ec.right
 				rt.driver = driver
+				lastDriverPos = nil
 			end
 
-			local driverHum = driver and getHumanoid(driver)
-			if driverHum and rt.lockedRotation then
-				local move = driverHum.MoveDirection
-				if move.Magnitude > 0.01 then
-					local delta = move.Unit * driverHum.WalkSpeed * dt
-					part.CFrame = CFrame.new(part.Position + delta) * rt.lockedRotation
-				else
-					part.CFrame = CFrame.new(part.Position) * rt.lockedRotation
+			local dChar = driver and driver.Character
+			local dRoot = dChar and dChar:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if dRoot and rt.lockedRotation then
+				if lastDriverPos then
+					local delta = dRoot.Position - lastDriverPos
+					-- Hanya translasi horizontal; abaikan komponen naik-turun bob animasi.
+					part.CFrame = CFrame.new(part.Position + Vector3.new(delta.X, 0, delta.Z)) * rt.lockedRotation
 				end
-			elseif rt.lockedRotation then
-				part.CFrame = CFrame.new(part.Position) * rt.lockedRotation
+				lastDriverPos = dRoot.Position
 			end
 		end)
 	end
@@ -545,6 +558,8 @@ function AssemblyService.drop(player: Player)
 		local ec = engineCarriers[part]
 		local otherPlayer = (ec.left == player) and ec.right or ((ec.right == player) and ec.left or nil)
 
+		part:SetAttribute("EngineCarrierCount", 0) -- akan di-set ulang di bawah sesuai kondisi
+
 		if otherPlayer and (otherPlayer.Parent ~= nil or otherPlayer.Character ~= nil) then
 			-- ADA PEMAIN LAIN: TETAP BAWA SENDIRI JANGAN JATOH (Keputusan Aer #1)
 			-- 1. Lepas pemain yang drop
@@ -571,12 +586,15 @@ function AssemblyService.drop(player: Player)
 			if info and info.helpPrompt then
 				info.helpPrompt.Enabled = true
 			end
+			part:SetAttribute("EngineCarrierCount", 1) -- tinggal 1 carrier -> Help Carry boleh muncul
 
 			AssemblyService.refreshPrompts()
 			return
 		else
 			-- TIDAK ADA PEMAIN LAIN: Engine jatuh ke tanah di depan pemain
 			engineCarriers[part] = nil
+			stopEngineRuntime(part)
+			part:SetAttribute("EngineCarrierCount", 0)
 			detachPlayer(player)
 
 			for _, child in ipairs(part:GetChildren()) do
@@ -676,6 +694,13 @@ local function tryInsert(player: Player, slotPart: BasePart): boolean
 		engineCarriers[carried] = nil
 	else
 		detachPlayer(player)
+	end
+	-- Hentikan loop penggerak engine & reset atribut supaya prompt/anim tidak nyangkut.
+	stopEngineRuntime(carried)
+	carried:SetAttribute("EngineCarrierCount", 0)
+	local carriedInfo = pickups[carried]
+	if carriedInfo and carriedInfo.helpPrompt then
+		carriedInfo.helpPrompt.Enabled = false
 	end
 	pickups[carried] = nil
 

@@ -1,0 +1,226 @@
+{
+ "notice": {
+  "file": "_preview/reel_notice.mp3",
+  "durasi_s": 15.6,
+  "catatan": "jumlah pip = nomor klip",
+  "klip": [
+   {
+    "no": 1,
+    "nama": "notice_surprised",
+    "file": "notice\\notice_surprised__fs547366.mp3",
+    "judul": "monster_surprised.ogg",
+    "alasan": "'monster_surprised' centroid 471Hz - kaget, 2.1s"
+   },
+   {
+    "no": 2,
+    "nama": "notice_what",
+    "file": "notice\\notice_what__fs432198.mp3",
+    "judul": "Monster Says &quot;What&#x27;s That?&quot;",
+    "alasan": "'Monster Says What's That' centroid 236Hz - paling berat"
+   },
+   {
+    "no": 3,
+    "nama": "notice_gasp",
+    "file": "notice\\notice_gasp__fs542010.mp3",
+    "judul": "GASP_Monster Screech_1.wav",
+    "alasan": "'GASP_Monster Screech' - tarikan napas + screech"
+   },
+   {
+    "no": 4,
+    "nama": "notice_wake",
+    "file": "notice\\notice_wake__fs588666.mp3",
+    "judul": "WAKE UP SCARED.mp3",
+    "alasan": "'WAKE UP SCARED' centroid 113Hz, 2rb unduhan"
+   }
+  ]
+ },
+ "shriek": {
+  "file": "_preview/reel_shriek.mp3",
+  "durasi_s": 16.7,
+  "catatan": "jumlah pip = nomor klip",
+  "klip": [
+   {
+    "no": 1,
+    "nama": "shriek_alien",
+    "file": "shriek\\shriek_alien__fs748258.mp3",
+    "judul": "Alien Monster Roaring",
+    "alasan": "'Alien Monster Roaring' skor tertinggi 72.5, 2.5s"
+   },
+   {
+    "no": 2,
+    "nama": "shriek_screech",
+    "file": "shriek\\shriek_screech__fs807383.mp3",
+    "judul": "Monster screech",
+    "alasan": "'Monster screech' harm 0.78 - jelas vokal, 3.8s"
+   },
+   {
+    "no": 3,
+    "nama": "shriek_scream",
+    "file": "shriek\\shriek_scream__fs427412.mp3",
+    "judul": "Monster Scream",
+    "alasan": "'Monster Scream' 2.0s, 922 unduhan"
+   },
+   {
+    "no": 4,
+    "nama": "shriek_attack",
+    "file": "shriek\\shriek_attack__fs556273.mp3",
+    "judul": "attack cannibal beast",
+    "alasan": "'attack cannibal beast' - saat menyerang"
+   }
+  ]
+ },
+ "laugh": {
+  "file": "_preview/reel_laugh.mp3",
+  "durasi_s": 45.7,
+  "catatan": "jumlah pip = nomor klip",
+  "klip": [
+   {
+    "no": 1,
+    "nama": "laugh_spooky",
+    "file": "laugh\\laugh_spooky__fs650620.mp3",
+    "judul": "Spooky Laugh",
+    "alasan": "'Spooky Laugh' centroid 435Hz periode 0.28s - terberat"
+   },
+   {
+    "no": 2,
+    "nama": "laugh_clown_01",
+    "file": "laugh\\laugh_clown_01__fs808417.mp3",
+    "judul": "Clown Laugh 01",
+    "alasan": "'Clown Laugh 01' centroid 704Hz - badut asli"
+   },
+   {
+    "no": 3,
+    "nama": "laugh_matt",
+    "file": "laugh\\laugh_matt__fs131009.mp3",
+    "judul": "The Matt Laugh",
+    "alasan": "'The Matt Laugh' 9.1s periode 0.34s"
+   },
+   {
+    "no": 4,
+    "nama": "laugh_maniacal",
+    "file": "laugh\\laugh_maniacal__fs857071.mp3",
+    "judul": "Maniacal Laughter Low Quality",
+    "alasan": "'Maniacal Laughter' periode 0.33s - gila"
+   },
+   {
+    "no": 5,
+    "nama": "laugh_multiple",
+    "file": "laugh\\laugh_multiple__fs732921.mp3",
+    "judul": "multiple clown laughs",
+    "alasan": "'multiple clown laughs' - beberapa badut"
+   }
+  ]
+ },
+ "vocal": {
+  "file": "_preview/reel_vocal.mp3",
+  "durasi_s": 26.7,
+  "catatan": "jumlah pip = nomor klip",
+  "klip": [
+   {
+    "no": 1,
+    "nama": "vocal_snarl",
+    "file": "vocal\\vocal_snarl__fs442815.mp3",
+    "judul": "Goblin Snarl",
+    "alasan": "'Goblin Snarl' centroid 475Hz, 3rb unduhan, 2.0s"
+   },
+   {
+    "no": 2,
+    "nama": "vocal_angry",
+    "file": "vocal\\vocal_angry__fs403483.mp3",
+    "judul": "Monster / alien angry 02",
+    "alasan": "'Monster / alien angry 02' 16.2s - bisa loop"
+   },
+   {
+    "no": 3,
+    "nama": "vocal_growl",
+    "file": "vocal\\vocal_growl__fs442817.mp3",
+    "judul": "Goblin Growl",
+    "alasan": "'Goblin Growl' 0.78s centroid 323Hz - paling pendek"
+   },
+   {
+    "no": 4,
+    "nama": "vocal_zombie",
+    "file": "vocal\\vocal_zombie__fs618115.mp3",
+    "judul": "Zombie Monster growl and scream",
+    "alasan": "'Zombie Monster growl and scream' 35.9s"
+   }
+  ]
+ },
+ "breath": {
+  "file": "_preview/reel_breath.mp3",
+  "durasi_s": 21.6,
+  "catatan": "jumlah pip = nomor klip",
+  "klip": [
+   {
+    "no": 1,
+    "nama": "breath_zombie_pant",
+    "file": "breath\\breath_zombie_pant__fs483791.mp3",
+    "judul": "Zombie Pant 1_1",
+    "alasan": "'Zombie Pant' harm 0.85 centroid 204Hz - 1.06s"
+   },
+   {
+    "no": 2,
+    "nama": "breath_heavy",
+    "file": "breath\\breath_heavy__fs163383.mp3",
+    "judul": "Heavy Breathing",
+    "alasan": "'Heavy Breathing' periode 0.84s - 24rb unduhan"
+   },
+   {
+    "no": 3,
+    "nama": "breath_deep",
+    "file": "breath\\breath_deep__fs422342.mp3",
+    "judul": "heavy breathing.wav",
+    "alasan": "'heavy breathing' centroid 93Hz - paling gelap"
+   },
+   {
+    "no": 4,
+    "nama": "breath_animal",
+    "file": "breath\\breath_animal__fs350414.mp3",
+    "judul": "Animal Heavy Breathing",
+    "alasan": "'Animal Heavy Breathing' periode 1.00s, 27s - loop"
+   }
+  ]
+ },
+ "growl": {
+  "file": "_preview/reel_growl.mp3",
+  "durasi_s": 45.0,
+  "catatan": "jumlah pip = nomor klip",
+  "klip": [
+   {
+    "no": 1,
+    "nama": "growl_rumble",
+    "file": "growl\\growl_rumble__fs132873.mp3",
+    "judul": "Monster Low Rumble 2.wav",
+    "alasan": "'Monster Low Rumble 2' centroid 34Hz - PALING berat"
+   },
+   {
+    "no": 2,
+    "nama": "growl_large",
+    "file": "growl\\growl_large__fs699932.mp3",
+    "judul": "Growl - Large Creature, Fantasy.wav",
+    "alasan": "'Growl - Large Creature' centroid 63Hz, 1.5s"
+   },
+   {
+    "no": 3,
+    "nama": "growl_short",
+    "file": "growl\\growl_short__fs797291.mp3",
+    "judul": "Monster Growls",
+    "alasan": "'Monster Growls' centroid 137Hz, 8.9s"
+   },
+   {
+    "no": 4,
+    "nama": "growl_snores",
+    "file": "growl\\growl_snores__fs744790.mp3",
+    "judul": "Monster growls and snores",
+    "alasan": "'Monster growls and snores' 64.7s centroid 75Hz"
+   },
+   {
+    "no": 5,
+    "nama": "growl_trex",
+    "file": "growl\\growl_trex__fs688734.mp3",
+    "judul": "T Rex Closed Mouth Vocalizations.wav",
+    "alasan": "'T Rex Closed Mouth' centroid 56Hz, 41s"
+   }
+  ]
+ }
+}

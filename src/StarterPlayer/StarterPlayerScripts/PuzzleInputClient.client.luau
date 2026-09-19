@@ -113,10 +113,33 @@ local function isCarrying(): boolean
 	return (bat == true) or (asm ~= nil and asm ~= false)
 end
 
+-- ----------------------------------------------------------------------
+-- Sembunyikan prompt "Help Carry" dari pemain yang SEDANG membawa engine.
+-- ProximityPrompt.Enabled bersifat global di server, jadi carrier ikut melihat
+-- prompt-nya. Di sisi client kita matikan lokal selama dia bawa engine.
+-- ----------------------------------------------------------------------
+local function isCarryingEngine(): boolean
+	local char = player.Character
+	if not char then return false end
+	return char:GetAttribute("CarryingAssemblyPart") == "Engine"
+end
+
+local function refreshHelpPromptVisibility()
+	local hideForMe = isCarryingEngine()
+	for _, inst in ipairs(workspace:GetDescendants()) do
+		if inst:IsA("ProximityPrompt") and inst.Name == "EngineHelpCarryPrompt" then
+			if hideForMe then
+				inst.Enabled = false
+			end
+		end
+	end
+end
+
 task.spawn(function()
 	while true do
 		hintLabel.Visible = isCarrying()
-		task.wait(0.2)
+		refreshHelpPromptVisibility()
+		task.wait(0.15)
 	end
 end)
 

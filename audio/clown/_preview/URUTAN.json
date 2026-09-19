@@ -1,0 +1,249 @@
+{
+ "laugh": {
+  "file": "_preview/reel_laugh.mp3",
+  "durasi_s": 46.6,
+  "catatan": "jumlah pip di awal = nomor klip",
+  "klip": [
+   {
+    "no": 1,
+    "nama": "laugh_deepman_A",
+    "file": "laugh\\laugh_deepman_A__fs400503.mp3",
+    "alasan": "tawa lelaki dewasa f0 ~80Hz - paling 'badan besar' tanpa diolah"
+   },
+   {
+    "no": 2,
+    "nama": "laugh_deepman_B",
+    "file": "laugh\\laugh_deepman_B__fs350679.mp3",
+    "alasan": "tawa jahat berat 2.7s, ringkas untuk trigger"
+   },
+   {
+    "no": 3,
+    "nama": "laugh_monster",
+    "file": "laugh\\laugh_monster__fs500028.mp3",
+    "alasan": "tawa monster f0 ~101Hz, kalau mau lebih non-manusia"
+   },
+   {
+    "no": 4,
+    "nama": "laugh_darkhall",
+    "file": "laugh\\laugh_darkhall__fs381837.mp3",
+    "alasan": "bass 0.91, centroid 135Hz - paling gelap, enak untuk jarak jauh"
+   },
+   {
+    "no": 5,
+    "nama": "laugh_clown_real",
+    "file": "laugh\\laugh_clown_real__fs808416__x0.7.mp3",
+    "alasan": "TAWA BADUT ASLI tapi tipis (f0 385Hz) - turunkan ke 0.7"
+   },
+   {
+    "no": 6,
+    "nama": "laugh_clown_pop",
+    "file": "laugh\\laugh_clown_pop__fs263708__x0.7.mp3",
+    "alasan": "badut asli, 16rb unduhan, juga tipis - turunkan ke 0.7"
+   },
+   {
+    "no": 7,
+    "nama": "laugh_clown_crazy",
+    "file": "laugh\\laugh_clown_crazy__fs609781__x0.75.mp3",
+    "alasan": "tag clown+crazy+sinister, bass 0.49 - 0.75 sudah berat"
+   }
+  ]
+ },
+ "footstep": {
+  "file": "_preview/reel_footstep.mp3",
+  "durasi_s": 32.9,
+  "catatan": "jumlah pip di awal = nomor klip",
+  "klip": [
+   {
+    "no": 1,
+    "nama": "step_thud_A",
+    "file": "footstep\\step_thud_A__fs826333.mp3",
+    "alasan": "bass 1.00 centroid 61Hz, tag eerie/fantasy - TIDAK metalik"
+   },
+   {
+    "no": 2,
+    "nama": "step_thud_B",
+    "file": "footstep\\step_thud_B__fs841139.mp3",
+    "alasan": "bass 0.98, tag thud/footsteps/impact murni"
+   },
+   {
+    "no": 3,
+    "nama": "step_floor",
+    "file": "footstep\\step_floor__fs336490.mp3",
+    "alasan": "0.92s gedebuk lantai kayu - paling pas untuk per-langkah"
+   },
+   {
+    "no": 4,
+    "nama": "step_giant",
+    "file": "footstep\\step_giant__fs622737.mp3",
+    "alasan": "tag giant/stomp/crush, loop 25s"
+   },
+   {
+    "no": 5,
+    "nama": "step_robot",
+    "file": "footstep\\step_robot__fs813053.mp3",
+    "alasan": "skor tertinggi TAPI metalik - hanya kalau badutnya mekanis"
+   }
+  ]
+ },
+ "breath": {
+  "file": "_preview/reel_breath.mp3",
+  "durasi_s": 39.4,
+  "catatan": "jumlah pip di awal = nomor klip",
+  "klip": [
+   {
+    "no": 1,
+    "nama": "breath_labored",
+    "file": "breath\\breath_labored__fs683653.mp3",
+    "alasan": "napas lelaki payah/berat - persis 'gendut kehabisan napas'"
+   },
+   {
+    "no": 2,
+    "nama": "breath_monster",
+    "file": "breath\\breath_monster__fs574208.mp3",
+    "alasan": "napas monster 42s, untuk ambience idle"
+   },
+   {
+    "no": 3,
+    "nama": "breath_creature",
+    "file": "breath\\breath_creature__fs546400.mp3",
+    "alasan": "skor akustik tertinggi 80.1, napas+geram 5.5s"
+   },
+   {
+    "no": 4,
+    "nama": "breath_moaning",
+    "file": "breath\\breath_moaning__fs624592.mp3",
+    "alasan": "napas + erangan monster 64s"
+   }
+  ]
+ },
+ "growl": {
+  "file": "_preview/reel_growl.mp3",
+  "durasi_s": 15.3,
+  "catatan": "jumlah pip di awal = nomor klip",
+  "klip": [
+   {
+    "no": 1,
+    "nama": "growl_short_A",
+    "file": "growl\\growl_short_A__fs559953.mp3",
+    "alasan": "1.25s bass 0.99 - geraman pendek untuk TargetAcquired"
+   },
+   {
+    "no": 2,
+    "nama": "growl_short_B",
+    "file": "growl\\growl_short_B__fs699932.mp3",
+    "alasan": "1.49s 'Growl - Large Creature'"
+   },
+   {
+    "no": 3,
+    "nama": "growl_deep",
+    "file": "growl\\growl_deep__fs222523.mp3",
+    "alasan": "5.8s 'Deep Monster Growl', 2.5rb unduhan"
+   },
+   {
+    "no": 4,
+    "nama": "growl_roar",
+    "file": "growl\\growl_roar__fs354182.mp3",
+    "alasan": "2.85s 'Creature Roar' untuk serangan"
+   }
+  ]
+ },
+ "hit": {
+  "file": "_preview/reel_hit.mp3",
+  "durasi_s": 22.7,
+  "catatan": "jumlah pip di awal = nomor klip",
+  "klip": [
+   {
+    "no": 1,
+    "nama": "hit_gore",
+    "file": "hit\\hit_gore__fs587269.mp3",
+    "alasan": "bass 0.99 centroid 82Hz - impact terberat"
+   },
+   {
+    "no": 2,
+    "nama": "hit_stab",
+    "file": "hit\\hit_stab__fs578382.mp3",
+    "alasan": "'Shock Stab' - jumpscare bernada, bukan cuma dentum"
+   },
+   {
+    "no": 3,
+    "nama": "hit_bodyfall",
+    "file": "hit\\hit_bodyfall__fs673424.mp3",
+    "alasan": "2.06s badan jatuh - untuk kematian"
+   },
+   {
+    "no": 4,
+    "nama": "hit_punch",
+    "file": "hit\\hit_punch__fs369323.mp3",
+    "alasan": "pukulan berat untuk CombatManager"
+   }
+  ]
+ },
+ "clownhorn": {
+  "file": "_preview/reel_clownhorn.mp3",
+  "durasi_s": 27.7,
+  "catatan": "jumlah pip di awal = nomor klip",
+  "klip": [
+   {
+    "no": 1,
+    "nama": "horn_clown_A",
+    "file": "clownhorn\\horn_clown_A__fs251611.mp3",
+    "alasan": "'Clown_Horn.mp3' 1.05s, 6rb unduhan - klakson badut paling bersih"
+   },
+   {
+    "no": 2,
+    "nama": "horn_clown_B",
+    "file": "clownhorn\\horn_clown_B__fs588570.mp3",
+    "alasan": "'Clown Horn (Single Honk)' 1.61s"
+   },
+   {
+    "no": 3,
+    "nama": "horn_big",
+    "file": "clownhorn\\horn_big__fs342014.mp3",
+    "alasan": "'Horn-Big.mp3' tag clown/funny/oldtime - lebih besar"
+   },
+   {
+    "no": 4,
+    "nama": "horn_many",
+    "file": "clownhorn\\horn_many__fs588591.mp3",
+    "alasan": "'Clown Horn (Many Honks)' 30s - untuk ambience"
+   },
+   {
+    "no": 5,
+    "nama": "horn_big_slow",
+    "file": "clownhorn\\horn_big_slow__fs342014__x0.6.mp3",
+    "alasan": "sama dengan horn_big tapi 0.6x - klakson raksasa"
+   }
+  ]
+ },
+ "ambience": {
+  "file": "_preview/reel_ambience.mp3",
+  "durasi_s": 43.9,
+  "catatan": "jumlah pip di awal = nomor klip",
+  "klip": [
+   {
+    "no": 1,
+    "nama": "amb_circus_march",
+    "file": "ambience\\amb_circus_march__fs556321.mp3",
+    "alasan": "'Nightmarish Circus March' 21.7s - tag carnival/circus/clown"
+   },
+   {
+    "no": 2,
+    "nama": "amb_circus_black",
+    "file": "ambience\\amb_circus_black__fs329789.mp3",
+    "alasan": "'black circus music' 60s, organ/horror/terror"
+   },
+   {
+    "no": 3,
+    "nama": "amb_carousel",
+    "file": "ambience\\amb_carousel__fs126661.mp3",
+    "alasan": "carnival merry-go-round asli 86s, 5.3rb unduhan"
+   },
+   {
+    "no": 4,
+    "nama": "amb_musicbox",
+    "file": "ambience\\amb_musicbox__fs693725.mp3",
+    "alasan": "'Music Box Creepy' 57s"
+   }
+  ]
+ }
+}
