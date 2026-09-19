@@ -34,6 +34,14 @@ Config.StoreKey = Enum.KeyCode.Q
 -- Kosongkan ("") kalau tidak mau pakai animasi sama sekali.
 Config.PanelCarryAnimId = "rbxassetid://71893510212987"
 
+-- PANEL di-weld ke TENGAH DEPAN badan (HumanoidRootPart), bukan satu tangan,
+-- supaya cocok dengan pose angkat 2 tangan. Offset relatif ke HumanoidRootPart.
+-- (-Z = depan badan). Naikin Y biar setinggi dada, mundurin Z biar di depan.
+Config.PanelCarryOffset = CFrame.new(0, 0.4, -2.2) * CFrame.Angles(0, math.rad(90), 0)
+
+-- Engine (berat, satu genggaman) tetap di tangan kanan.
+Config.HandCarryOffset = CFrame.new(0, -0.6, -0.4) * CFrame.Angles(math.rad(90), 0, 0)
+
 -- ============================================================
 -- 2. WAKTU PASANG — harus diam, gak bisa gerak
 -- ============================================================

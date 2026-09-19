@@ -178,9 +178,19 @@ function AssemblyService.pickup(player: Player, part: BasePart): boolean
 	local info = pickups[part]
 	if not info then return false end
 
-	local hand = getHand(player)
 	local hum = getHumanoid(player)
-	if not hand or not hum then return false end
+	if not hum then return false end
+
+	-- Panel = weld ke tengah depan badan (2 tangan). Engine = weld ke tangan kanan.
+	local isPanel = (info.kind == "Panel")
+	local anchor: BasePart?
+	if isPanel then
+		local char = player.Character
+		anchor = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	else
+		anchor = getHand(player)
+	end
+	if not anchor then return false end
 
 	carriedPart[player] = part
 	carriedKind[player] = info.kind
@@ -210,15 +220,15 @@ function AssemblyService.pickup(player: Player, part: BasePart): boolean
 
 	local weld = Instance.new("Weld")
 	weld.Name = "AssemblyCarryWeld"
-	weld.Part0 = hand
+	weld.Part0 = anchor
 	weld.Part1 = part
-	weld.C0 = CFrame.new(0, -0.6, -0.4) * CFrame.Angles(math.rad(90), 0, 0)
+	weld.C0 = isPanel and Config.PanelCarryOffset or Config.HandCarryOffset
 	weld.Parent = part
 
-	part.CFrame = hand.CFrame * weld.C0
+	part.CFrame = anchor.CFrame * weld.C0
 
 	-- Animasi pose angkat 2 tangan: HANYA untuk PANEL.
-	if info.kind == "Panel" then
+	if isPanel then
 		CarryAnimator.play(player)
 	end
 
