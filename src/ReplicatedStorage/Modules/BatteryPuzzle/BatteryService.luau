@@ -73,6 +73,10 @@ function BatteryService.refreshPickupPrompts()
 	end
 
 	-- Juga cek apakah ada pemain yang sedang membawa part assembly (Engine/Panel)
+	if not anyCarrying and isAssemblyCarrying and isAssemblyCarrying() then
+		anyCarrying = true
+	end
+
 	if not anyCarrying then
 		for _, plr in ipairs(Players:GetPlayers()) do
 			local char = plr.Character
@@ -115,6 +119,11 @@ function BatteryService.isAnyoneCarrying(): boolean
 		return true
 	end
 	return false
+end
+
+local isAssemblyCarrying: (() -> boolean)? = nil
+function BatteryService.setAssemblyCarryingChecker(fn: () -> boolean)
+	isAssemblyCarrying = fn
 end
 
 function BatteryService.setCarryChangedCallback(cb: () -> ())

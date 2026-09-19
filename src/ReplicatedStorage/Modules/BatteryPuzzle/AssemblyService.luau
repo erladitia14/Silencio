@@ -49,6 +49,7 @@ local generatorModel: Model? = nil
 local onAssembledCallback: ((genModel: Model) -> ())? = nil
 local onWarnCallback: ((player: Player, message: string) -> ())? = nil
 local onCarryChanged: (() -> ())? = nil
+local isBatteryCarrying: (() -> boolean)? = nil
 
 function AssemblyService.setWarnCallback(cb: (player: Player, message: string) -> ())
 	onWarnCallback = cb
@@ -56,6 +57,17 @@ end
 
 function AssemblyService.setCarryChangedCallback(cb: () -> ())
 	onCarryChanged = cb
+end
+
+function AssemblyService.setBatteryCarryingChecker(fn: () -> boolean)
+	isBatteryCarrying = fn
+end
+
+function AssemblyService.isAnyoneCarrying(): boolean
+	for _ in pairs(carriedPart) do
+		return true
+	end
+	return false
 end
 
 local function warn_(player: Player, message: string)
@@ -116,6 +128,10 @@ function AssemblyService.refreshPrompts()
 	end
 
 	-- Juga cek apakah ada pemain yang sedang membawa baterai
+	if not anyCarrying and isBatteryCarrying and isBatteryCarrying() then
+		anyCarrying = true
+	end
+
 	if not anyCarrying then
 		for _, plr in ipairs(Players:GetPlayers()) do
 			local char = plr.Character

@@ -80,6 +80,11 @@ BatteryService.setCarryChangedCallback(function()
 	AssemblyService.refreshPrompts()
 end)
 
+-- Hubungkan checker carry assembly: baterai tidak boleh diambil saat bawa assembly
+BatteryService.setAssemblyCarryingChecker(function()
+	return AssemblyService.isAnyoneCarrying()
+end)
+
 -- BatteryService
 BatteryService.start()
 

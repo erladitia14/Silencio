@@ -61,6 +61,11 @@ AssemblyService.setCarryChangedCallback(function()
 	BatteryService.refreshPickupPrompts()
 end)
 
+-- Hubungkan checker carry baterai: part assembly tidak boleh diambil saat bawa baterai
+AssemblyService.setBatteryCarryingChecker(function()
+	return BatteryService.isAnyoneCarrying()
+end)
+
 -- Tombol Simpan (Q): pemain menaruh part assembly yang sedang dibawa.
 storeEvent.OnServerEvent:Connect(function(player)
 	if AssemblyService.getCarried(player) then
