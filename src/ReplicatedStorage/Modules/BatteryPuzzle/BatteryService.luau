@@ -266,8 +266,6 @@ function BatteryService.pickup(player: Player, battery: BasePart): boolean
 		battery.CanCollide = false
 		battery.CanQuery = false
 		battery.CanTouch = false
-		-- Prompt harus dimatikan eksplisit — ProximityPrompt tetap aktif
-		-- walau part transparan, karena prompt pakai QueryRaycast (bukan CanTouch).
 		local prompt = battery:FindFirstChild("BatteryPickupPrompt")
 		if prompt and prompt:IsA("ProximityPrompt") then
 			prompt.Enabled = false
@@ -304,6 +302,7 @@ function BatteryService.drop(player: Player, reason: string?): boolean
 		battery.Transparency = 0
 		battery.CanCollide = true
 		battery.CanQuery = true
+		battery.CanTouch = true
 	end
 
 	-- Nyalakan prompt lagi supaya bisa diambil kembali
@@ -321,7 +320,7 @@ function BatteryService.drop(player: Player, reason: string?): boolean
 	return true
 end
 
--- Kembalikan ke posisi awal (mati/keluar/respawn)
+-- Recovery: kembalikan ke spawn point asli baterai
 function BatteryService.returnHome(player: Player, reason: string?): boolean
 	local battery = carriedBy[player]
 	if not battery then
@@ -333,12 +332,14 @@ function BatteryService.returnHome(player: Player, reason: string?): boolean
 	if rec then
 		rec.carrier = nil
 		clearCarriedVisual(battery)
+
 		if rec.homeCFrame then
 			battery.CFrame = rec.homeCFrame
 		end
 		battery.Transparency = 0
 		battery.CanCollide = true
 		battery.CanQuery = true
+		battery.CanTouch = true
 	end
 
 	-- Nyalakan prompt lagi supaya bisa diambil kembali
@@ -467,24 +468,12 @@ end
 -- INTERUPSI: kena damage -> jatuh
 -- ============================================================
 
-local function watchDamage(player: Player)
-	local c = player.Character
-	if not c then
-		return
-	end
-	local hum = c:FindFirstChildOfClass("Humanoid")
-	if not hum then
-		return
-	end
-	hum.HealthChanged:Connect(function(newHealth)
-		if not Config.DropOnDamage then
+function BatteryService.attachDamageListener(player: Player, hum: Humanoid)
+	hum.HealthChanged:Connect(function(health)
+		if health <= 0 then
 			return
 		end
 		if not carriedBy[player] then
-			return
-		end
-		-- hanya kalau berkurang
-		if newHealth >= hum.MaxHealth then
 			return
 		end
 		local now = os.clock()
