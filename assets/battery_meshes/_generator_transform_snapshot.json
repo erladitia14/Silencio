@@ -207,5 +207,38 @@
         1
       ]
     }
+  },
+  "update_2026-09-19_engine_moved": {
+    "note": "Engine SUDAH dipindah Aer ke titik AMBIL (pickup). Panel dibiarkan unanchored -> akan jatuh saat play; posisinya sekarang TIDAK dipakai sebagai pickup. TARGET RAKITAN FINAL semua part TETAP dari snapshot awal (relative_to_case), TIDAK berubah.",
+    "engine_pickup_now": {
+      "Position": [
+        80.432,
+        1.741,
+        78.875
+      ],
+      "relToCase": [
+        -16.697,
+        -1.255,
+        -0.042
+      ]
+    },
+    "assembly_targets_relToCase_FINAL": {
+      "Engine": [
+        0.3035,
+        0.2909,
+        -0.0419
+      ],
+      "Panel_01": [
+        0.1887,
+        0.312,
+        2.7837
+      ],
+      "Panel_02": [
+        0.1887,
+        0.312,
+        -2.7858
+      ]
+    },
+    "reminder": "Panel pickup point belum ditentukan Aer (panel bakal jatuh). Tunggu Aer taruh titik ambil Panel, atau AssemblyService spawn pickup dari titik yang Aer tandai."
   }
 }
