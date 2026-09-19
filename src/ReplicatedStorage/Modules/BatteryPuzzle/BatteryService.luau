@@ -122,7 +122,7 @@ local function showCarriedVisual(player: Player, battery: BasePart): BasePart?
 		return nil
 	end
 
-	-- Salinan visual: pastikan prompt DIBUANG dan transparansi 0
+	-- Salinan visual: pastikan prompt DIBUANG, transparansi 0, dan SEMUA tag dicabut
 	local vis = battery:Clone()
 	vis.Name = "CarriedBattery"
 	vis.Transparency = 0 -- JANGAN ikutan transparan dari part asli
@@ -131,6 +131,14 @@ local function showCarriedVisual(player: Player, battery: BasePart): BasePart?
 	vis.CanTouch = false
 	vis.CanQuery = false
 	vis.Massless = true
+
+	-- KRUSIAL: Cabut semua tag CollectionService dari clone!
+	-- Kalau tag "BatteryPickup" terbawa clone, CollectionService akan mentrigger
+	-- registerBattery() baru pada part ini, sehingga muncul ProximityPrompt kedua
+	-- yang menempel di badan/tangan pemain!
+	for _, tag in ipairs(CollectionService:GetTags(vis)) do
+		CollectionService:RemoveTag(vis, tag)
+	end
 
 	-- Hapus semua prompt agar tidak melayang di badan pemain
 	for _, d in ipairs(vis:GetDescendants()) do
@@ -202,8 +210,13 @@ function BatteryService.pickup(player: Player, battery: BasePart): boolean
 	-- efek
 	applyCarryEffects(player)
 
-	-- visual: sembunyikan asli + MATIKAN prompt (bukan cuma transparansi)
+	-- visual: buat salinan visual di tangan DULUAN sebelum part asli disembunyikan
 	if Config.HideOriginalWhileCarried then
+		local vis = showCarriedVisual(player, battery)
+		if not vis then
+			Config.log("pickup: visual gagal untuk", player.Name, "— batalkan? tidak, tetap pickup")
+		end
+
 		battery.Transparency = 1
 		battery.CanCollide = false
 		battery.CanQuery = false
@@ -213,10 +226,6 @@ function BatteryService.pickup(player: Player, battery: BasePart): boolean
 		local prompt = battery:FindFirstChild("BatteryPickupPrompt")
 		if prompt and prompt:IsA("ProximityPrompt") then
 			prompt.Enabled = false
-		end
-		local vis = showCarriedVisual(player, battery)
-		if not vis then
-			Config.log("pickup: visual gagal untuk", player.Name, "— batalkan? tidak, tetap pickup")
 		end
 	end
 
@@ -357,6 +366,13 @@ end
 -- ============================================================
 
 local function registerBattery(battery: BasePart)
+	-- Jangan daftarkan visual tiruan atau part yang sudah dipegang karakter
+	if battery.Name == "CarriedBattery" then
+		return
+	end
+	if battery:FindFirstAncestorOfClass("Model") and battery:FindFirstAncestorOfClass("Model"):FindFirstChildOfClass("Humanoid") then
+		return
+	end
 	if batteries[battery] then
 		return
 	end
