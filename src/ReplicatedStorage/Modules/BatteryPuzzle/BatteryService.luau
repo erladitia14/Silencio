@@ -192,11 +192,18 @@ function BatteryService.pickup(player: Player, battery: BasePart): boolean
 	-- efek
 	applyCarryEffects(player)
 
-	-- visual: sembunyikan asli, tampilkan salinan yang mengikuti pemain
+	-- visual: sembunyikan asli + MATIKAN prompt (bukan cuma transparansi)
 	if Config.HideOriginalWhileCarried then
 		battery.Transparency = 1
 		battery.CanCollide = false
 		battery.CanQuery = false
+		battery.CanTouch = false
+		-- Prompt harus dimatikan eksplisit — ProximityPrompt tetap aktif
+		-- walau part transparan, karena prompt pakai QueryRaycast (bukan CanTouch).
+		local prompt = battery:FindFirstChild("BatteryPickupPrompt")
+		if prompt and prompt:IsA("ProximityPrompt") then
+			prompt.Enabled = false
+		end
 		local vis = showCarriedVisual(player, battery)
 		if not vis then
 			Config.log("pickup: visual gagal untuk", player.Name, "— batalkan? tidak, tetap pickup")
@@ -234,6 +241,12 @@ function BatteryService.drop(player: Player, reason: string?): boolean
 		battery.CanQuery = true
 	end
 
+	-- Nyalakan prompt lagi supaya bisa diambil kembali
+	local prompt = battery:FindFirstChild("BatteryPickupPrompt")
+	if prompt and prompt:IsA("ProximityPrompt") then
+		prompt.Enabled = true
+	end
+
 	clearCarryEffects(player)
 	if notifyCarryChanged then
 		notifyCarryChanged(player, false)
@@ -260,6 +273,12 @@ function BatteryService.returnHome(player: Player, reason: string?): boolean
 		battery.Transparency = 0
 		battery.CanCollide = true
 		battery.CanQuery = true
+	end
+
+	-- Nyalakan prompt lagi supaya bisa diambil kembali
+	local prompt = battery:FindFirstChild("BatteryPickupPrompt")
+	if prompt and prompt:IsA("ProximityPrompt") then
+		prompt.Enabled = true
 	end
 
 	clearCarryEffects(player)

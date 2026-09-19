@@ -136,6 +136,9 @@ local function tryInsert(player: Player, case: Instance, slot: BasePart): boolea
 	slot.Transparency = 1
 	slot.CanCollide = false
 	slot.CanQuery = false
+	slot.CanTouch = false
+	-- Prompt insert harus dimatikan eksplisit — sama seperti pickup,
+	-- ProximityPrompt tetap aktif walau part transparan.
 	local prompt = slot:FindFirstChild("BatteryInsertPrompt")
 	if prompt and prompt:IsA("ProximityPrompt") then
 		prompt.Enabled = false
