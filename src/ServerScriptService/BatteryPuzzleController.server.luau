@@ -54,11 +54,20 @@ CaseService.start({
 	consumeCarried = function(player)
 		return BatteryService.consume(player)
 	end,
+	isAnyoneCarrying = function()
+		return BatteryService.isAnyoneCarrying()
+	end,
 	onSlotFilled = function(player, case, slot)
 		local filled, total = CaseService.getProgress(case)
 		PuzzleService.reportSlotFilled(case, slot, filled, total)
 	end,
 })
+
+-- Tiap status bawa baterai berubah, refresh prompt Insert di case
+-- (Insert hanya boleh muncul kalau ada yang sedang membawa baterai).
+BatteryService.setCarryChangedCallback(function()
+	CaseService.refresh()
+end)
 
 -- BatteryService
 BatteryService.start()

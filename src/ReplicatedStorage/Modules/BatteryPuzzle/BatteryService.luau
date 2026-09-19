@@ -29,6 +29,10 @@ local batteries: { [BasePart]: { homeCF: CFrame, prompt: ProximityPrompt } } = {
 local carriedBy: { [Player]: BasePart } = {}
 local savedSpeed: { [Player]: { walk: number, jump: number } } = {}
 
+-- Dipasang orchestrator: dipanggil tiap status bawa baterai berubah,
+-- supaya prompt Insert di case ikut ter-refresh (nyala hanya saat bawa baterai).
+local onCarryChanged: (() -> ())? = nil
+
 -- ----------------------------------------------------------------------
 -- Helpers
 -- ----------------------------------------------------------------------
@@ -59,11 +63,9 @@ end
 -- agar pemain tidak melihat / menekan prompt baterai lain saat tangannya penuh.
 function BatteryService.refreshPickupPrompts()
 	local anyCarrying = false
-	for _, plr in ipairs(Players:GetPlayers()) do
-		if carriedBy[plr] ~= nil then
-			anyCarrying = true
-			break
-		end
+	for _ in pairs(carriedBy) do
+		anyCarrying = true
+		break
 	end
 
 	for part, info in pairs(batteries) do
@@ -75,6 +77,11 @@ function BatteryService.refreshPickupPrompts()
 			info.prompt.Enabled = true
 		end
 	end
+
+	-- beritahu CaseService supaya prompt Insert ikut nyala/mati
+	if onCarryChanged then
+		onCarryChanged()
+	end
 end
 
 -- ----------------------------------------------------------------------
@@ -83,6 +90,19 @@ end
 
 function BatteryService.getCarried(player: Player): BasePart?
 	return carriedBy[player]
+end
+
+-- Dibaca CaseService untuk menentukan apakah prompt Insert boleh muncul.
+-- Cek tabel carriedBy LANGSUNG (bukan iterasi Players) supaya andal.
+function BatteryService.isAnyoneCarrying(): boolean
+	for _ in pairs(carriedBy) do
+		return true
+	end
+	return false
+end
+
+function BatteryService.setCarryChangedCallback(cb: () -> ())
+	onCarryChanged = cb
 end
 
 function BatteryService.canPickup(player: Player, battery: BasePart): boolean

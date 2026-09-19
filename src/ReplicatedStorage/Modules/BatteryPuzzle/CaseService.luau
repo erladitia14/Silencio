@@ -29,6 +29,7 @@ local cases: { [Instance]: any } = {}
 local onSlotFilled: ((player: Player, case: Instance, slot: BasePart) -> ())? = nil
 local getCarried: ((player: Player) -> BasePart?)? = nil
 local consumeCarried: ((player: Player) -> BasePart?)? = nil
+local isAnyoneCarrying: (() -> boolean)? = nil
 
 -- ============================================================
 -- UTIL
@@ -62,23 +63,39 @@ local function ensureSlotPrompt(slot: BasePart): ProximityPrompt
 	p.MaxActivationDistance = Config.InsertPromptDistance
 	p.RequiresLineOfSight = Config.RequireLineOfSight
 	p.HoldDuration = Config.InsertDuration
+	p.Enabled = false          -- default MATI; updateSlotPrompts yang menyalakan
 	return p
 end
 
--- Hanya slot KOSONG paling depan (kiri->kanan) yang prompt-nya nyala.
+-- Prompt Insert HANYA nyala kalau:
+--   (a) ada pemain yang sedang membawa baterai, DAN
+--   (b) itu slot KOSONG paling depan (kiri->kanan).
+-- Kalau tak ada yang bawa baterai, semua prompt insert MATI.
 local function updateSlotPrompts(rec: any)
+	local carrying = isAnyoneCarrying and isAnyoneCarrying() or false
+
 	local nextIndex = 0
-	for i, slot in ipairs(rec.slots) do
-		if not rec.filled[slot] then
-			nextIndex = i
-			break
+	if carrying then
+		for i, slot in ipairs(rec.slots) do
+			if not rec.filled[slot] then
+				nextIndex = i
+				break
+			end
 		end
 	end
+
 	for i, slot in ipairs(rec.slots) do
 		local prompt = slot:FindFirstChild("BatteryInsertPrompt")
 		if prompt and prompt:IsA("ProximityPrompt") then
 			prompt.Enabled = (i == nextIndex)
 		end
+	end
+end
+
+-- Dipanggil orchestrator saat status bawa baterai berubah (pickup/drop/consume).
+function CaseService.refresh()
+	for _, rec in pairs(cases) do
+		updateSlotPrompts(rec)
 	end
 end
 
@@ -228,10 +245,12 @@ function CaseService.start(opts: {
 	onSlotFilled: ((player: Player, case: Instance, slot: BasePart) -> ())?,
 	getCarried: ((player: Player) -> BasePart?)?,
 	consumeCarried: ((player: Player) -> BasePart?)?,
+	isAnyoneCarrying: (() -> boolean)?,
 })
 	onSlotFilled = opts.onSlotFilled
 	getCarried = opts.getCarried
 	consumeCarried = opts.consumeCarried
+	isAnyoneCarrying = opts.isAnyoneCarrying
 
 	for _, case in ipairs(CollectionService:GetTagged(Config.CaseTag)) do
 		registerCase(case)
