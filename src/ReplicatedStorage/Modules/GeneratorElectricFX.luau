@@ -45,8 +45,14 @@ local CollectionService = game:GetService("CollectionService")
 -- ======================================================================
 
 local CONFIG = {
-	-- TAG objek efek. Tim cukup menandai objeknya dengan tag ini.
+	-- TAG objek efek (opsional). Kalau tidak ada tag, modul otomatis memakai
+	-- ParticleEmitter yang jadi ANAK LANGSUNG Case (lihat AutoDetectInCase).
 	EffectTag = "GeneratorElectricFX",
+
+	-- Kalau true dan tidak ada objek ber-tag, modul memakai ParticleEmitter
+	-- yang berada langsung di dalam Case. Berguna kalau tim menempelkan efek
+	-- tanpa Attachment (lebih rapi di Explorer).
+	AutoDetectInCase = true,
 
 	-- Munculkan burst PERTAMA segera saat generator nyala (detik). Ini momen
 	-- paling penting: pemain baru menekan tombol power dan harus langsung
@@ -59,12 +65,17 @@ local CONFIG = {
 	-- Lama satu burst (detik). Dinaikkan dari 0.45 supaya efeknya sempat terlihat.
 	BurstDuration = 0.9,
 
-	-- Titik tempel efek di badan generator, skala -1..1 dari setengah ukuran Case.
-	-- PENTING: Z HARUS > 1.0 supaya efek keluar dari permukaan mesh. Mesh Case
-	-- mengisi penuh bounding box, jadi anchor di dalam ±1.0 = efek muncul DI
-	-- DALAM badan generator dan tidak kelihatan (sudah dibuktikan dengan
-	-- raycast: 4/6 arah kena mesh = tertutup).
-	-- 1.15 = sedikit di depan permukaan. Naikkan kalau efek masih tenggelam.
+	-- Pindahkan objek efek ke badan generator? DEFAULT FALSE = JANGAN sentuh.
+	-- Kalau true, modul akan memindahkan objek ke Anchor di bawah — dan itu
+	-- MENIMPA penempatan manual tim (pernah bikin bingung: attachment sudah
+	-- dipindah ke tengah, tapi balik lagi ke depan). Biarkan false kecuali
+	-- memang mau modul yang mengatur posisi.
+	MoveToAnchor = false,
+
+	-- Titik tempel (dipakai HANYA kalau MoveToAnchor = true). Skala -1..1
+	-- terhadap setengah ukuran Case. PENTING: minimal satu komponen harus
+	-- > 1.0 supaya keluar dari permukaan mesh (nilai < 1.0 = DI DALAM badan
+	-- generator, tidak kelihatan).
 	Anchor = Vector3.new(0, 0.55, 1.15),
 
 	-- Perbesar partikel efek saat game jalan. Aset Toolbox punya partikel sangat
@@ -73,13 +84,32 @@ local CONFIG = {
 	SizeMultiplier = 2.5,      -- ukuran partikel
 	LifetimeMultiplier = 3.0,  -- umur partikel (0.1s -> 0.3s)
 	SpeedMultiplier = 4.0,     -- kecepatan sebar (0.2 -> 0.8)
-	RateMultiplier = 2.0,      -- jumlah partikel per detik
+	RateMultiplier = 1.0,      -- partikel per detik per emitter
+
+	-- SEBARAN EFEK: emitter dikloning ke titik-titik ini supaya listriknya
+	-- keluar dari BANYAK tempat, bukan satu titik saja. Skala -1..1 terhadap
+	-- setengah ukuran Case.
+	-- ATURAN: minimal SATU komponen harus > 1.0 (keluar permukaan mesh).
+	-- Kosongkan (={}) kalau mau satu titik saja.
+	SpreadPoints = {
+		Vector3.new(-0.70, -0.50, 1.15), -- depan bawah kiri
+		Vector3.new(0.70, -0.50, 1.15),  -- depan bawah kanan
+		Vector3.new(-0.70, 0.50, 1.15),  -- depan atas kiri
+		Vector3.new(0.70, 0.50, 1.15),   -- depan atas kanan
+		Vector3.new(1.15, 0.30, 0),      -- samping kanan
+		Vector3.new(-1.15, 0.30, 0),     -- samping kiri
+		Vector3.new(1.15, -0.40, 0),     -- samping kanan bawah
+		Vector3.new(-1.15, -0.40, 0),    -- samping kiri bawah
+	},
 }
 
 local ATTR_POWERED = "GeneratorPowered"
 local ATTR_HV_ACTIVE = "HighVoltageActive"
 local HV_EVENT_NAME = "HighVoltage"
-local FOLDER_NAME = "GeneratorElectricFX"
+
+-- Attachment internal buatan modul, tempat kloningan emitter sebaran ditaruh.
+-- Dinamai jelas supaya tim tahu ini bukan ditempel manual.
+local SPREAD_HOLDER = "GeneratorElectricFX_Points"
 
 -- ======================================================================
 -- Util
@@ -176,15 +206,13 @@ local emitters: { Instance } = {}
 -- Mengumpulkan efek
 -- ----------------------------------------------------------------------
 
--- Bekerja untuk struktur apa pun: Model, Folder, Part, atau emitter langsung.
-local function collectEffects(root: Instance)
-	emitters = {}
-
+-- Kumpulkan semua objek yang bisa "menyala" dari sebuah instance + turunannya.
+local function collectInto(list: { Instance }, root: Instance)
 	local function consider(d: Instance)
 		if d:IsA("ParticleEmitter") or d:IsA("Beam") or d:IsA("Trail")
 			or d:IsA("PointLight") or d:IsA("SpotLight") or d:IsA("SurfaceLight")
 			or d:IsA("Sparkles") or d:IsA("Fire") or d:IsA("Smoke") then
-			table.insert(emitters, d)
+			table.insert(list, d)
 		end
 	end
 
@@ -245,6 +273,69 @@ local function renderOff()
 	end
 end
 
+-- Sebarkan efek ke banyak titik di badan generator. Emitter SUMBER tetap di
+-- tempatnya (tidak digeser); kloningannya ditaruh di titik-titik CONFIG.SpreadPoints.
+-- Semua kloningan dimasukkan ke daftar emitters supaya ikut nyala/mati bareng burst.
+--
+-- Kenapa dikloning, bukan digeser: satu emitter hanya punya satu posisi.
+-- Kloning bikin efeknya benar-benar MENYEBAR dari banyak tempat sekaligus.
+local function spreadEffects(case: BasePart)
+	if #CONFIG.SpreadPoints == 0 then
+		return
+	end
+
+	-- Ambil emitter SUMBER (yang asli) sebagai cetakan.
+	local sources: { Instance } = {}
+	for _, e in ipairs(emitters) do
+		if e:IsA("ParticleEmitter") then
+			table.insert(sources, e)
+		end
+	end
+	if #sources == 0 then
+		return
+	end
+
+	local half = case.Size * 0.5
+
+	-- Wadah kloningan: Attachment internal, dinamai jelas supaya tim tahu ini
+	-- buatan modul (bukan ditempel manual). Ditaruh di dalam Case.
+	local holder = case:FindFirstChild(SPREAD_HOLDER)
+	if not holder then
+		holder = Instance.new("Attachment")
+		holder.Name = SPREAD_HOLDER
+		holder.Parent = case
+	end
+
+	for i, pt in ipairs(CONFIG.SpreadPoints) do
+		-- Titik HARUS keluar dari permukaan mesh (lihat catatan CONFIG).
+		local localPos = Vector3.new(pt.X * half.X, pt.Y * half.Y, pt.Z * half.Z)
+
+		local attName = "Point" .. i
+		local att = (holder :: Attachment):FindFirstChild(attName)
+		if not att then
+			att = Instance.new("Attachment")
+			att.Name = attName
+			att.Parent = holder
+		end
+		local a = att :: Attachment
+		-- Set Parent dulu, baru WorldCFrame (kalau tidak, dianggap lokal).
+		a.WorldCFrame = case.CFrame * CFrame.new(localPos)
+
+		for _, src in ipairs(sources) do
+			local cloneName = src.Name .. "_s" .. i
+			local existing = a:FindFirstChild(cloneName)
+			if existing then
+				existing:Destroy()
+			end
+			local c = src:Clone()
+			c.Name = cloneName
+			c.Enabled = false
+			c.Parent = a
+			table.insert(emitters, c)
+		end
+	end
+end
+
 -- ----------------------------------------------------------------------
 -- Adopsi: pindahkan efek ber-tag ke badan generator
 -- ----------------------------------------------------------------------
@@ -264,57 +355,60 @@ local function adopt(): boolean
 		return false
 	end
 
+	-- Cari objek efek: (1) yang ber-tag, (2) kalau tidak ada, emitter yang
+	-- jadi ANAK LANGSUNG Case (tim menempelkan efek tanpa Attachment).
+	local obj: Instance? = nil
 	local tagged = CollectionService:GetTagged(CONFIG.EffectTag)
-	local obj = tagged[1]
+	if #tagged > 0 then
+		obj = tagged[1]
+	elseif CONFIG.AutoDetectInCase then
+		for _, c in ipairs(case:GetChildren()) do
+			if c:IsA("ParticleEmitter") or c:IsA("Beam") or c:IsA("Trail")
+				or c:IsA("PointLight") or c:IsA("SpotLight") then
+				obj = c
+				break
+			end
+		end
+	end
+
 	if not obj then
-		warn("[GeneratorElectricFX] Tidak ada objek ber-tag '" .. CONFIG.EffectTag
-			.. "'. Insert efek dari Toolbox lalu beri tag itu.")
+		warn("[GeneratorElectricFX] Tidak ada efek: tidak ada objek ber-tag '"
+			.. CONFIG.EffectTag .. "' dan tidak ada ParticleEmitter langsung di dalam Case")
 		return false
 	end
 
-	-- Wadah: Case.<FolderName>. HANYA dibuat kalau efeknya memang perlu
-	-- dipindah ke dalam Case. Kalau efek sudah di dalam Case (mis. ditempel
-	-- di Attachment), tidak perlu wadah -> jangan bikin folder kosong.
-	local folder: Instance? = nil
-	if not obj:IsDescendantOf(case) then
-		local existing = case:FindFirstChild(FOLDER_NAME)
-		if existing then
-			folder = existing
-		else
-			folder = Instance.new("Folder")
-			folder.Name = FOLDER_NAME
-			folder.Parent = case
+	-- PENTING: JANGAN memindahkan objek efek. Tim yang mengatur posisinya.
+	-- Dulu modul SELALU memindahkan ke CONFIG.Anchor, sehingga penempatan
+	-- manual (mis. attachment sudah dipindah ke tengah) selalu ditimpa dan
+	-- efeknya balik lagi ke tempat lama. Sekarang hanya dipindah kalau
+	-- CONFIG.MoveToAnchor = true.
+	if CONFIG.MoveToAnchor then
+		local scale = readNumber(obj, "EffectScale", 1)
+		local offset = readVector(obj, "EffectOffset", Vector3.zero)
+		local follow = readBool(obj, "FollowSurface", true)
+
+		local anchor = Vector3.zero
+		if follow then
+			anchor = Vector3.new(
+				CONFIG.Anchor.X * case.Size.X * 0.5,
+				CONFIG.Anchor.Y * case.Size.Y * 0.5,
+				CONFIG.Anchor.Z * case.Size.Z * 0.5)
 		end
-		obj.Parent = folder
-	end
+		anchor += offset
 
-	-- Atribut opsional.
-	local scale = readNumber(obj, "EffectScale", 1)
-	local offset = readVector(obj, "EffectOffset", Vector3.zero)
-	local follow = readBool(obj, "FollowSurface", true)
+		-- Pakai CFrame, bukan Vector3 sumbu dunia: Case bisa diputar.
+		local targetCF = case.CFrame * CFrame.new(anchor)
 
-	local anchor = Vector3.zero
-	if follow then
-		anchor = Vector3.new(
-			CONFIG.Anchor.X * case.Size.X * 0.5,
-			CONFIG.Anchor.Y * case.Size.Y * 0.5,
-			CONFIG.Anchor.Z * case.Size.Z * 0.5)
-	end
-	anchor += offset
-
-	-- PENTING: pakai CFrame, bukan Vector3 sumbu dunia. Case ini DIPUTAR 90°,
-	-- jadi sumbu lokal != sumbu dunia (pernah kejadian: titik jadi ngawur).
-	local targetCF = case.CFrame * CFrame.new(anchor)
-
-	if obj:IsA("BasePart") then
-		obj.CFrame = targetCF
-	elseif obj:IsA("Model") then
-		(obj :: Model):PivotTo(targetCF)
-		if scale ~= 1 then
-			(obj :: Model):ScaleTo(scale)
+		if obj:IsA("BasePart") then
+			obj.CFrame = targetCF
+		elseif obj:IsA("Model") then
+			(obj :: Model):PivotTo(targetCF)
+			if scale ~= 1 then
+				(obj :: Model):ScaleTo(scale)
+			end
+		elseif obj:IsA("Attachment") then
+			(obj :: Attachment).WorldCFrame = targetCF
 		end
-	elseif obj:IsA("Attachment") then
-		(obj :: Attachment).WorldCFrame = targetCF
 	end
 
 	-- Jangan biarkan efek menghalangi / menabrak pemain.
@@ -328,12 +422,35 @@ local function adopt(): boolean
 
 	effectObj = obj
 	state.adopted = true
-	collectEffects(obj)
+
+	-- Kumpulkan SEMUA efek di dalam Case, bukan cuma objek pertama yang ketemu.
+	-- Aset Toolbox sering menaruh beberapa emitter bersaudara (mis. 4 identik);
+	-- kalau cuma satu yang diambil, sebarannya cuma mengkloning satu.
+	emitters = {}
+	collectInto(emitters, obj)
+	for _, c in ipairs(case:GetChildren()) do
+		collectInto(emitters, c)
+	end
+
+	-- Buang duplikat (emitter bisa terkumpul dua kali dari loop di atas).
+	local seen: { [Instance]: boolean } = {}
+	local unique: { Instance } = {}
+	for _, e in ipairs(emitters) do
+		if not seen[e] then
+			seen[e] = true
+			table.insert(unique, e)
+		end
+	end
+	emitters = unique
 
 	-- Perbesar partikel aset yang terlalu tipis (lihat tuneEmitter).
 	for _, e in ipairs(emitters) do
 		tuneEmitter(e)
 	end
+
+	-- SEBARKAN efek ke beberapa titik di badan generator. Tanpa ini efeknya
+	-- cuma menumpuk di satu titik (keluhan Aer: "kenapa cuman disini doang").
+	spreadEffects(case)
 
 	-- PENTING: matikan efek SEKARANG saat adopsi. Aset Toolbox biasanya
 	-- datang dengan Enabled=true, jadi kalau tidak dimatikan di sini efeknya
@@ -341,8 +458,8 @@ local function adopt(): boolean
 	renderOff()
 
 	if #emitters == 0 then
-		warn("[GeneratorElectricFX] Objek ber-tag '" .. CONFIG.EffectTag
-			.. "' tidak punya ParticleEmitter/Beam/Light/Trail. Efeknya tidak akan kelihatan.")
+		warn("[GeneratorElectricFX] Objek efek tidak punya ParticleEmitter/Beam/Light/Trail. "
+			.. "Efeknya tidak akan kelihatan.")
 	end
 
 	return true
