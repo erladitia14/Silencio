@@ -117,13 +117,31 @@ if not warnEvent then
 	warnEvent.Parent = ReplicatedStorage
 end
 
--- Cari komponen generator secara dinamis (nol koordinat, tahan rename posisi).
-local genOuter = workspace:FindFirstChild("Generator")
-local genInner = genOuter and genOuter:FindFirstChild("Generator")
-local batteryCase = genOuter and genOuter:FindFirstChild("BatteryCase")
-local activeButton = genInner
-	and genInner:FindFirstChild("Case")
-	and genInner.Case:FindFirstChild("ActiveButton")
+-- Cari komponen generator lewat TAG (bukan path), supaya tahan dipindah ke
+-- folder mana pun (mis. Workspace["control room 3"].Generator). Konsisten dengan
+-- cara AssemblyService & CaseService menemukan objek.
+local CollectionService = game:GetService("CollectionService")
+
+-- genInner = Model "Generator" pembungkus slot rakitan. Ditemukan dari ancestor
+-- salah satu AssemblySlot yang bernama "Generator".
+local genInner: Model? = nil
+for _, slot in ipairs(CollectionService:GetTagged("AssemblySlot")) do
+	local anc = slot:FindFirstAncestorOfClass("Model")
+	while anc do
+		if anc.Name == "Generator" then
+			genInner = anc
+			break
+		end
+		anc = anc:FindFirstAncestorOfClass("Model")
+	end
+	if genInner then break end
+end
+
+-- BatteryCase = objek ber-tag "BatteryCase".
+local batteryCase = CollectionService:GetTagged("BatteryCase")[1]
+
+-- ActiveButton = attachment "ActiveButton" di dalam genInner (cari rekursif).
+local activeButton = genInner and genInner:FindFirstChild("ActiveButton", true)
 
 if genInner and activeButton then
 	ActiveButtonService.setWarnCallback(function(player, message)
