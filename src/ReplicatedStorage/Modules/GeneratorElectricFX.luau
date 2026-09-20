@@ -35,6 +35,10 @@ local CollectionService = game:GetService("CollectionService")
 -- ======================================================================
 
 local CONFIG = {
+	-- Visual busur/percikan/kilatan. MATI = hanya sinyal & suara yang jalan
+	-- (dipakai sementara sampai efek visual asli terpasang).
+	VisualsEnabled = false,
+
 	-- Seberapa sering efek muncul sendiri (detik). Acak di antara dua angka ini.
 	BurstMinInterval = 3.5,
 	BurstMaxInterval = 9.0,
@@ -48,14 +52,27 @@ local CONFIG = {
 	-- Terang kilatan lampu.
 	LightBrightness = 6,
 	LightRange = 26,
-	-- Lebar busur (studs).
-	BeamWidth = 0.09,
+	-- Lebar busur (studs). Harus cukup tebal untuk terlihat dari jarak pemain.
+	BeamWidth = 0.35,
+	-- Kepekatan busur: 0 = solid terang, 1 = hilang. 0.15 = jelas terlihat.
+	BeamTransparency = 0.15,
 	-- Jumlah percikan per burst.
 	SparkCount = 18,
 
-	-- Titik busur: posisi di permukaan Case, skala -1..1 dari setengah ukuran.
-	-- (dikali 0.92 supaya busurnya sedikit di dalam permukaan, tidak melayang)
-	SurfaceInset = 0.92,
+	-- Jarak titik busur dari PERMUKAAN mesh (studs, keluar).
+	-- 0 = menempel permukaan. Naikkan kalau busurnya masih tenggelam di mesh.
+	SurfaceOffset = 0.35,
+
+	-- Sudut-sudut arah untuk mencari permukaan Case (dipakai raycast).
+	-- 8 arah diagonal + 4 arah utama = cukup untuk menemukan siluet mesh.
+	SurfaceDirs = {
+		Vector3.new(1, 1, 1), Vector3.new(-1, 1, 1),
+		Vector3.new(-1, -1, 1), Vector3.new(1, -1, 1),
+		Vector3.new(1, 1, -1), Vector3.new(-1, 1, -1),
+		Vector3.new(-1, -1, -1), Vector3.new(1, -1, -1),
+		Vector3.new(1, 0, 0), Vector3.new(-1, 0, 0),
+		Vector3.new(0, 1, 0), Vector3.new(0, -1, 0),
+	},
 }
 
 -- Sinyal yang sama dengan yang didengar GeneratorSFX.
@@ -64,19 +81,24 @@ local ATTR_POWERED = "GeneratorPowered"
 local ATTR_HV_ACTIVE = "HighVoltageActive"
 local FOLDER_NAME = "GeneratorElectricFX"
 
--- Titik sudut kotak (skala -1..1). Dipakai untuk menaruh attachment busur.
+-- Titik sudut kotak (skala -1..1), urutan mengikuti 4 muka sisi.
+-- Urutan sengaja: tiap 4 titik berurutan = satu muka, jadi busurnya bisa
+-- melintang DI MUKA itu (bukan menembus badan mesh).
 local CORNERS = {
+	-- muka +Z
 	Vector3.new(1, 1, 1),
 	Vector3.new(-1, 1, 1),
 	Vector3.new(-1, -1, 1),
 	Vector3.new(1, -1, 1),
+	-- muka -Z
 	Vector3.new(1, 1, -1),
 	Vector3.new(-1, 1, -1),
 	Vector3.new(-1, -1, -1),
 	Vector3.new(1, -1, -1),
 }
 
--- Pasangan titik yang disambung busur (indeks ke CORNERS).
+-- Pasangan titik yang disambung busur: diagonal DI DALAM satu muka.
+-- {1,3} = diagonal muka +Z, {2,4} = diagonal lain muka +Z, dst.
 local ARC_PAIRS = {
 	{ 1, 3 },
 	{ 2, 4 },
@@ -159,11 +181,35 @@ local function build(): boolean
 		folder.Parent = case
 	end
 
-	local half = case.Size * 0.5 * CONFIG.SurfaceInset
+	-- Visual dimatikan sementara (efek busur buatan sendiri belum memuaskan;
+	-- menunggu efek asli). Sinyal & suara tetap jalan lewat fireSignal().
+	-- Tidak ada Beam/ParticleEmitter/PointLight yang dibuat sama sekali.
+	if not CONFIG.VisualsEnabled then
+		state.built = true
+		return true
+	end
 
-	-- Titik busur
+	local half = case.Size * 0.5
+
+	-- Titik busur ditaruh di SUDUT BOUNDING BOX, dihitung dalam RUANG LOKAL
+	-- part lalu diubah ke dunia lewat CFrame.
+	-- PENTING: Case ini DIPUTAR 90°, jadi sumbu lokal != sumbu dunia.
+	-- (Terukur: world +Z kena permukaan 5.50 studs padahal Size.Z/2 = 2.76;
+	--  world +X malah kosong.) Menaruh titik pakai Vector3 sumbu dunia dengan
+	-- ukuran sumbu lokal = titik ngawur, busur tenggelam di dalam mesh.
+	local margin = CONFIG.SurfaceOffset
+	local surfacePoints: { Vector3 } = {}
+	for _, corner in ipairs(CORNERS) do
+		local localPos = Vector3.new(
+			corner.X * (half.X + margin),
+			corner.Y * (half.Y + margin),
+			corner.Z * (half.Z + margin))
+		table.insert(surfacePoints, case.CFrame:PointToWorldSpace(localPos))
+	end
+
+	-- Titik busur (posisi LOKAL relatif Case, karena Attachment di dalam Case)
 	local points: { Attachment } = {}
-	for i, corner in ipairs(CORNERS) do
+	for i, worldPos in ipairs(surfacePoints) do
 		local name = "ArcPoint" .. i
 		local att = folder:FindFirstChild(name)
 		if not att then
@@ -172,13 +218,26 @@ local function build(): boolean
 			att.Parent = folder
 		end
 		local a = att :: Attachment
-		a.Position = Vector3.new(corner.X * half.X, corner.Y * half.Y, corner.Z * half.Z)
+		a.WorldPosition = worldPos
 		table.insert(points, a)
 	end
 
-	-- Busur listrik
+	-- Busur listrik: sambungkan pasangan titik yang ketemu.
+	-- Jumlah titik hasil raycast bisa beda dari 8, jadi pasangan dipilih
+	-- berdasarkan jumlah titik yang tersedia (busur menyilang antar sisi).
 	beams = {}
-	for i, pair in ipairs(ARC_PAIRS) do
+	local n = #points
+	local pairs2: { { number } } = {}
+	if n >= 8 then
+		pairs2 = ARC_PAIRS
+	else
+		-- pasangkan titik berhadapan: i dengan i + n/2
+		local halfN = math.floor(n / 2)
+		for i = 1, halfN do
+			table.insert(pairs2, { i, i + halfN })
+		end
+	end
+	for i, pair in ipairs(pairs2) do
 		local name = "Arc" .. i
 		local b = folder:FindFirstChild(name)
 		if not b then
@@ -195,6 +254,7 @@ local function build(): boolean
 		beam.LightEmission = 1
 		beam.LightInfluence = 0
 		beam.Color = ColorSequence.new(CONFIG.Color)
+		beam.Transparency = NumberSequence.new(CONFIG.BeamTransparency)
 		beam.Enabled = false
 		table.insert(beams, beam)
 	end
@@ -250,13 +310,17 @@ end
 
 -- Menyalakan visual dengan intensitas acak (bikin busurnya "hidup").
 local function renderOn()
+	if not CONFIG.VisualsEnabled then
+		return
+	end
 	for _, beam in ipairs(beams) do
 		beam.Enabled = true
-		local t = randRange(0.15, 0.85)
+		-- Sedikit variasi kepekatan antar busur, TAPI tetap terlihat jelas.
+		local t = CONFIG.BeamTransparency + randRange(0, 0.15)
 		beam.Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0.75),
+			NumberSequenceKeypoint.new(0, math.min(1, t + 0.1)),
 			NumberSequenceKeypoint.new(0.5, t),
-			NumberSequenceKeypoint.new(1, 0.75),
+			NumberSequenceKeypoint.new(1, math.min(1, t + 0.1)),
 		})
 		beam.CurveSize0 = randRange(-0.4, 0.4)
 		beam.CurveSize1 = randRange(-0.4, 0.4)
