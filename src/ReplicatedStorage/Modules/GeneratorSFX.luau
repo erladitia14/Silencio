@@ -19,10 +19,31 @@
 	  electrical_contacts                  one-shot  4 baterai lengkap
 	  old_industrial_generator             one-shot  generator baru hidup
 	  steady_industrial_generator          LOOP      generator sudah nyala
-	  high_voltage_electricity             LOOP      lapisan listrik
+	  high_voltage_electricity             one-shot  IKUT SINYAL efek listrik
 
-	Urutan: startup (old) diputar dulu -> begitu selesai, dua loop (steady +
-	high voltage) menyusul. Jadi tidak tumpang tindih jadi bising.
+	Urutan: startup (old) diputar dulu -> begitu selesai, loop steady menyusul.
+	Jadi tidak tumpang tindih jadi bising.
+
+	=== SUARA LISTRIK (high_voltage_electricity) — BUKAN LOOP ===
+	Suara ini TIDAK menyala sendiri saat generator hidup. Ia hanya berbunyi
+	kalau script EFEK LISTRIK memberi sinyal, supaya suara & efek visual
+	muncul BERSAMAAN. Dua cara memberi sinyal (pilih salah satu):
+
+	  1. BindableEvent "HighVoltage" di dalam Model generator
+	       gen.HighVoltage:Fire()          -> putar 1x (one-shot)
+	     Modul membuat event ini otomatis kalau belum ada, jadi script efek
+	     cukup: local sig = gen:WaitForChild("HighVoltage"); sig:Fire()
+
+	  2. Attribute "HighVoltageActive" (Bool) di Model generator
+	       gen:SetAttribute("HighVoltageActive", true)   -> nyala & tahan
+	       gen:SetAttribute("HighVoltageActive", false)  -> berhenti
+	     Dipakai kalau efek listriknya berdurasi panjang: suara diulang terus
+	     SELAMA attribute true, lalu berhenti begitu false. Jadi tetap
+	     sinkron dengan efeknya, bukan nyala selamanya.
+
+	Syarat: generator harus sudah nyala (Attribute "GeneratorPowered" = true).
+	Kalau sinyal datang sementara mesin belum hidup, sinyal DIABAIKAN.
+	Sinyal beruntun tidak menumpuk (satu efek = satu suara).
 
 	Cara pakai: GeneratorSFXController.server.luau memanggil start().
 ]]
@@ -34,6 +55,8 @@ local HOST_NAME = "GeneratorSFX"
 local PROMPT_NAME = "GeneratorActivatePrompt"
 local ATTR_POWERED = "GeneratorPowered"
 local ATTR_COMPLETE = "BatteryPuzzleComplete"
+local ATTR_HV_ACTIVE = "HighVoltageActive" -- Attribute (Bool) sinyal efek listrik
+local HV_EVENT_NAME = "HighVoltage" -- BindableEvent sinyal efek listrik
 
 local SFX_NAMES = {
 	Button = "pressing_a_large_industrial_button",
@@ -80,6 +103,8 @@ local state = {
 	powered = false,
 	loopsRunning = false,
 	contactsPlayed = false,
+	hvHeld = false, -- efek listrik sedang berlangsung (attribute true)
+	hvPending = false, -- sinyal datang sebelum mesin nyala -> ditahan
 }
 
 -- ======================================================================
@@ -180,7 +205,87 @@ local function beginLoops()
 	end
 	state.loopsRunning = true
 	startLoop(sounds.Steady)
-	startLoop(sounds.HighVoltage)
+	-- CATATAN: high_voltage_electricity SENGAJA tidak dinyalakan di sini.
+	-- Ia hanya berbunyi kalau script efek listrik memberi sinyal (lihat
+	-- fireHighVoltage / setHighVoltageHeld), supaya suara & efek visual
+	-- muncul bersamaan. Kalau dinyalakan di sini, ia jadi loop selamanya.
+end
+
+-- ======================================================================
+-- Suara listrik — BUKAN loop mandiri; ia budak sinyal efek visual
+-- ======================================================================
+
+-- Sinyal 1: event "HighVoltage" di-fire -> putar SEKALI.
+-- Sinyal diabaikan kalau generator belum nyala, dan tidak menumpuk
+-- (satu efek = satu suara).
+local function fireHighVoltage()
+	if not state.powered then
+		return
+	end
+	local s = sounds.HighVoltage
+	if not s then
+		return
+	end
+	if state.hvHeld then
+		-- Efek listrik sedang berlangsung (mode tahan): pastikan tetap berbunyi.
+		-- JANGAN turunkan jadi one-shot — itu akan memutus efeknya di tengah jalan.
+		if not s.IsPlaying then
+			s.Looped = true
+			s.TimePosition = 0
+			s:Play()
+		end
+		return
+	end
+	if s.IsPlaying then
+		return -- jangan tumpuk; efeknya masih jalan
+	end
+	playOneShot(s)
+end
+
+-- Sinyal 2: Attribute "HighVoltageActive" (Bool) di Model generator.
+-- true = suara diulang SELAMA efek listriknya hidup; false = berhenti.
+-- Jadi tetap sinkron dengan efeknya, bukan nyala selamanya.
+local function setHighVoltageHeld(active: boolean)
+	local s = sounds.HighVoltage
+	if not s then
+		return
+	end
+
+	if not active then
+		state.hvHeld = false
+		state.hvPending = false
+		if s.IsPlaying then
+			s:Stop()
+		end
+		s.Looped = false
+		return
+	end
+
+	if not state.powered then
+		-- Mesin belum nyala -> tahan dulu, diterapkan begitu generator hidup.
+		state.hvPending = true
+		return
+	end
+
+	state.hvHeld = true
+	state.hvPending = false
+	s.Looped = true -- mengulang HANYA selama efeknya hidup
+	if not s.IsPlaying then
+		s.TimePosition = 0
+		s:Play()
+	end
+end
+
+-- Diterapkan begitu generator nyala: kalau sinyal listrik sudah datang
+-- SEBELUM mesin hidup, efeknya baru dimulai sekarang (sinkron dengan efek).
+local function applyPendingHighVoltage()
+	if not state.powered then
+		return
+	end
+	if not state.hvPending then
+		return
+	end
+	setHighVoltageHeld(true)
 end
 
 -- skipStartup = true dipakai kalau generator SUDAH nyala sebelum modul ini
@@ -194,6 +299,7 @@ local function startPowered(skipStartup: boolean)
 	local startup = sounds.Startup
 	if skipStartup or not startup then
 		beginLoops()
+		applyPendingHighVoltage()
 		return
 	end
 
@@ -204,6 +310,7 @@ local function startPowered(skipStartup: boolean)
 		end
 		finished = true
 		beginLoops()
+		applyPendingHighVoltage()
 	end
 
 	-- Jaring pengaman: kalau sound gagal dimuat, "Ended" tidak pernah terbit
@@ -321,6 +428,26 @@ function GeneratorSFX.start(opts: { [string]: any }?): boolean
 				end
 			end)
 		end
+
+		-- 4) Suara listrik — ikut sinyal script EFEK LISTRIK (bukan loop mandiri).
+		-- Sinyal A: BindableEvent "HighVoltage" -> putar sekali.
+		-- Dibuat otomatis kalau belum ada, jadi script efek cukup:
+		--     gen:WaitForChild("HighVoltage"):Fire()
+		local hvEvent = gen:FindFirstChild(HV_EVENT_NAME)
+		if not hvEvent then
+			hvEvent = Instance.new("BindableEvent")
+			hvEvent.Name = HV_EVENT_NAME
+			hvEvent.Parent = gen
+		end
+		(hvEvent :: BindableEvent).Event:Connect(fireHighVoltage)
+
+		-- Sinyal B: Attribute "HighVoltageActive" (Bool) -> tahan selama true.
+		if gen:GetAttribute(ATTR_HV_ACTIVE) == true then
+			setHighVoltageHeld(true)
+		end
+		gen:GetAttributeChangedSignal(ATTR_HV_ACTIVE):Connect(function()
+			setHighVoltageHeld(gen:GetAttribute(ATTR_HV_ACTIVE) == true)
+		end)
 	else
 		warn("[GeneratorSFX] Model generator tidak ditemukan; suara nyala dilewati")
 	end

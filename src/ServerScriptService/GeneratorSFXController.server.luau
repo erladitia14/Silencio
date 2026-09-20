@@ -2,14 +2,22 @@
 --[[
 	GeneratorSFXController — Script tipis (ServerScriptService).
 
-	Tugasnya cuma satu: menyalakan modul pendengar suara generator.
+	Menyalakan dua modul MANDIRI yang saling terhubung:
+	  1. GeneratorElectricFX — efek visual busur listrik (SUMBER sinyal)
+	  2. GeneratorSFX        — suara generator (pengikut sinyal)
+
+	Hubungannya: efek listrik men-fire BindableEvent "HighVoltage" di Model
+	generator; GeneratorSFX mendengarnya dan memutar high_voltage_electricity.
+	Jadi efek & suara selalu muncul BERSAMAAN, tidak mungkin lepas sinkron.
+
 	TIDAK menyentuh BatteryPuzzleController / AssemblyController / sistem lain.
 
-	Suara yang didengarkan:
-	  tombol power  -> pressing_a_large_industrial_button
-	  4 baterai     -> electrical_contacts
-	  generator nyala -> old_industrial_generator (startup, one-shot)
-	                    lalu steady_industrial_generator + high_voltage_electricity (loop)
+	Suara & efek:
+	  tombol power    -> pressing_a_large_industrial_button
+	  4 baterai       -> electrical_contacts
+	  generator nyala -> old_industrial_generator (startup) lalu
+	                     steady_industrial_generator (loop mesin)
+	  efek listrik    -> high_voltage_electricity (ikut sinyal efek, one-shot)
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -20,7 +28,11 @@ if not RunService:IsServer() then
 end
 
 local Modules = ReplicatedStorage:WaitForChild("Modules")
+
+-- GeneratorSFX dulu: ia yang MEMBUAT BindableEvent "HighVoltage" kalau belum
+-- ada, jadi GeneratorElectricFX pasti menemukan event yang sama.
 local GeneratorSFX = require(Modules:WaitForChild("GeneratorSFX"))
+local GeneratorElectricFX = require(Modules:WaitForChild("GeneratorElectricFX"))
 
 -- buttonOnSuccess = false -> suara tombol bunyi TIAP ditekan (termasuk saat
 -- gating masih menolak, mis. "Install all the batteries first!").
@@ -28,3 +40,5 @@ local GeneratorSFX = require(Modules:WaitForChild("GeneratorSFX"))
 GeneratorSFX.start({
 	buttonOnSuccess = false,
 })
+
+GeneratorElectricFX.start()
