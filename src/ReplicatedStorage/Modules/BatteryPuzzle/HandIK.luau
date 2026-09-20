@@ -94,7 +94,10 @@ function HandIK.attach(player: Player, side: "Left" | "Right", attachments: { [s
 			if endEffector and chainRoot then
 				local ik = Instance.new("IKControl")
 				ik.Name = "CarryIK_" .. map.hand
-				ik.Type = Enum.IKControlType.Transform
+				-- Type = Position: tangan HANYA ditarik ke TITIK attachment; rotasi
+				-- pergelangan dibiarkan natural. (Transform akan memaksa telapak ikut
+				-- ORIENTASI attachment -> kalau attachment 0,0,0 pergelangan nekuk aneh.)
+				ik.Type = Config.IKType or Enum.IKControlType.Position
 				ik.ChainRoot = chainRoot
 				ik.EndEffector = endEffector
 				ik.Target = att

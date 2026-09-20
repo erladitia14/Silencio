@@ -77,6 +77,10 @@ Config.EngineRightCarryOffset = CFrame.new(-0.145, -1.266, -2.958) * CFrame.Angl
 -- memenangkan lengan, sedangkan kaki tetap dari animasi jalan.
 Config.UseHandIK = true
 Config.IKWeight = 1.0                      -- 0 = mati, 1 = penuh
+-- Type IK:
+--   Position  = tangan ditarik ke TITIK attachment, rotasi pergelangan NATURAL (default, anti-nekuk)
+--   Transform = tangan ikut posisi + ORIENTASI attachment (perlu attachment yang diputar pas)
+Config.IKType = Enum.IKControlType.Position
 Config.IKChainLength = 2                   -- 2 sendi: Bahu + Siku (UpperArm, LowerArm)
 
 -- Suffix nama Attachment di Engine: "<Sisi>(<Tangan>)"
