@@ -60,8 +60,12 @@ local CONFIG = {
 	BurstDuration = 0.9,
 
 	-- Titik tempel efek di badan generator, skala -1..1 dari setengah ukuran Case.
-	-- Default (0, 0.55, 0.75) = agak ke atas & ke sisi depan generator.
-	Anchor = Vector3.new(0, 0.55, 0.75),
+	-- PENTING: Z HARUS > 1.0 supaya efek keluar dari permukaan mesh. Mesh Case
+	-- mengisi penuh bounding box, jadi anchor di dalam ±1.0 = efek muncul DI
+	-- DALAM badan generator dan tidak kelihatan (sudah dibuktikan dengan
+	-- raycast: 4/6 arah kena mesh = tertutup).
+	-- 1.15 = sedikit di depan permukaan. Naikkan kalau efek masih tenggelam.
+	Anchor = Vector3.new(0, 0.55, 1.15),
 
 	-- Perbesar partikel efek saat game jalan. Aset Toolbox punya partikel sangat
 	-- tipis (Lifetime 0.1s, Speed 0.2, Size maks 0.82) sehingga praktis tidak
