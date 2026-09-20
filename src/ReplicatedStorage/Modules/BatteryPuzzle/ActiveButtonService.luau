@@ -12,7 +12,7 @@
 	     (di-set PuzzleService/CaseService pada Model "BatteryCase")
 
 	Perilaku:
-	  - Prompt "Nyalakan Generator" SELALU tampil di tombol (biar pemain tahu
+	  - Prompt "Power On Generator" SELALU tampil di tombol (biar pemain tahu
 	    tombolnya ada), tapi kalau syarat belum lengkap -> tampilkan WARNING dan
 	    tolak (pola sama dengan gating Panel: prompt ada, tapi kasih peringatan).
 	  - Kalau syarat lengkap -> set Attribute "GeneratorPowered" = true pada Model
@@ -69,11 +69,11 @@ local function tryActivate(player: Player)
 	if powered then return end
 
 	if not isAssembled() then
-		warn_(player, "Rakit generator dulu (Engine + 2 Panel)!")
+		warn_(player, "Assemble the generator first (Engine + 2 Panels)!")
 		return
 	end
 	if not isBatteryComplete() then
-		warn_(player, "Pasang semua baterai dulu!")
+		warn_(player, "Install all the batteries first!")
 		return
 	end
 
@@ -119,7 +119,7 @@ function ActiveButtonService.start(opts: {
 	end
 
 	assert(prompt)
-	prompt.ActionText = "Nyalakan Generator"
+	prompt.ActionText = "Power On Generator"
 	prompt.ObjectText = "Generator"
 	prompt.KeyboardKeyCode = Enum.KeyCode.E
 	prompt.HoldDuration = 0.4

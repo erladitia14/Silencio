@@ -689,7 +689,7 @@ local function tryInsert(player: Player, slotPart: BasePart): boolean
 
 	-- Engine gating: Panel tidak bisa dipasang sebelum Engine -> WARNING, bukan diam.
 	if rec.kind == "Panel" and not isEngineInstalled() then
-		warn_(player, "Pasang Engine dulu sebelum Panel!")
+		warn_(player, "Install the Engine before the Panel!")
 		return false
 	end
 
