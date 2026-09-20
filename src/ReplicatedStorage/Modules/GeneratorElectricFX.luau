@@ -14,7 +14,8 @@
 	     - memindahkan objek itu ke badan generator
 	     - menyalakannya saat generator hidup (burst acak 3.5-9s)
 	     - mematikannya saat generator mati
-	     - men-fire sinyal "HighVoltage" tiap efek muncul -> suara ikut
+	     - men-fire sinyal "HighVoltage" (di ReplicatedStorage) tiap efek muncul
+	       -> suara ikut
 
 	KONTRAK: SEMUA ParticleEmitter / Beam / Trail / Light di dalam objek
 	ber-tag itu DIKENDALIKAN modul (nyala saat burst, mati saat selesai).
@@ -26,7 +27,7 @@
 	  FollowSurface (Bool,    default true) : tempel di badan generator
 
 	=== SINYAL KE SUARA ===
-	Setiap efek muncul -> BindableEvent "HighVoltage" di Model generator di-fire.
+	Setiap efek muncul -> BindableEvent "HighVoltage" di ReplicatedStorage di-fire.
 	GeneratorSFX mendengarnya & memutar high_voltage_electricity.
 	Jadi efek & suara SATU sumber, mustahil lepas sinkron.
 
@@ -117,6 +118,20 @@ local function readBool(obj: Instance, name: string, default: boolean): boolean
 		return val
 	end
 	return default
+end
+
+-- Sinyal efek listrik -> suara. Ditaruh di ReplicatedStorage (bukan di dalam
+-- Model generator) supaya tidak mengotori scene generator. Dibuat kalau belum
+-- ada; kalau sudah ada (dibuat GeneratorSFX), dipakai yang sama.
+local function getHVEvent(): BindableEvent
+	local rs = game:GetService("ReplicatedStorage")
+	local ev = rs:FindFirstChild(HV_EVENT_NAME)
+	if not ev then
+		ev = Instance.new("BindableEvent")
+		ev.Name = HV_EVENT_NAME
+		ev.Parent = rs
+	end
+	return ev :: BindableEvent
 end
 
 -- ======================================================================
@@ -373,15 +388,9 @@ function GeneratorElectricFX.start(opts: { [string]: any }?): boolean
 		return false
 	end
 
-	-- Sinyal untuk GeneratorSFX. Dibuat kalau belum ada (idempotent: kalau
-	-- GeneratorSFX sudah membuatnya, kita pakai yang sama).
-	local ev = gen:FindFirstChild(HV_EVENT_NAME)
-	if not ev then
-		ev = Instance.new("BindableEvent")
-		ev.Name = HV_EVENT_NAME
-		ev.Parent = gen
-	end
-	hvEvent = ev :: BindableEvent
+	-- Sinyal untuk GeneratorSFX. Ditaruh di ReplicatedStorage (bukan di Model
+	-- generator) sesuai permintaan Aer. Idempotent: kalau sudah ada, dipakai.
+	hvEvent = getHVEvent()
 
 	local ok = adopt()
 

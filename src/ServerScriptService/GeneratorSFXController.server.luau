@@ -6,8 +6,9 @@
 	  1. GeneratorElectricFX — efek visual busur listrik (SUMBER sinyal)
 	  2. GeneratorSFX        — suara generator (pengikut sinyal)
 
-	Hubungannya: efek listrik men-fire BindableEvent "HighVoltage" di Model
-	generator; GeneratorSFX mendengarnya dan memutar high_voltage_electricity.
+	Hubungannya: efek listrik men-fire BindableEvent "HighVoltage" di
+	ReplicatedStorage; GeneratorSFX mendengarnya dan memutar
+	high_voltage_electricity.
 	Jadi efek & suara selalu muncul BERSAMAAN, tidak mungkin lepas sinkron.
 
 	TIDAK menyentuh BatteryPuzzleController / AssemblyController / sistem lain.
@@ -29,8 +30,8 @@ end
 
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 
--- GeneratorSFX dulu: ia yang MEMBUAT BindableEvent "HighVoltage" kalau belum
--- ada, jadi GeneratorElectricFX pasti menemukan event yang sama.
+-- GeneratorSFX dulu: ia yang MEMBUAT BindableEvent "HighVoltage" di
+-- ReplicatedStorage kalau belum ada, jadi GeneratorElectricFX menemukan event sama.
 local GeneratorSFX = require(Modules:WaitForChild("GeneratorSFX"))
 local GeneratorElectricFX = require(Modules:WaitForChild("GeneratorElectricFX"))
 

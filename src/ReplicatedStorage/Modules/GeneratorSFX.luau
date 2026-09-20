@@ -29,10 +29,10 @@
 	kalau script EFEK LISTRIK memberi sinyal, supaya suara & efek visual
 	muncul BERSAMAAN. Dua cara memberi sinyal (pilih salah satu):
 
-	  1. BindableEvent "HighVoltage" di dalam Model generator
-	       gen.HighVoltage:Fire()          -> putar 1x (one-shot)
+	  1. BindableEvent "HighVoltage" di ReplicatedStorage
+	       game.ReplicatedStorage.HighVoltage:Fire()   -> putar 1x (one-shot)
 	     Modul membuat event ini otomatis kalau belum ada, jadi script efek
-	     cukup: local sig = gen:WaitForChild("HighVoltage"); sig:Fire()
+	     cukup: local sig = RS:WaitForChild("HighVoltage"); sig:Fire()
 
 	  2. Attribute "HighVoltageActive" (Bool) di Model generator
 	       gen:SetAttribute("HighVoltageActive", true)   -> nyala & tahan
@@ -430,14 +430,15 @@ function GeneratorSFX.start(opts: { [string]: any }?): boolean
 		end
 
 		-- 4) Suara listrik — ikut sinyal script EFEK LISTRIK (bukan loop mandiri).
-		-- Sinyal A: BindableEvent "HighVoltage" -> putar sekali.
+		-- Sinyal A: BindableEvent "HighVoltage" di ReplicatedStorage -> putar sekali.
 		-- Dibuat otomatis kalau belum ada, jadi script efek cukup:
-		--     gen:WaitForChild("HighVoltage"):Fire()
-		local hvEvent = gen:FindFirstChild(HV_EVENT_NAME)
+		--     game.ReplicatedStorage:WaitForChild("HighVoltage"):Fire()
+		local rs = game:GetService("ReplicatedStorage")
+		local hvEvent = rs:FindFirstChild(HV_EVENT_NAME)
 		if not hvEvent then
 			hvEvent = Instance.new("BindableEvent")
 			hvEvent.Name = HV_EVENT_NAME
-			hvEvent.Parent = gen
+			hvEvent.Parent = rs
 		end
 		(hvEvent :: BindableEvent).Event:Connect(fireHighVoltage)
 
