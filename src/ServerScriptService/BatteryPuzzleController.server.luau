@@ -23,6 +23,7 @@ local BatteryService = require(BatteryPuzzle:WaitForChild("BatteryService"))
 local CaseService = require(BatteryPuzzle:WaitForChild("CaseService"))
 local PuzzleService = require(BatteryPuzzle:WaitForChild("PuzzleService"))
 local AssemblyService = require(BatteryPuzzle:WaitForChild("AssemblyService"))
+local ActiveButtonService = require(BatteryPuzzle:WaitForChild("ActiveButtonService"))
 
 -- ============================================================
 -- RemoteEvent (progress ke client; opsional dipakai UI)
@@ -103,5 +104,44 @@ end)
 -- Di Studio edit mode placeholder TETAP terlihat supaya bisa ditata.
 -- Begitu game jalan, baru disembunyikan (tidak dihapus).
 CaseService.hidePlaceholders()
+
+-- ============================================================
+-- TOMBOL AKHIR: ActiveButton -> nyalakan generator
+-- ============================================================
+
+-- Warning ke layar (pakai UI feedback yang sama dgn assembly/panel).
+local warnEvent = ReplicatedStorage:FindFirstChild("PuzzleWarnEvent")
+if not warnEvent then
+	warnEvent = Instance.new("RemoteEvent")
+	warnEvent.Name = "PuzzleWarnEvent"
+	warnEvent.Parent = ReplicatedStorage
+end
+
+-- Cari komponen generator secara dinamis (nol koordinat, tahan rename posisi).
+local genOuter = workspace:FindFirstChild("Generator")
+local genInner = genOuter and genOuter:FindFirstChild("Generator")
+local batteryCase = genOuter and genOuter:FindFirstChild("BatteryCase")
+local activeButton = genInner
+	and genInner:FindFirstChild("Case")
+	and genInner.Case:FindFirstChild("ActiveButton")
+
+if genInner and activeButton then
+	ActiveButtonService.setWarnCallback(function(player, message)
+		warnEvent:FireClient(player, message)
+	end)
+	ActiveButtonService.setPoweredCallback(function(genModel)
+		-- Hook untuk sistem lampu/pintu berikutnya. Sengaja tidak menyentuh
+		-- KeySystem/SafeZone; cukup terbitkan attribute + print.
+		print("[ActiveButton] Generator menyala:", genModel:GetFullName())
+	end)
+	ActiveButtonService.start({
+		generator = genInner,
+		batteryCase = batteryCase,
+		button = activeButton,
+	})
+	Config.log("ActiveButton ready")
+else
+	warn("[BatteryPuzzleController] ActiveButton/Generator tidak ditemukan; tombol nyala dilewati")
+end
 
 Config.log("BatteryPuzzleController ready")

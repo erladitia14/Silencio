@@ -97,7 +97,7 @@ Config.HandCarryOffset = CFrame.new(0, -0.6, -0.4) * CFrame.Angles(math.rad(90),
 -- 2. WAKTU PASANG — harus diam, gak bisa gerak
 -- ============================================================
 
-Config.InsertDuration = 2.0             -- detik tahan prompt
+Config.InsertDuration = 1.0             -- detik tahan prompt (dipercepat dari 2.0)
 Config.CancelInsertOnMove = false       -- true = batal kalau pemain jalan
 Config.CancelInsertOnDamage = true      -- batal kalau kena damage
 
