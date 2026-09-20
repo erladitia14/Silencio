@@ -1,31 +1,40 @@
 --!strict
 --[[
-	GeneratorElectricFX — EFEK VISUAL busur listrik pada generator (MODUL MANDIRI).
+	GeneratorElectricFX — PENGENDALI efek listrik generator (MODUL MANDIRI).
 
-	Ini SUMBER sinyalnya: setiap kali efek muncul, modul ini men-fire sinyal
-	"HighVoltage" di Model generator, dan GeneratorSFX memutar suaranya.
-	Efek & suara jadi SATU sumber -> mustahil lepas sinkron.
+	Modul ini TIDAK membuat visual sendiri. Ia MENGENDALIKAN objek efek yang
+	di-insert tim dari Toolbox, supaya efek & suara listrik selalu muncul
+	BERSAMAAN.
 
-	Perilaku:
-	  - Selama generator nyala (Attribute "GeneratorPowered" = true), efek
-	    menyala secara ACAK: tiap 3.5-9 detik muncul burst singkat (0.45s)
-	    berisi kedip busur listrik + percikan + kilatan lampu.
-	  - Generator mati -> efek berhenti & semua visual dipadamkan.
-	  - Mode tahan: kalau Attribute "HighVoltageActive" (Bool) = true, efek
-	    menyala TERUS (bukan burst) sampai attribute itu di-set false.
-	    Berguna kalau tim mau efek listrik berdurasi panjang.
+	=== CARA PAKAI (nol script tambahan) ===
+	1. Insert efek listrik dari Toolbox ke Workspace (bebas di mana saja).
+	2. Beri TAG "GeneratorElectricFX" pada objek efek itu (View > Tag Editor).
+	   Bisa Model, Folder, atau BasePart langsung.
+	3. Selesai. Modul akan:
+	     - memindahkan objek itu ke badan generator
+	     - menyalakannya saat generator hidup (burst acak 3.5-9s)
+	     - mematikannya saat generator mati
+	     - men-fire sinyal "HighVoltage" tiap efek muncul -> suara ikut
 
-	Sinyal yang diterbitkan (dibaca GeneratorSFX):
-	  BindableEvent "HighVoltage" di Model generator -> Fire() tiap burst.
+	KONTRAK: SEMUA ParticleEmitter / Beam / Trail / Light di dalam objek
+	ber-tag itu DIKENDALIKAN modul (nyala saat burst, mati saat selesai).
+	Kalau ada efek yang harus selalu nyala, taruh di luar objek ber-tag.
 
-	Yang dibuat modul ini (idempotent, semua di dalam folder
-	Case.GeneratorElectricFX supaya rapi & gampang dihapus):
-	  - 6 Attachment titik busur di permukaan Case
-	  - 4 Beam busur listrik
-	  - 1 ParticleEmitter percikan
-	  - 1 PointLight kilatan
+	Atribut opsional pada objek efek (boleh dipakai atau tidak):
+	  EffectScale   (Number,  default 1)    : perbesar/perkecil efek (khusus Model)
+	  EffectOffset  (Vector3, default 0)    : geser posisi dari titik tempel
+	  FollowSurface (Bool,    default true) : tempel di badan generator
 
-	Semua angka tuning ada di CONFIG di bawah. Nol konfigurasi di Studio.
+	=== SINYAL KE SUARA ===
+	Setiap efek muncul -> BindableEvent "HighVoltage" di Model generator di-fire.
+	GeneratorSFX mendengarnya & memutar high_voltage_electricity.
+	Jadi efek & suara SATU sumber, mustahil lepas sinkron.
+
+	Syarat: generator harus sudah nyala (Attribute "GeneratorPowered" = true).
+	Sinyal saat mesin belum hidup diabaikan.
+
+	Mode tahan: Attribute "HighVoltageActive" (Bool) = true -> efek & suara
+	jalan terus sampai di-set false (bukan burst acak).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -35,76 +44,24 @@ local CollectionService = game:GetService("CollectionService")
 -- ======================================================================
 
 local CONFIG = {
-	-- Visual busur/percikan/kilatan. MATI = hanya sinyal & suara yang jalan
-	-- (dipakai sementara sampai efek visual asli terpasang).
-	VisualsEnabled = false,
+	-- TAG objek efek. Tim cukup menandai objeknya dengan tag ini.
+	EffectTag = "GeneratorElectricFX",
 
 	-- Seberapa sering efek muncul sendiri (detik). Acak di antara dua angka ini.
 	BurstMinInterval = 3.5,
 	BurstMaxInterval = 9.0,
 	-- Lama satu burst (detik).
 	BurstDuration = 0.45,
-	-- Frekuensi kedipan saat burst (Hz). 30 = halus, 12 = kedap-kedip kasar.
-	FlickerHz = 30,
 
-	-- Warna busur & lampu.
-	Color = Color3.fromRGB(130, 220, 255),
-	-- Terang kilatan lampu.
-	LightBrightness = 6,
-	LightRange = 26,
-	-- Lebar busur (studs). Harus cukup tebal untuk terlihat dari jarak pemain.
-	BeamWidth = 0.35,
-	-- Kepekatan busur: 0 = solid terang, 1 = hilang. 0.15 = jelas terlihat.
-	BeamTransparency = 0.15,
-	-- Jumlah percikan per burst.
-	SparkCount = 18,
-
-	-- Jarak titik busur dari PERMUKAAN mesh (studs, keluar).
-	-- 0 = menempel permukaan. Naikkan kalau busurnya masih tenggelam di mesh.
-	SurfaceOffset = 0.35,
-
-	-- Sudut-sudut arah untuk mencari permukaan Case (dipakai raycast).
-	-- 8 arah diagonal + 4 arah utama = cukup untuk menemukan siluet mesh.
-	SurfaceDirs = {
-		Vector3.new(1, 1, 1), Vector3.new(-1, 1, 1),
-		Vector3.new(-1, -1, 1), Vector3.new(1, -1, 1),
-		Vector3.new(1, 1, -1), Vector3.new(-1, 1, -1),
-		Vector3.new(-1, -1, -1), Vector3.new(1, -1, -1),
-		Vector3.new(1, 0, 0), Vector3.new(-1, 0, 0),
-		Vector3.new(0, 1, 0), Vector3.new(0, -1, 0),
-	},
+	-- Titik tempel efek di badan generator, skala -1..1 dari setengah ukuran Case.
+	-- Default (0, 0.55, 0.75) = agak ke atas & ke sisi depan generator.
+	Anchor = Vector3.new(0, 0.55, 0.75),
 }
 
--- Sinyal yang sama dengan yang didengar GeneratorSFX.
-local HV_EVENT_NAME = "HighVoltage"
 local ATTR_POWERED = "GeneratorPowered"
 local ATTR_HV_ACTIVE = "HighVoltageActive"
+local HV_EVENT_NAME = "HighVoltage"
 local FOLDER_NAME = "GeneratorElectricFX"
-
--- Titik sudut kotak (skala -1..1), urutan mengikuti 4 muka sisi.
--- Urutan sengaja: tiap 4 titik berurutan = satu muka, jadi busurnya bisa
--- melintang DI MUKA itu (bukan menembus badan mesh).
-local CORNERS = {
-	-- muka +Z
-	Vector3.new(1, 1, 1),
-	Vector3.new(-1, 1, 1),
-	Vector3.new(-1, -1, 1),
-	Vector3.new(1, -1, 1),
-	-- muka -Z
-	Vector3.new(1, 1, -1),
-	Vector3.new(-1, 1, -1),
-	Vector3.new(-1, -1, -1),
-	Vector3.new(1, -1, -1),
-}
-
--- Pasangan titik yang disambung busur: diagonal DI DALAM satu muka.
--- {1,3} = diagonal muka +Z, {2,4} = diagonal lain muka +Z, dst.
-local ARC_PAIRS = {
-	{ 1, 3 },
-	{ 2, 4 },
-	{ 5, 7 },
-	{ 6, 8 },
-}
 
 -- ======================================================================
 -- Util
@@ -132,6 +89,36 @@ local function randRange(a: number, b: number): number
 	return a + math.random() * (b - a)
 end
 
+local function readNumber(obj: Instance, name: string, default: number): number
+	local ok, val = pcall(function()
+		return obj:GetAttribute(name)
+	end)
+	if ok and type(val) == "number" and val > 0 then
+		return val
+	end
+	return default
+end
+
+local function readVector(obj: Instance, name: string, default: Vector3): Vector3
+	local ok, val = pcall(function()
+		return obj:GetAttribute(name)
+	end)
+	if ok and typeof(val) == "Vector3" then
+		return val
+	end
+	return default
+end
+
+local function readBool(obj: Instance, name: string, default: boolean): boolean
+	local ok, val = pcall(function()
+		return obj:GetAttribute(name)
+	end)
+	if ok and type(val) == "boolean" then
+		return val
+	end
+	return default
+end
+
 -- ======================================================================
 -- Modul
 -- ======================================================================
@@ -141,25 +128,67 @@ local GeneratorElectricFX = {}
 local state = {
 	started = false,
 	powered = false,
-	active = false, -- burst / mode tahan sedang berjalan
-	built = false,
+	active = false,
+	adopted = false,
 }
 
 local gen: Model? = nil
-local casePart: BasePart? = nil
-local beams: { Beam } = {}
-local spark: ParticleEmitter? = nil
-local flash: PointLight? = nil
+local effectObj: Instance? = nil
 local hvEvent: BindableEvent? = nil
 local loopRunning = false
 
+-- Semua objek yang bisa "menyala" di dalam efek yang diadopsi.
+local emitters: { Instance } = {}
+
 -- ----------------------------------------------------------------------
--- Membangun visual (idempotent)
+-- Mengumpulkan efek
 -- ----------------------------------------------------------------------
 
-local function build(): boolean
-	if state.built then
-		return true
+-- Bekerja untuk struktur apa pun: Model, Folder, Part, atau emitter langsung.
+local function collectEffects(root: Instance)
+	emitters = {}
+
+	local function consider(d: Instance)
+		if d:IsA("ParticleEmitter") or d:IsA("Beam") or d:IsA("Trail")
+			or d:IsA("PointLight") or d:IsA("SpotLight") or d:IsA("SurfaceLight")
+			or d:IsA("Sparkles") or d:IsA("Fire") or d:IsA("Smoke") then
+			table.insert(emitters, d)
+		end
+	end
+
+	consider(root)
+	for _, d in ipairs(root:GetDescendants()) do
+		consider(d)
+	end
+end
+
+-- ----------------------------------------------------------------------
+-- Nyalakan / matikan efek
+-- (didefinisikan SEBELUM adopt() — fungsi lokal wajib ada sebelum dipakai)
+-- ----------------------------------------------------------------------
+
+local function renderOn()
+	if not effectObj then
+		return
+	end
+	for _, e in ipairs(emitters) do
+		(e :: any).Enabled = true
+	end
+end
+
+local function renderOff()
+	for _, e in ipairs(emitters) do
+		(e :: any).Enabled = false
+	end
+end
+
+-- ----------------------------------------------------------------------
+-- Adopsi: pindahkan efek ber-tag ke badan generator
+-- ----------------------------------------------------------------------
+
+local function adopt(): boolean
+	if state.adopted then
+		return effectObj ~= nil
 	end
 	local g = gen
 	if not g then
@@ -168,12 +197,19 @@ local function build(): boolean
 
 	local case = g:FindFirstChild("Case")
 	if not case or not case:IsA("BasePart") then
-		warn("[GeneratorElectricFX] 'Case' (BasePart) tidak ditemukan di generator; efek dilewati")
+		warn("[GeneratorElectricFX] 'Case' (BasePart) tidak ditemukan di generator")
 		return false
 	end
-	casePart = case
 
-	-- Wadah rapi: Case.GeneratorElectricFX
+	local tagged = CollectionService:GetTagged(CONFIG.EffectTag)
+	local obj = tagged[1]
+	if not obj then
+		warn("[GeneratorElectricFX] Tidak ada objek ber-tag '" .. CONFIG.EffectTag
+			.. "'. Insert efek dari Toolbox lalu beri tag itu.")
+		return false
+	end
+
+	-- Wadah: Case.<FolderName>, supaya efek ikut generator & rapi.
 	local folder = case:FindFirstChild(FOLDER_NAME)
 	if not folder then
 		folder = Instance.new("Folder")
@@ -181,170 +217,64 @@ local function build(): boolean
 		folder.Parent = case
 	end
 
-	-- Visual dimatikan sementara (efek busur buatan sendiri belum memuaskan;
-	-- menunggu efek asli). Sinyal & suara tetap jalan lewat fireSignal().
-	-- Tidak ada Beam/ParticleEmitter/PointLight yang dibuat sama sekali.
-	if not CONFIG.VisualsEnabled then
-		state.built = true
-		return true
+	-- Pindahkan objek ke wadah (sekali saja).
+	if not obj:IsDescendantOf(case) then
+		obj.Parent = folder
 	end
 
-	local half = case.Size * 0.5
+	-- Atribut opsional.
+	local scale = readNumber(obj, "EffectScale", 1)
+	local offset = readVector(obj, "EffectOffset", Vector3.zero)
+	local follow = readBool(obj, "FollowSurface", true)
 
-	-- Titik busur ditaruh di SUDUT BOUNDING BOX, dihitung dalam RUANG LOKAL
-	-- part lalu diubah ke dunia lewat CFrame.
-	-- PENTING: Case ini DIPUTAR 90°, jadi sumbu lokal != sumbu dunia.
-	-- (Terukur: world +Z kena permukaan 5.50 studs padahal Size.Z/2 = 2.76;
-	--  world +X malah kosong.) Menaruh titik pakai Vector3 sumbu dunia dengan
-	-- ukuran sumbu lokal = titik ngawur, busur tenggelam di dalam mesh.
-	local margin = CONFIG.SurfaceOffset
-	local surfacePoints: { Vector3 } = {}
-	for _, corner in ipairs(CORNERS) do
-		local localPos = Vector3.new(
-			corner.X * (half.X + margin),
-			corner.Y * (half.Y + margin),
-			corner.Z * (half.Z + margin))
-		table.insert(surfacePoints, case.CFrame:PointToWorldSpace(localPos))
+	local anchor = Vector3.zero
+	if follow then
+		anchor = Vector3.new(
+			CONFIG.Anchor.X * case.Size.X * 0.5,
+			CONFIG.Anchor.Y * case.Size.Y * 0.5,
+			CONFIG.Anchor.Z * case.Size.Z * 0.5)
 	end
+	anchor += offset
 
-	-- Titik busur (posisi LOKAL relatif Case, karena Attachment di dalam Case)
-	local points: { Attachment } = {}
-	for i, worldPos in ipairs(surfacePoints) do
-		local name = "ArcPoint" .. i
-		local att = folder:FindFirstChild(name)
-		if not att then
-			att = Instance.new("Attachment")
-			att.Name = name
-			att.Parent = folder
+	-- PENTING: pakai CFrame, bukan Vector3 sumbu dunia. Case ini DIPUTAR 90°,
+	-- jadi sumbu lokal != sumbu dunia (pernah kejadian: titik jadi ngawur).
+	local targetCF = case.CFrame * CFrame.new(anchor)
+
+	if obj:IsA("BasePart") then
+		obj.CFrame = targetCF
+	elseif obj:IsA("Model") then
+		(obj :: Model):PivotTo(targetCF)
+		if scale ~= 1 then
+			(obj :: Model):ScaleTo(scale)
 		end
-		local a = att :: Attachment
-		a.WorldPosition = worldPos
-		table.insert(points, a)
+	elseif obj:IsA("Attachment") then
+		(obj :: Attachment).WorldCFrame = targetCF
 	end
 
-	-- Busur listrik: sambungkan pasangan titik yang ketemu.
-	-- Jumlah titik hasil raycast bisa beda dari 8, jadi pasangan dipilih
-	-- berdasarkan jumlah titik yang tersedia (busur menyilang antar sisi).
-	beams = {}
-	local n = #points
-	local pairs2: { { number } } = {}
-	if n >= 8 then
-		pairs2 = ARC_PAIRS
-	else
-		-- pasangkan titik berhadapan: i dengan i + n/2
-		local halfN = math.floor(n / 2)
-		for i = 1, halfN do
-			table.insert(pairs2, { i, i + halfN })
+	-- Jangan biarkan efek menghalangi / menabrak pemain.
+	for _, d in ipairs(obj:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.CanCollide = false
+			d.CanTouch = false
+			d.CanQuery = false
 		end
 	end
-	for i, pair in ipairs(pairs2) do
-		local name = "Arc" .. i
-		local b = folder:FindFirstChild(name)
-		if not b then
-			b = Instance.new("Beam")
-			b.Name = name
-			b.Parent = folder
-		end
-		local beam = b :: Beam
-		beam.Attachment0 = points[pair[1]]
-		beam.Attachment1 = points[pair[2]]
-		beam.FaceCamera = true
-		beam.Width0 = CONFIG.BeamWidth
-		beam.Width1 = CONFIG.BeamWidth
-		beam.LightEmission = 1
-		beam.LightInfluence = 0
-		beam.Color = ColorSequence.new(CONFIG.Color)
-		beam.Transparency = NumberSequence.new(CONFIG.BeamTransparency)
-		beam.Enabled = false
-		table.insert(beams, beam)
+
+	effectObj = obj
+	state.adopted = true
+	collectEffects(obj)
+
+	-- PENTING: matikan efek SEKARANG saat adopsi. Aset Toolbox biasanya
+	-- datang dengan Enabled=true, jadi kalau tidak dimatikan di sini efeknya
+	-- sudah menyala sebelum generator hidup.
+	renderOff()
+
+	if #emitters == 0 then
+		warn("[GeneratorElectricFX] Objek ber-tag '" .. CONFIG.EffectTag
+			.. "' tidak punya ParticleEmitter/Beam/Light/Trail. Efeknya tidak akan kelihatan.")
 	end
 
-	-- Percikan
-	local sp = folder:FindFirstChild("Sparks")
-	if not sp then
-		sp = Instance.new("ParticleEmitter")
-		sp.Name = "Sparks"
-		sp.Parent = folder
-	end
-	local p = sp :: ParticleEmitter
-	p.Texture = "rbxasset://textures/particles/sparkles_main.dds"
-	p.Color = ColorSequence.new(CONFIG.Color)
-	p.LightEmission = 1
-	p.LightInfluence = 0
-	p.Size = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.22),
-		NumberSequenceKeypoint.new(1, 0),
-	})
-	p.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.1),
-		NumberSequenceKeypoint.new(1, 1),
-	})
-	p.Lifetime = NumberRange.new(0.18, 0.42)
-	p.Speed = NumberRange.new(9, 20)
-	p.SpreadAngle = Vector2.new(180, 180)
-	p.Rate = 0
-	p.Enabled = false
-	spark = p
-
-	-- Kilatan lampu
-	local fl = folder:FindFirstChild("Flash")
-	if not fl then
-		fl = Instance.new("PointLight")
-		fl.Name = "Flash"
-		fl.Parent = folder
-	end
-	local light = fl :: PointLight
-	light.Color = CONFIG.Color
-	light.Brightness = 0
-	light.Range = CONFIG.LightRange
-	light.Enabled = false
-	flash = light
-
-	state.built = true
 	return true
-end
-
--- ----------------------------------------------------------------------
--- Visual on/off
--- ----------------------------------------------------------------------
-
--- Menyalakan visual dengan intensitas acak (bikin busurnya "hidup").
-local function renderOn()
-	if not CONFIG.VisualsEnabled then
-		return
-	end
-	for _, beam in ipairs(beams) do
-		beam.Enabled = true
-		-- Sedikit variasi kepekatan antar busur, TAPI tetap terlihat jelas.
-		local t = CONFIG.BeamTransparency + randRange(0, 0.15)
-		beam.Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, math.min(1, t + 0.1)),
-			NumberSequenceKeypoint.new(0.5, t),
-			NumberSequenceKeypoint.new(1, math.min(1, t + 0.1)),
-		})
-		beam.CurveSize0 = randRange(-0.4, 0.4)
-		beam.CurveSize1 = randRange(-0.4, 0.4)
-	end
-	if spark then
-		spark.Enabled = true
-	end
-	if flash then
-		flash.Enabled = true
-		flash.Brightness = CONFIG.LightBrightness * randRange(0.5, 1.0)
-	end
-end
-
-local function renderOff()
-	for _, beam in ipairs(beams) do
-		beam.Enabled = false
-	end
-	if spark then
-		spark.Enabled = false
-	end
-	if flash then
-		flash.Enabled = false
-		flash.Brightness = 0
-	end
 end
 
 -- ----------------------------------------------------------------------
@@ -359,7 +289,7 @@ local function fireSignal()
 	end
 end
 
--- Satu burst: kedip cepat, lalu padam. Sinyal di-fire SEKALI di awal
+-- Satu burst: efek nyala sebentar, lalu padam. Sinyal di-fire SEKALI di awal
 -- (satu efek = satu suara, tidak menumpuk).
 local function burst()
 	if state.active then
@@ -368,27 +298,10 @@ local function burst()
 	state.active = true
 
 	fireSignal()
-
-	local step = 1 / math.max(1, CONFIG.FlickerHz)
-	local elapsed = 0
-	while elapsed < CONFIG.BurstDuration do
-		if not state.powered then
-			break
-		end
-		-- Kedip kasar: kadang terang, kadang hampir mati.
-		if math.random() < 0.75 then
-			renderOn()
-		else
-			renderOff()
-		end
-		if spark and math.random() < 0.5 then
-			spark:Emit(math.random(2, math.max(2, CONFIG.SparkCount // 4)))
-		end
-		task.wait(step)
-		elapsed += step
-	end
-
+	renderOn()
+	task.wait(CONFIG.BurstDuration)
 	renderOff()
+
 	state.active = false
 end
 
@@ -399,16 +312,12 @@ local function holdOn()
 	end
 	state.active = true
 	fireSignal()
+	renderOn()
 	while state.powered do
 		if gen and gen:GetAttribute(ATTR_HV_ACTIVE) ~= true then
 			break
 		end
-		if math.random() < 0.8 then
-			renderOn()
-		else
-			renderOff()
-		end
-		task.wait(1 / math.max(1, CONFIG.FlickerHz))
+		task.wait(0.2)
 	end
 	renderOff()
 	state.active = false
@@ -421,7 +330,6 @@ local function runLoop()
 	end
 	loopRunning = true
 	while state.powered do
-		-- Tunggu acak dulu.
 		local waitFor = randRange(CONFIG.BurstMinInterval, CONFIG.BurstMaxInterval)
 		local waited = 0
 		while waited < waitFor and state.powered do
@@ -433,7 +341,7 @@ local function runLoop()
 		end
 
 		if gen and gen:GetAttribute(ATTR_HV_ACTIVE) == true then
-			holdOn() -- mode tahan: jalan terus sampai attribute false
+			holdOn()
 		else
 			burst()
 		end
@@ -448,11 +356,11 @@ end
 
 -- opts (opsional; kosong = cari otomatis dari scene):
 --   generator : Model  (Model generator dalam)
--- Mengembalikan true kalau efek siap dipakai.
+-- Mengembalikan true kalau generator + efek ketemu & siap.
 function GeneratorElectricFX.start(opts: { [string]: any }?): boolean
 	opts = opts or {}
 	if state.started then
-		return state.built
+		return state.adopted
 	end
 	state.started = true
 
@@ -472,18 +380,15 @@ function GeneratorElectricFX.start(opts: { [string]: any }?): boolean
 	end
 	hvEvent = ev :: BindableEvent
 
-	if not build() then
-		return false
-	end
+	local ok = adopt()
 
-	-- Ikuti status generator. Sinyal perubahan SELALU disambung (dulu kalau
-	-- generator sudah nyala saat start(), sambungan ini dilewati -> mematikan
-	-- generator tidak pernah terbaca).
+	-- Ikuti status generator. Sinyal perubahan SELALU disambung (kalau tidak,
+	-- mematikan generator saat efek sudah jalan tidak pernah terbaca).
 	local function applyPowered()
 		local on = gen ~= nil and gen:GetAttribute(ATTR_POWERED) == true
 		state.powered = on
 		if on then
-			if not loopRunning then
+			if not loopRunning and state.adopted then
 				task.spawn(runLoop)
 			end
 		else
@@ -503,7 +408,19 @@ function GeneratorElectricFX.start(opts: { [string]: any }?): boolean
 		end
 	end)
 
-	return true
+	-- Kalau efek di-insert SETELAH game jalan: adopsi begitu tag muncul.
+	CollectionService:GetInstanceAddedSignal(CONFIG.EffectTag):Connect(function(_inst)
+		if state.adopted then
+			return
+		end
+		if adopt() then
+			if state.powered and not loopRunning then
+				task.spawn(runLoop)
+			end
+		end
+	end)
+
+	return ok
 end
 
 return GeneratorElectricFX
