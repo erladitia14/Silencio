@@ -63,6 +63,29 @@ Config.EngineRightAnimId = "rbxassetid://124217715255364"
 Config.EngineLeftCarryOffset = CFrame.new(0.145, -1.266, -3.298) * CFrame.Angles(0, math.rad(90), 0)
 Config.EngineRightCarryOffset = CFrame.new(-0.145, -1.266, -2.958) * CFrame.Angles(0, math.rad(-90), 0)
 
+-- ============================================================
+-- IK TANGAN KE ATTACHMENT (biar tangan SELALU nempel walau
+-- ukuran badan / panjang lengan pemain berbeda-beda)
+-- ============================================================
+-- Animasi R15 menyimpan SUDUT sendi, jadi tangan pemain bertubuh
+-- besar/kecil bisa meleset dari Attachment Engine. IKControl
+-- menyelesaikannya: Roblox menghitung sendiri sudut bahu/siku
+-- supaya TELAPAK TANGAN menyentuh titik Attachment.
+--
+-- Urutan eksekusi Roblox: Animasi dulu -> baru IKControl.
+-- Karena itu IK TIDAK bertabrakan dengan animasi; ia hanya
+-- memenangkan lengan, sedangkan kaki tetap dari animasi jalan.
+Config.UseHandIK = true
+Config.IKWeight = 1.0                      -- 0 = mati, 1 = penuh
+Config.IKChainLength = 2                   -- 2 sendi: Bahu + Siku (UpperArm, LowerArm)
+
+-- Suffix nama Attachment di Engine: "<Sisi>(<Tangan>)"
+-- Contoh: "Left(LeftArm)", "Right(RightArm)"
+Config.IKAttachmentSides = { Left = "Left", Right = "Right" }
+
+-- Offset halus titik IK terhadap Attachment (kalau perlu digeser tipis).
+Config.IKPositionOffset = Vector3.new(0, 0, 0)
+
 -- Offset bawa tangan satu (baterai kecil)
 Config.HandCarryOffset = CFrame.new(0, -0.6, -0.4) * CFrame.Angles(math.rad(90), 0, 0)
 

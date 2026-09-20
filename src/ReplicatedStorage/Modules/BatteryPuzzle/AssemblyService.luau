@@ -25,6 +25,7 @@ local Players = game:GetService("Players")
 
 local Config = require(script.Parent.Config)
 local CarryAnimator = require(script.Parent.CarryAnimator)
+local HandIK = require(script.Parent.HandIK)
 
 local AssemblyService = {}
 
@@ -49,7 +50,14 @@ type SlotRecord = {
 	prompt: ProximityPrompt,
 }
 local slots: { [BasePart]: SlotRecord } = {}
-local pickups: { [BasePart]: { kind: string, prompt: ProximityPrompt, homeCF: CFrame, helpPrompt: ProximityPrompt?, attachments: {left: Attachment?, right: Attachment?} } } = {}
+local pickups: { [BasePart]: {
+	kind: string,
+	prompt: ProximityPrompt,
+	homeCF: CFrame,
+	helpPrompt: ProximityPrompt?,
+	attachments: {left: Attachment?, right: Attachment?},
+	ikAttachments: { [string]: Attachment },
+} } = {}
 
 -- Model generator pemilik (dideteksi dari parent slot)
 local generatorModel: Model? = nil
@@ -302,14 +310,16 @@ local function detachPlayer(player: Player)
 	end
 
 	CarryAnimator.stop(player)
+	HandIK.detach(player)
 end
 
--- Offset menempatkan pemain di sisi engine (diukur dari rig Aer).
+-- Offset posisi pemain RELATIF ke Engine (diukur dari rig Left/Right buatan Aer).
+-- Nilai ini = HumanoidRootPart.CFrame relatif terhadap Engine.CFrame.
 local function getCarrierSnapOffset(side: "Left" | "Right"): CFrame
 	if side == "Left" then
-		return CFrame.new(-1.2783, -0.0648, 0.0032) * CFrame.Angles(0, math.rad(-90), 0)
+		return CFrame.new(-3.2982, 1.2661, -0.1449) * CFrame.Angles(0, math.rad(-90), 0)
 	end
-	return CFrame.new(0.9781, -0.0648, 0.0032) * CFrame.Angles(0, math.rad(90), 0)
+	return CFrame.new(2.9582, 1.2661, -0.1449) * CFrame.Angles(0, math.rad(90), 0)
 end
 
 -- OPSI A: WELD + NETWORK OWNERSHIP.
@@ -320,6 +330,9 @@ end
 -- Anti-jitter 2 orang: hanya DRIVER yang menggerakkan assembly & memegang
 -- network ownership. Pemain kedua di-PlatformStand + Massless supaya ikut
 -- terbawa lewat weld tanpa melawan driver (dua humanoid tidak saling tarik).
+--
+-- Posisi TANGAN diatur terpisah oleh HandIK (IKControl) ke Attachment Engine,
+-- supaya tetap nempel walau ukuran badan / panjang lengan pemain berbeda.
 local function attachEngineCarrier(part: BasePart, player: Player, side: "Left" | "Right")
 	local info = pickups[part]
 	if not info then return false end
@@ -352,12 +365,11 @@ local function attachEngineCarrier(part: BasePart, player: Player, side: "Left" 
 	local offset = getCarrierSnapOffset(side)
 	if isDriver then
 		-- Driver: snap ke posisi pegangan DULU supaya engine tidak melompat.
-		root.CFrame = att.WorldCFrame * offset
+		root.CFrame = part.CFrame * offset
 	end
 
-	-- C0 dihitung dari data Attachment: posisi engine terhadap pemain persis
-	-- seperti posisi snap (engine = root * C0).
-	local c0 = offset:Inverse() * att.CFrame:Inverse()
+	-- Weld: engine = root * C0  ->  C0 = offset^-1
+	local c0 = offset:Inverse()
 
 	local weld = Instance.new("Weld")
 	weld.Name = "EngineCarryWeld_" .. side
@@ -383,6 +395,12 @@ local function attachEngineCarrier(part: BasePart, player: Player, side: "Left" 
 	end
 
 	rt.offsets[player] = c0
+
+	-- IK TANGAN: tempelkan KEDUA tangan pemain ke Attachment sisi ini.
+	-- IKControl dibuat di sini (server) dan otomatis ter-replikasi + di-solve
+	-- per-client. Inilah yang membuat tangan selalu pas walau panjang lengan
+	-- / ukuran badan pemain berbeda-beda (animasi baked tidak bisa begitu).
+	HandIK.attach(player, side, info.ikAttachments)
 
 	-- Jumlah carrier dipakai CLIENT untuk menyembunyikan prompt Help Carry dari
 	-- carrier sendiri (ProximityPrompt.Enabled bersifat global di server).
@@ -794,18 +812,35 @@ local function registerPickup(part: BasePart)
 		prompt.Name = "AssemblyPickupPrompt"
 		prompt.Parent = part
 	end
-	-- Engine memiliki Attachment "Left" dan "Right" buatan Aer.
-	-- Pickup pertama tampil di sisi Left; pemain kedua menerima Help Carry di Right.
+	-- Engine memiliki Attachment buatan Aer dengan pola "<Sisi>(<Tangan>)":
+	--   Left(LeftArm), Left(RightArm), Right(LeftArm), Right(RightArm)
+	-- Dipakai untuk: prompt pickup/help + target IK kedua tangan.
 	local leftAttachment: Attachment? = nil
 	local rightAttachment: Attachment? = nil
+	local ikAttachments: { [string]: Attachment } = {}
 	if kind == "Engine" then
-		local candidateLeft = part:FindFirstChild("Left")
-		local candidateRight = part:FindFirstChild("Right")
-		if candidateLeft and candidateLeft:IsA("Attachment") then
-			leftAttachment = candidateLeft
+		for _, child in ipairs(part:GetChildren()) do
+			if child:IsA("Attachment") then
+				-- Pola nama: "<Sisi>(<Tangan>)"
+				local s = string.match(child.Name, "^(%w+)%(")
+				if s then
+					ikAttachments[child.Name] = child
+					if s == "Left" and not leftAttachment then
+						leftAttachment = child
+					elseif s == "Right" and not rightAttachment then
+						rightAttachment = child
+					end
+				end
+			end
 		end
-		if candidateRight and candidateRight:IsA("Attachment") then
-			rightAttachment = candidateRight
+		-- Fallback: Attachment polos "Left"/"Right" (versi lama).
+		if not leftAttachment then
+			local c = part:FindFirstChild("Left")
+			if c and c:IsA("Attachment") then leftAttachment = c end
+		end
+		if not rightAttachment then
+			local c = part:FindFirstChild("Right")
+			if c and c:IsA("Attachment") then rightAttachment = c end
 		end
 	end
 
@@ -851,6 +886,7 @@ local function registerPickup(part: BasePart)
 		prompt = prompt,
 		helpPrompt = helpPrompt,
 		attachments = {left = leftAttachment, right = rightAttachment},
+		ikAttachments = ikAttachments,
 		homeCF = part.CFrame,
 	}
 end
