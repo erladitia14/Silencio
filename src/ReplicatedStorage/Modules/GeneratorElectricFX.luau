@@ -48,15 +48,28 @@ local CONFIG = {
 	-- TAG objek efek. Tim cukup menandai objeknya dengan tag ini.
 	EffectTag = "GeneratorElectricFX",
 
-	-- Seberapa sering efek muncul sendiri (detik). Acak di antara dua angka ini.
+	-- Munculkan burst PERTAMA segera saat generator nyala (detik). Ini momen
+	-- paling penting: pemain baru menekan tombol power dan harus langsung
+	-- lihat & dengar efeknya. Tanpa ini pemain menunggu 3.5-9 detik tanpa apa-apa.
+	FirstBurstDelay = 0.15,
+
+	-- Seberapa sering efek muncul lagi setelahnya (detik). Acak di antara dua angka.
 	BurstMinInterval = 3.5,
 	BurstMaxInterval = 9.0,
-	-- Lama satu burst (detik).
-	BurstDuration = 0.45,
+	-- Lama satu burst (detik). Dinaikkan dari 0.45 supaya efeknya sempat terlihat.
+	BurstDuration = 0.9,
 
 	-- Titik tempel efek di badan generator, skala -1..1 dari setengah ukuran Case.
 	-- Default (0, 0.55, 0.75) = agak ke atas & ke sisi depan generator.
 	Anchor = Vector3.new(0, 0.55, 0.75),
+
+	-- Perbesar partikel efek saat game jalan. Aset Toolbox punya partikel sangat
+	-- tipis (Lifetime 0.1s, Speed 0.2, Size maks 0.82) sehingga praktis tidak
+	-- terlihat. Nilai di bawah ini mengalikan properti aset; 1 = jangan diubah.
+	SizeMultiplier = 2.5,      -- ukuran partikel
+	LifetimeMultiplier = 3.0,  -- umur partikel (0.1s -> 0.3s)
+	SpeedMultiplier = 4.0,     -- kecepatan sebar (0.2 -> 0.8)
+	RateMultiplier = 2.0,      -- jumlah partikel per detik
 }
 
 local ATTR_POWERED = "GeneratorPowered"
@@ -177,6 +190,37 @@ local function collectEffects(root: Instance)
 	end
 end
 
+-- Perbesar partikel aset Toolbox yang terlalu tipis. Tanpa ini efeknya ADA tapi
+-- praktis tidak terlihat (aset Electric Particle: Lifetime 0.1s, Speed 0.2,
+-- Size maks 0.82 studs). Dikalikan dari nilai aset, jadi aset lain tetap aman.
+local function tuneEmitter(e: Instance)
+	if not e:IsA("ParticleEmitter") then
+		return
+	end
+	local pe = e :: ParticleEmitter
+
+	-- Size: kalikan setiap keypoint
+	local sz = pe.Size
+	local newKeys = {}
+	for _, kp in ipairs(sz.Keypoints) do
+		table.insert(newKeys, NumberSequenceKeypoint.new(kp.Time, kp.Value * CONFIG.SizeMultiplier))
+	end
+	pe.Size = NumberSequence.new(newKeys)
+
+	-- Lifetime
+	pe.Lifetime = NumberRange.new(
+		pe.Lifetime.Min * CONFIG.LifetimeMultiplier,
+		pe.Lifetime.Max * CONFIG.LifetimeMultiplier)
+
+	-- Speed
+	pe.Speed = NumberRange.new(
+		pe.Speed.Min * CONFIG.SpeedMultiplier,
+		pe.Speed.Max * CONFIG.SpeedMultiplier)
+
+	-- Rate
+	pe.Rate = pe.Rate * CONFIG.RateMultiplier
+end
+
 -- ----------------------------------------------------------------------
 -- Nyalakan / matikan efek
 -- (didefinisikan SEBELUM adopt() — fungsi lokal wajib ada sebelum dipakai)
@@ -282,6 +326,11 @@ local function adopt(): boolean
 	state.adopted = true
 	collectEffects(obj)
 
+	-- Perbesar partikel aset yang terlalu tipis (lihat tuneEmitter).
+	for _, e in ipairs(emitters) do
+		tuneEmitter(e)
+	end
+
 	-- PENTING: matikan efek SEKARANG saat adopsi. Aset Toolbox biasanya
 	-- datang dengan Enabled=true, jadi kalau tidak dimatikan di sini efeknya
 	-- sudah menyala sebelum generator hidup.
@@ -341,18 +390,34 @@ local function holdOn()
 	state.active = false
 end
 
--- Selama generator nyala: munculkan burst secara acak.
+-- Selama generator nyala: burst PERTAMA langsung, lalu acak.
 local function runLoop()
 	if loopRunning then
 		return
 	end
 	loopRunning = true
+
+	-- Burst pertama segera: pemain baru menekan tombol power dan harus langsung
+	-- lihat & dengar efeknya (tanpa ini mereka menunggu 3.5-9 detik tanpa apa-apa).
+	local waited = 0
+	while waited < CONFIG.FirstBurstDelay and state.powered do
+		task.wait(0.05)
+		waited += 0.05
+	end
+	if state.powered then
+		if gen and gen:GetAttribute(ATTR_HV_ACTIVE) == true then
+			holdOn()
+		else
+			burst()
+		end
+	end
+
 	while state.powered do
 		local waitFor = randRange(CONFIG.BurstMinInterval, CONFIG.BurstMaxInterval)
-		local waited = 0
-		while waited < waitFor and state.powered do
+		local waited2 = 0
+		while waited2 < waitFor and state.powered do
 			task.wait(0.2)
-			waited += 0.2
+			waited2 += 0.2
 		end
 		if not state.powered then
 			break
