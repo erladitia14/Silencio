@@ -81,39 +81,15 @@ local CONFIG = {
 	-- Perbesar partikel efek saat game jalan. Aset Toolbox punya partikel sangat
 	-- tipis (Lifetime 0.1s, Speed 0.2, Size maks 0.82) sehingga praktis tidak
 	-- terlihat. Nilai di bawah ini mengalikan properti aset; 1 = jangan diubah.
-	SizeMultiplier = 2.5,      -- ukuran partikel
+	SizeMultiplier = 1.0,      -- ukuran partikel (1 = nilai aset)
 	LifetimeMultiplier = 3.0,  -- umur partikel (0.1s -> 0.3s)
 	SpeedMultiplier = 4.0,     -- kecepatan sebar (0.2 -> 0.8)
 	RateMultiplier = 1.0,      -- partikel per detik per emitter
-
-	-- SEBARAN EFEK: emitter dikloning ke titik-titik ini supaya listriknya
-	-- keluar dari BEBERAPA tempat, bukan satu titik saja. Skala -1..1 terhadap
-	-- setengah ukuran Case.
-	-- ATURAN: minimal SATU komponen harus > 1.0 (keluar permukaan mesh).
-	-- Kosongkan (={}) kalau mau satu titik saja.
-	-- Catatan: aset Toolbox punya 4 emitter IDENTIK. Semua dikloning ke tiap
-	-- titik = efeknya berlipat 4x dan jadi norak. Karena itu hanya emitter
-	-- PERTAMA yang dipakai sebagai cetakan (lihat MaxSpreadSources).
-	SpreadPoints = {
-		Vector3.new(-0.70, 0.30, 1.15), -- depan kiri
-		Vector3.new(0.70, 0.30, 1.15),  -- depan kanan
-		Vector3.new(1.15, 0.30, 0),     -- samping kanan
-		Vector3.new(-1.15, 0.30, 0),    -- samping kiri
-	},
-
-	-- Berapa banyak emitter sumber yang dipakai sebagai cetakan sebaran.
-	-- Aset ini punya 4 emitter identik; pakai 1 saja sudah cukup (pakai 4 =
-	-- efek 4x lebih ramai, pernah dikeluhkan "kebanyakan listriknya").
-	MaxSpreadSources = 1,
 }
 
 local ATTR_POWERED = "GeneratorPowered"
 local ATTR_HV_ACTIVE = "HighVoltageActive"
 local HV_EVENT_NAME = "HighVoltage"
-
--- Attachment internal buatan modul, tempat kloningan emitter sebaran ditaruh.
--- Dinamai jelas supaya tim tahu ini bukan ditempel manual.
-local SPREAD_HOLDER = "GeneratorElectricFX_Points"
 
 -- ======================================================================
 -- Util
@@ -277,75 +253,6 @@ local function renderOff()
 	end
 end
 
--- Sebarkan efek ke banyak titik di badan generator. Emitter SUMBER tetap di
--- tempatnya (tidak digeser); kloningannya ditaruh di titik-titik CONFIG.SpreadPoints.
--- Semua kloningan dimasukkan ke daftar emitters supaya ikut nyala/mati bareng burst.
---
--- Kenapa dikloning, bukan digeser: satu emitter hanya punya satu posisi.
--- Kloning bikin efeknya benar-benar MENYEBAR dari banyak tempat sekaligus.
-local function spreadEffects(case: BasePart)
-	if #CONFIG.SpreadPoints == 0 then
-		return
-	end
-
-	-- Ambil emitter SUMBER sebagai cetakan. Aset Toolbox punya 4 emitter
-	-- IDENTIK — memakai semuanya sebagai cetakan melipatgandakan efeknya
-	-- (4 emitter x N titik) dan hasilnya jadi norak. Batasi lewat
-	-- MaxSpreadSources; emitter sisanya tetap menyala di tempat aslinya.
-	local sources: { Instance } = {}
-	for _, e in ipairs(emitters) do
-		if e:IsA("ParticleEmitter") then
-			table.insert(sources, e)
-			if #sources >= CONFIG.MaxSpreadSources then
-				break
-			end
-		end
-	end
-	if #sources == 0 then
-		return
-	end
-
-	local half = case.Size * 0.5
-
-	-- Wadah kloningan: Attachment internal, dinamai jelas supaya tim tahu ini
-	-- buatan modul (bukan ditempel manual). Ditaruh di dalam Case.
-	local holder = case:FindFirstChild(SPREAD_HOLDER)
-	if not holder then
-		holder = Instance.new("Attachment")
-		holder.Name = SPREAD_HOLDER
-		holder.Parent = case
-	end
-
-	for i, pt in ipairs(CONFIG.SpreadPoints) do
-		-- Titik HARUS keluar dari permukaan mesh (lihat catatan CONFIG).
-		local localPos = Vector3.new(pt.X * half.X, pt.Y * half.Y, pt.Z * half.Z)
-
-		local attName = "Point" .. i
-		local att = (holder :: Attachment):FindFirstChild(attName)
-		if not att then
-			att = Instance.new("Attachment")
-			att.Name = attName
-			att.Parent = holder
-		end
-		local a = att :: Attachment
-		-- Set Parent dulu, baru WorldCFrame (kalau tidak, dianggap lokal).
-		a.WorldCFrame = case.CFrame * CFrame.new(localPos)
-
-		for _, src in ipairs(sources) do
-			local cloneName = src.Name .. "_s" .. i
-			local existing = a:FindFirstChild(cloneName)
-			if existing then
-				existing:Destroy()
-			end
-			local c = src:Clone()
-			c.Name = cloneName
-			c.Enabled = false
-			c.Parent = a
-			table.insert(emitters, c)
-		end
-	end
-end
-
 -- ----------------------------------------------------------------------
 -- Adopsi: pindahkan efek ber-tag ke badan generator
 -- ----------------------------------------------------------------------
@@ -457,10 +364,6 @@ local function adopt(): boolean
 	for _, e in ipairs(emitters) do
 		tuneEmitter(e)
 	end
-
-	-- SEBARKAN efek ke beberapa titik di badan generator. Tanpa ini efeknya
-	-- cuma menumpuk di satu titik (keluhan Aer: "kenapa cuman disini doang").
-	spreadEffects(case)
 
 	-- PENTING: matikan efek SEKARANG saat adopsi. Aset Toolbox biasanya
 	-- datang dengan Enabled=true, jadi kalau tidak dimatikan di sini efeknya
