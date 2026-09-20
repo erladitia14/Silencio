@@ -209,16 +209,19 @@ local function adopt(): boolean
 		return false
 	end
 
-	-- Wadah: Case.<FolderName>, supaya efek ikut generator & rapi.
-	local folder = case:FindFirstChild(FOLDER_NAME)
-	if not folder then
-		folder = Instance.new("Folder")
-		folder.Name = FOLDER_NAME
-		folder.Parent = case
-	end
-
-	-- Pindahkan objek ke wadah (sekali saja).
+	-- Wadah: Case.<FolderName>. HANYA dibuat kalau efeknya memang perlu
+	-- dipindah ke dalam Case. Kalau efek sudah di dalam Case (mis. ditempel
+	-- di Attachment), tidak perlu wadah -> jangan bikin folder kosong.
+	local folder: Instance? = nil
 	if not obj:IsDescendantOf(case) then
+		local existing = case:FindFirstChild(FOLDER_NAME)
+		if existing then
+			folder = existing
+		else
+			folder = Instance.new("Folder")
+			folder.Name = FOLDER_NAME
+			folder.Parent = case
+		end
 		obj.Parent = folder
 	end
 
