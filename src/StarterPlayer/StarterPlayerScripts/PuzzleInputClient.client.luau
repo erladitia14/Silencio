@@ -5,7 +5,7 @@
 	Tugas:
 	1. Tombol SIMPAN (Q): kirim ke server untuk menaruh item yang sedang dibawa
 	   (baterai maupun engine/panel). Server yang memutuskan valid/tidak.
-	2. Tampilkan WARNING singkat di tengah-bawah layar (mis. "Pasang Engine dulu")
+	2. Tampilkan WARNING singkat di tengah-bawah layar (mis. "Install the Engine first")
 	   saat server mengirim PuzzleWarnEvent.
 
 	Tidak menyentuh sistem lain; murni input + UI feedback.
