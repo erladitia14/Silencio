@@ -87,20 +87,24 @@ local CONFIG = {
 	RateMultiplier = 1.0,      -- partikel per detik per emitter
 
 	-- SEBARAN EFEK: emitter dikloning ke titik-titik ini supaya listriknya
-	-- keluar dari BANYAK tempat, bukan satu titik saja. Skala -1..1 terhadap
+	-- keluar dari BEBERAPA tempat, bukan satu titik saja. Skala -1..1 terhadap
 	-- setengah ukuran Case.
 	-- ATURAN: minimal SATU komponen harus > 1.0 (keluar permukaan mesh).
 	-- Kosongkan (={}) kalau mau satu titik saja.
+	-- Catatan: aset Toolbox punya 4 emitter IDENTIK. Semua dikloning ke tiap
+	-- titik = efeknya berlipat 4x dan jadi norak. Karena itu hanya emitter
+	-- PERTAMA yang dipakai sebagai cetakan (lihat MaxSpreadSources).
 	SpreadPoints = {
-		Vector3.new(-0.70, -0.50, 1.15), -- depan bawah kiri
-		Vector3.new(0.70, -0.50, 1.15),  -- depan bawah kanan
-		Vector3.new(-0.70, 0.50, 1.15),  -- depan atas kiri
-		Vector3.new(0.70, 0.50, 1.15),   -- depan atas kanan
-		Vector3.new(1.15, 0.30, 0),      -- samping kanan
-		Vector3.new(-1.15, 0.30, 0),     -- samping kiri
-		Vector3.new(1.15, -0.40, 0),     -- samping kanan bawah
-		Vector3.new(-1.15, -0.40, 0),    -- samping kiri bawah
+		Vector3.new(-0.70, 0.30, 1.15), -- depan kiri
+		Vector3.new(0.70, 0.30, 1.15),  -- depan kanan
+		Vector3.new(1.15, 0.30, 0),     -- samping kanan
+		Vector3.new(-1.15, 0.30, 0),    -- samping kiri
 	},
+
+	-- Berapa banyak emitter sumber yang dipakai sebagai cetakan sebaran.
+	-- Aset ini punya 4 emitter identik; pakai 1 saja sudah cukup (pakai 4 =
+	-- efek 4x lebih ramai, pernah dikeluhkan "kebanyakan listriknya").
+	MaxSpreadSources = 1,
 }
 
 local ATTR_POWERED = "GeneratorPowered"
@@ -284,11 +288,17 @@ local function spreadEffects(case: BasePart)
 		return
 	end
 
-	-- Ambil emitter SUMBER (yang asli) sebagai cetakan.
+	-- Ambil emitter SUMBER sebagai cetakan. Aset Toolbox punya 4 emitter
+	-- IDENTIK — memakai semuanya sebagai cetakan melipatgandakan efeknya
+	-- (4 emitter x N titik) dan hasilnya jadi norak. Batasi lewat
+	-- MaxSpreadSources; emitter sisanya tetap menyala di tempat aslinya.
 	local sources: { Instance } = {}
 	for _, e in ipairs(emitters) do
 		if e:IsA("ParticleEmitter") then
 			table.insert(sources, e)
+			if #sources >= CONFIG.MaxSpreadSources then
+				break
+			end
 		end
 	end
 	if #sources == 0 then
