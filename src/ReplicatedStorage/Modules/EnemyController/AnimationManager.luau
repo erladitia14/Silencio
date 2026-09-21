@@ -100,6 +100,27 @@ function AnimationManager.new(monsterModel: Model)
 	self._connections = {} :: { RBXScriptConnection }
 	self._sources = {} :: { [string]: string }  -- dari mana tiap animasi didapat (untuk log)
 
+	-- Apakah rig ini BONE-BASED (mesh import: punya Bone, tanpa Motor6D)?
+	--
+	-- KENAPA PENTING: animasi DEFAULT Roblox (DEFAULT_ANIMS) dibuat untuk rig
+	-- karakter Roblox yang sendinya Motor6D bernama "Torso"/"Left Leg"/dst.
+	-- Mesh import (Mixamo dsb) tidak punya Motor6D sama sekali -- sendinya
+	-- Bone. Animasi default TETAP ter-load (Length > 0) tapi TIDAK menggerakkan
+	-- bone apa pun -> mesh diam di rest pose = T-POSE.
+	--
+	-- Jadi untuk rig bone-based, default Roblox TIDAK BOLEH dipakai sebagai
+	-- fallback: lebih baik tidak ada animasi (mesh tetap seperti sekarang)
+	-- daripada dipaksa memutar track yang tidak nyambung lalu T-pose.
+	local hasMotor6D = monsterModel:FindFirstChildOfClass("Motor6D") ~= nil
+	local hasBone = false
+	for _, d in ipairs(monsterModel:GetDescendants()) do
+		if d:IsA("Bone") then
+			hasBone = true
+			break
+		end
+	end
+	self._boneBased = hasBone and not hasMotor6D
+
 	self:_loadAnimations()
 	self:_setupStateListeners()
 
@@ -128,6 +149,16 @@ function AnimationManager:_getAnimId(name: string): (string?, string)
 	end
 
 	-- 3. ID default Roblox
+	--
+	-- SKIP untuk rig BONE-BASED (lihat self._boneBased di new()): animasi default
+	-- menargetkan Motor6D milik karakter Roblox, jadi pada mesh import (Bone,
+	-- tanpa Motor6D) ia ter-load tapi TIDAK menggerakkan apa pun -> T-POSE.
+	-- Lebih baik mengembalikan "tidak ada" supaya play() tidak menghentikan
+	-- animasi yang sedang berjalan.
+	if self._boneBased then
+		return nil, "TIDAK ADA (rig bone-based, default Roblox dilewati)"
+	end
+
 	local defaults = DEFAULT_ANIMS[self._rigType]
 	local fallback = defaults[name]
 	if fallback then
