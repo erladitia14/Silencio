@@ -49,7 +49,7 @@ local NavigationManager = require(modulesFolder:WaitForChild("NavigationManager"
 local CombatManager     = require(modulesFolder:WaitForChild("CombatManager"))
 local PatrolManager     = require(modulesFolder:WaitForChild("PatrolManager"))
 local AnimationManager  = require(modulesFolder:WaitForChild("AnimationManager"))
-local SkinBinder        = require(modulesFolder:WaitForChild("SkinBinder"))
+local MonsterRig        = require(modulesFolder:WaitForChild("MonsterRig"))
 local TargetClaims      = require(modulesFolder:WaitForChild("TargetClaims"))
 
 ---------------------------------------------------------------------
@@ -534,21 +534,21 @@ local function initializeMonster(monsterModel: Model)
 	end
 	print("[MonsterAI] " .. monsterModel.Name .. " chase mode: " .. chaseMode)
 
-	-- PASANG SKIN (mesh visual) bila ada.
-	-- NPC bisa terdiri dari dua model di folder yang sama:
-	--   rig  -> tag "Monster"      (Humanoid, gerak, damage, tabrakan)
-	--   skin -> tag "MonsterSkin"  (mesh visual + animasi)
-	-- SkinBinder yang mengurus weld, mematikan collision skin, menyembunyikan
-	-- rig, dan mematikan script animasi lama yang berebut Animator.
-	local bind = SkinBinder:bind(monsterModel)
-	if bind.error then
-		warn("[MonsterAI] " .. monsterModel.Name .. ": skin gagal dipasang -> " .. tostring(bind.error))
-	elseif bind.skins > 0 then
+	-- SIAPKAN RIG (struktur baru: satu model, mesh = HumanoidRootPart).
+	-- MonsterRig menghitung HipHeight otomatis dari geometri (kaki napak tanpa
+	-- angka manual), menyalakan collision mesh (tidak menembus lagi), dan
+	-- mematikan LocalScript "Animate"/"Anim" bawaan yang berebut Animator.
+	local rig = MonsterRig:setup(monsterModel)
+	if rig.error then
+		warn("[MonsterAI] " .. monsterModel.Name .. ": setup rig gagal -> " .. tostring(rig.error))
+	else
 		print(string.format(
-			"[MonsterAI] %s: skin terpasang (%d skin, weld baru %d, sudah ada %d, collision off %d, part rig disembunyikan %d, animator %d, part diluruskan %d%s)",
-			monsterModel.Name, bind.skins, bind.welded, bind.alreadyWelded,
-			bind.collisionOff, bind.rigHidden, bind.animated, bind.aligned,
-			#bind.scriptsDisabled > 0 and (", script dimatikan: " .. table.concat(bind.scriptsDisabled, " ")) or ""
+			"[MonsterAI] %s: rig siap (HipHeight %s -> %s, collision on %d%s)",
+			monsterModel.Name,
+			rig.hipHeightBefore and string.format("%.2f", rig.hipHeightBefore) or "?",
+			rig.hipHeight and string.format("%.2f", rig.hipHeight) or "tidak diubah",
+			rig.collisionOn,
+			#rig.scriptsDisabled > 0 and (", script dimatikan: " .. table.concat(rig.scriptsDisabled, " ")) or ""
 		))
 	end
 
@@ -624,8 +624,6 @@ local function initializeMonster(monsterModel: Model)
 		if ctx.combat and ctx.combat.destroy then
 			ctx.combat:destroy()
 		end
-		-- Lepas animator skin + catatan ignore-list raycast
-		SkinBinder:unbind(monsterModel)
 		print("[MonsterAI] " .. monsterModel.Name .. " telah mati. AI dihentikan.")
 	end)
 end

@@ -21,7 +21,6 @@ local Players = game:GetService("Players")
 
 local Config          = require(script.Parent.Config)
 local SafeZoneManager = require(script.Parent.SafeZoneManager)
-local SkinBinder      = require(script.Parent.SkinBinder)
 local TargetClaims    = require(script.Parent.TargetClaims)
 
 local TargetFinder = {}
@@ -59,14 +58,14 @@ function TargetFinder:_hasLineOfSight(monsterModel: Model, monsterRoot: BasePart
 	end
 
 	-- Raycast.
-	-- PENTING: kecualikan rig DAN skin visualnya. Pada pola "driver + skin"
-	-- mesh badan monster berada di LUAR model rig (sibling di folder yang
-	-- sama), jadi kalau tidak difilter ray langsung menabrak badan monster
-	-- sendiri dari jarak <1 stud -> LOS selalu gagal -> monster buta permanen.
-	-- CanCollide = false tidak menolong: raycast tetap mengenai part non-collide.
+	-- PENTING: kecualikan model monster itu sendiri. Struktur baru = satu model
+	-- (mesh badan = HumanoidRootPart), jadi tanpa filter ray langsung menabrak
+	-- badan monster sendiri dari jarak <1 stud -> LOS selalu gagal -> monster
+	-- buta permanen. CanCollide = true (mesh baru) TIDAK menolong: raycast tetap
+	-- mengenai part sendiri, malah lebih pasti kena.
 	local rayParams = RaycastParams.new()
 	rayParams.FilterType = Enum.RaycastFilterType.Exclude
-	rayParams.FilterDescendantsInstances = SkinBinder:getIgnoreList(monsterModel)
+	rayParams.FilterDescendantsInstances = { monsterModel }
 	rayParams.IgnoreWater = true
 
 	local result = workspace:Raycast(origin, direction, rayParams)
