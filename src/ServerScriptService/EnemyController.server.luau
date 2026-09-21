@@ -534,19 +534,20 @@ local function initializeMonster(monsterModel: Model)
 	end
 	print("[MonsterAI] " .. monsterModel.Name .. " chase mode: " .. chaseMode)
 
-	-- SIAPKAN RIG (struktur baru: satu model, mesh = HumanoidRootPart).
-	-- MonsterRig menyalakan collision mesh (tidak menembus lagi), memastikan
-	-- satu penyetir animasi (buang AnimationController bentrok), dan mematikan
-	-- LocalScript "Animate"/"Anim" bawaan. HipHeight & posisi TIDAK disentuh
-	-- (tim yang menata di Studio).
+	-- SIAPKAN RIG (proxy collision ramping + mesh jadi visual + animator tunggal).
+	-- MonsterRig membuat HumanoidRootPart proxy kecil supaya monster bisa
+	-- MELANGKAHI gundukan (kotak collision besar yang menyeret tanah = stuck).
 	local rig = MonsterRig:setup(monsterModel)
 	if rig.error then
 		warn("[MonsterAI] " .. monsterModel.Name .. ": setup rig gagal -> " .. tostring(rig.error))
 	else
 		print(string.format(
-			"[MonsterAI] %s: rig siap (collision on %d, AnimationController dibuang %s%s)",
+			"[MonsterAI] %s: rig siap (proxy=%s, collider=%s, HipHeight=%s, mesh diputar=%s, AnimationController dibuang %s%s)",
 			monsterModel.Name,
-			rig.collisionOn,
+			rig.proxyCreated and "dibuat" or "sudah ada",
+			rig.colliderSize and string.format("%.0fx%.0fx%.0f", rig.colliderSize.X, rig.colliderSize.Y, rig.colliderSize.Z) or "-",
+			rig.hipHeight and string.format("%.2f", rig.hipHeight) or "-",
+			tostring(rig.rotatedMesh == 1),
 			tostring(rig.animControllerRemoved),
 			#rig.scriptsDisabled > 0 and (", script dimatikan: " .. table.concat(rig.scriptsDisabled, " ")) or ""
 		))

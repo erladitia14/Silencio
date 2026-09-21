@@ -2,37 +2,46 @@
 --[[
 	MonsterRig.luau
 	---------------
-	Menyiapkan monster ber-STRUKTUR BARU (satu model, tanpa skin terpisah).
+	Menyiapkan monster jadi RIG YANG BISA BERJALAN & MELANGKAH dengan benar.
 
-	STRUKTUR BARU (permintaan Aer, 21 Sep 2026):
-	  Enemies/
-	  └── Clown              <- tag "Monster", Model
-	      ├── HumanoidRootPart  = MeshPart badut (mesh + bone/animasi)
-	      └── Humanoid
+	MASALAH YANG DISELESAIKAN
+	-------------------------
+	Kalau mesh monster (badut) dijadikan HumanoidRootPart APA ADANYA, kotak
+	collision-nya sebesar mesh (mis. 6.1 x 7.4 x 1.6 stud) dan bagian bawahnya
+	menyeret tanah. Akibatnya monster TIDAK PUNYA RUANG untuk "melangkah":
+	gundukan/undakan sekecil apa pun membuatnya MENTOK (stuck), walau
+	AutoJumpEnabled sudah true.
 
-	Beda dari pola lama "driver + skin" (SkinBinder): dulu rig R15 tipis di-weld
-	ke mesh kulit terpisah, dan mesh dibuat CanCollide=false supaya tidak menahan
-	rig. Akibatnya mesh visual nyembul keluar dari collision hitbox tipis ->
-	terlihat menembus tembok/tanah. Sekarang MESH-nya SENDIRI yang jadi
-	HumanoidRootPart, jadi tidak ada lagi yang nembus.
+	Bandingkan karakter Roblox normal: HumanoidRootPart-nya KECIL (2x2x1) dan
+	MELAYANG ~2 stud di atas tanah, kaki part terpisah -> bisa melangkahi
+	gundukan rendah tanpa lompat.
 
-	YANG DIKERJAKAN MODUL INI (idempotent, cukup tag "Monster"):
-	  1. Collision mesh dinyalakan (CanCollide = true) supaya tidak menembus.
-	     Bisa di-skip dengan Attribute "KeepCollision" (biar tim yang atur).
-	  2. Satu penyetir animasi saja: pastikan Humanoid punya Animator, dan buang
-	     AnimationController sisa rig lama yang bikin animasi diam (T-pose).
-	  3. Matikan LocalScript "Animate"/"Anim" bawaan yang ikut merebut Animator.
+	SOLUSI (di sini)
+	----------------
+	Bikin HumanoidRootPart PROXY: Part kecil, tak terlihat, melayang sesuai
+	HipHeight. Mesh monster jadi MESH VISUAL (CanCollide=false) yang di-weld ke
+	proxy. Jadi:
+	  - collision = kotak kecil ramping -> bisa melangkah, tidak nyangkut
+	  - mesh tetap tampil penuh & tetap beranimasi (bone tetap di dalam model)
+	  - mesh tidak menembus tembok karena proxy tetap punya collision
 
-	PENTING — POSISI & HipHeight TIDAK DISENTUH.
-	Modul ini TIDAK mengubah HipHeight dan TIDAK memindahkan part apa pun.
-	Tinggi badan monster sepenuhnya urusan tim yang menata di Studio: letakkan
-	monster pada posisi yang benar, nilainya dipakai apa adanya.
-	(Menebak HipHeight dari geometri mesh sudah dicoba dan SALAH untuk skinned
-	mesh: bone yang menggerakkan mesh tidak sejalan dengan kotak part, jadi
-	hitung-hitungan malah mengangkat/menenggelamkan monster.)
+	CATATAN: mesh TIDAK dipindah/diputar oleh modul ini. Kalau orientasi mesh
+	nyamping, itu sifat asetnya -> pakai Attribute "MeshYawOffset" (derajat).
 
-	OPT-OUT (Attribute pada Model):
-	  - "KeepCollision" = true    -> jangan sentuh CanCollide part
+	CARA PAKAI: cukup tag "Monster" pada Model. Nol konfigurasi.
+
+	ATTRIBUTE (semua OPSIONAL, di Model monster):
+	  ColliderSize    (Vector3) -> ukuran kotak collision proxy. Default 3,5,3.
+	  ColliderOffset  (Vector3) -> geser proxy dari posisi mesh. Default 0,0,0.
+	  MeshYawOffset   (number)  -> putar MESH visual (derajat) untuk membetulkan
+	                               arah hadap aset yang nyamping. Default 0.
+	  MeshYawOffsetX/Z(number)  -> kalau perlu koreksi pitch/roll juga.
+	  KeepCollision   (Bool)    -> true = jangan sentuh collision sama sekali
+	                               (modul tidak bikin proxy).
+	  NoProxy         (Bool)    -> true = jangan bikin proxy (mesh tetap HRP).
+	  HipHeight       (number)  -> paksa HipHeight proxy (default: 60% tinggi mesh).
+
+	MODUL INI IDEMPOTENT: dipanggil dua kali tidak bikin proxy/weld ganda.
 ]]
 
 local MonsterRig = {}
@@ -40,8 +49,68 @@ local MonsterRig = {}
 --- Script animasi bawaan yang sering berebut Animator dengan AnimationManager.
 local CONFLICTING_SCRIPTS = { Anim = true, Animate = true }
 
---- Matikan LocalScript "Animate"/"Anim" bawaan di dalam model. Mengembalikan
---- daftar nama yang dimatikan.
+--- Nama yang dipakai untuk part proxy & weld.
+local PROXY_NAME = "HumanoidRootPart"
+local WELD_NAME = "MonsterRigWeld"
+
+--- Nama asli mesh disimpan di Attribute supaya bisa dibalik/di-debug.
+local ATTR_MESH_NAME = "MonsterRig_MeshName"
+
+---------------------------------------------------------------------
+-- Util
+---------------------------------------------------------------------
+
+--- Ambil Attribute Vector3 dengan default (aman kalau salah tipe).
+local function vecAttr(model: Instance, name: string, default: Vector3): Vector3
+	local v = model:GetAttribute(name)
+	if typeof(v) == "Vector3" then
+		return v
+	end
+	return default
+end
+
+--- Ambil Attribute number dengan default.
+local function numAttr(model: Instance, name: string, default: number): number
+	local v = model:GetAttribute(name)
+	if typeof(v) == "number" then
+		return v
+	end
+	return default
+end
+
+--- Bounding box GEOMETRI RENDER model (mengikuti bentuk mesh, bukan Size part).
+--- Mengembalikan (center, size) atau nil.
+local function renderBounds(model: Model): (Vector3?, Vector3?)
+	local ok, cf, size = pcall(function()
+		return model:GetBoundingBox()
+	end)
+	if not ok or not cf or not size then
+		return nil, nil
+	end
+	return cf.Position, size
+end
+
+--- Cari part mesh utama: part pertama yang punya Bone (mesh skinned), kalau
+--- tidak ada ambil BasePart pertama. Mengembalikan nil bila model tanpa part.
+local function findMeshPart(model: Model): BasePart?
+	local firstPart: BasePart? = nil
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			if not firstPart then
+				firstPart = d
+			end
+			-- MeshPart yang punya Bone = mesh visual utama
+			for _, c in ipairs(d:GetChildren()) do
+				if c:IsA("Bone") then
+					return d
+				end
+			end
+		end
+	end
+	return firstPart
+end
+
+--- Matikan LocalScript "Animate"/"Anim" bawaan di dalam model.
 local function disableConflictingScripts(model: Model): { string }
 	local disabled = {}
 	for _, d in ipairs(model:GetDescendants()) do
@@ -53,8 +122,23 @@ local function disableConflictingScripts(model: Model): { string }
 	return disabled
 end
 
---- Nyalakan collision semua BasePart model (mesh tidak lagi menembus).
---- Mengembalikan jumlah part yang diubah.
+--- Pastikan Humanoid punya Animator, dan buang AnimationController bentrok.
+local function fixAnimator(model: Model, humanoid: Humanoid): boolean
+	if not humanoid:FindFirstChildOfClass("Animator") then
+		local a = Instance.new("Animator")
+		a.Parent = humanoid
+	end
+	local removed = false
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("AnimationController") then
+			d:Destroy()
+			removed = true
+		end
+	end
+	return removed
+end
+
+--- Nyalakan collision semua BasePart model.
 local function enableCollision(model: Model): number
 	local n = 0
 	for _, d in ipairs(model:GetDescendants()) do
@@ -66,64 +150,182 @@ local function enableCollision(model: Model): number
 	return n
 end
 
---- Pastikan Humanoid punya Animator, dan singkirkan AnimationController yang
---- bentrok. Mengembalikan true bila AnimationController dihapus.
----
---- KENAPA: mesh hasil rig lama (pola "driver + skin") datang dengan
---- AnimationController + Animator sendiri. Begitu kita kasih Humanoid, ada DUA
---- kandidat penyetir: Humanoid.Animator (jalur AnimationManager) dan
---- AnimationController.Animator (jalur lama). Animasi yang di-load ke Animator
---- yang BUKAN penggerak mesh -> mesh diam di rest pose (T-pose). Humanoid selalu
---- menang untuk model ber-Humanoid, jadi AnimationController tinggal jadi
---- sumber kebingungan -> dibuang.
-local function fixAnimator(model: Model, humanoid: Humanoid): boolean
-	-- Humanoid wajib punya Animator (AnimationManager butuh ini).
-	if not humanoid:FindFirstChildOfClass("Animator") then
-		local a = Instance.new("Animator")
-		a.Parent = humanoid
-	end
-
-	local removed = false
-	for _, d in ipairs(model:GetDescendants()) do
-		if d:IsA("AnimationController") then
-			d:Destroy()
-			removed = true
+--- Apakah model sudah punya proxy (dipanggil ulang)?
+local function findExistingProxy(model: Model): (BasePart?, BasePart?)
+	-- Proxy = part bernama HumanoidRootPart yang BUKAN mesh (punya weld ke mesh)
+	for _, d in ipairs(model:GetChildren()) do
+		if d:IsA("BasePart") and d.Name == PROXY_NAME then
+			for _, c in ipairs(d:GetChildren()) do
+				if c:IsA("WeldConstraint") and c.Name == WELD_NAME then
+					return d, (c.Part1 :: BasePart?)
+				end
+			end
 		end
 	end
-	return removed
+	return nil, nil
 end
 
---- Siapkan monster ber-struktur baru. Idempotent (aman dipanggil ulang).
---- TIDAK menyentuh HipHeight / posisi part.
---- Mengembalikan ringkasan untuk dilaporkan ke Output.
+---------------------------------------------------------------------
+-- Setup
+---------------------------------------------------------------------
+
+--- Siapkan monster. Idempotent.
+--- Mengembalikan ringkasan untuk log.
 function MonsterRig:setup(model: Model): { [string]: any }
 	local result = {
-		collisionOn = 0,
 		scriptsDisabled = {},
 		animControllerRemoved = false,
+		proxyCreated = false,
+		proxyName = nil :: string?,
+		meshName = nil :: string?,
+		hipHeight = nil :: number?,
+		colliderSize = nil :: Vector3?,
+		collisionOn = 0,
+		rotatedMesh = 0,
 	}
 
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
-	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if not humanoid or not root then
-		result.error = "model tidak punya Humanoid/HumanoidRootPart"
+	if not humanoid then
+		result.error = "model tidak punya Humanoid"
 		return result
 	end
 
-	-- 1. Matikan script animasi bawaan yang bentrok (harus DULU: sebelum
-	--    AnimationManager mengambil alih Animator).
+	-- 1. Matikan script animasi bentrok (sebelum Animator diambil alih).
 	result.scriptsDisabled = disableConflictingScripts(model)
 
-	-- 2. Satu penyetir animasi saja: Humanoid.Animator. Buang AnimationController
-	--    sisa rig lama supaya animasi benar-benar menggerakkan mesh (bukan T-pose).
+	-- 2. Satu penyetir animasi: Humanoid.Animator.
 	result.animControllerRemoved = fixAnimator(model, humanoid)
 
-	-- 3. Collision ON (kecuali tim minta atur sendiri).
-	if model:GetAttribute("KeepCollision") ~= true then
-		result.collisionOn = enableCollision(model)
-	end
+	-- 3. PROXY: collision ramping + mesh jadi visual.
+	--
+	-- Dilewati kalau tim minta atur sendiri.
+	local skipProxy = (model:GetAttribute("NoProxy") == true)
+		or (model:GetAttribute("KeepCollision") == true)
 
-	-- CATATAN: HipHeight & posisi TIDAK diubah di sini (lihat header).
+	if not skipProxy then
+		local existingProxy, existingMesh = findExistingProxy(model)
+		local mesh: BasePart?
+		local proxy: BasePart?
+
+		if existingProxy and existingMesh then
+			-- Sudah pernah di-setup -> idempotent, pakai yang ada.
+			proxy = existingProxy
+			mesh = existingMesh
+			result.proxyCreated = false
+		else
+			mesh = findMeshPart(model)
+			if not mesh then
+				result.error = "model tidak punya BasePart (mesh)"
+				return result
+			end
+
+			-- Simpan nama asli mesh (biar bisa dibalikin / jelas di Explorer).
+			if mesh:GetAttribute(ATTR_MESH_NAME) == nil then
+				mesh:SetAttribute(ATTR_MESH_NAME, mesh.Name)
+			end
+			local originalMeshName = mesh:GetAttribute(ATTR_MESH_NAME) :: string
+
+			-- Ukuran collider: default 3 x (60% tinggi render) x 3, tapi jangan
+			-- lebih pendek dari 3 stud supaya tetap stabil.
+			local _, renderSize = renderBounds(model)
+			local defaultH = 5
+			if renderSize then
+				defaultH = math.clamp(renderSize.Y * 0.6, 3, 12)
+			end
+			local colSize = vecAttr(model, "ColliderSize", Vector3.new(3, defaultH, 3))
+			local colOffset = vecAttr(model, "ColliderOffset", Vector3.zero)
+
+			-- Titik acuan: pakai CFrame mesh (mesh = penentu posisi/rotasi awal).
+			local baseCF = mesh.CFrame * CFrame.new(colOffset)
+
+			-- Nama mesh diganti supaya nama "HumanoidRootPart" bebas dipakai proxy.
+			mesh.Name = "Mesh"
+
+			proxy = Instance.new("Part")
+			proxy.Name = PROXY_NAME
+			proxy.Size = colSize
+			proxy.Transparency = 1
+			proxy.CanCollide = true
+			proxy.Anchored = false
+			proxy.Massless = true
+			proxy.CFrame = baseCF
+			proxy.Parent = model
+
+			-- Mesh jadi visual: tidak menahan gerak, tidak punya massa.
+			mesh.CanCollide = false
+			mesh.Massless = true
+
+			-- Weld mesh ke proxy (mesh ikut gerak proxy).
+			local weld = Instance.new("WeldConstraint")
+			weld.Name = WELD_NAME
+			weld.Part0 = proxy
+			weld.Part1 = mesh
+			weld.Parent = proxy
+
+			model.PrimaryPart = proxy
+			task.wait(0.1)
+
+			result.proxyCreated = true
+			result.meshName = originalMeshName
+			result.colliderSize = colSize
+		end
+
+		result.proxyName = proxy and proxy.Name or nil
+
+		-- Humanoid harus menganggap PROXY sebagai root.
+		if proxy and humanoid.RootPart ~= proxy then
+			model.PrimaryPart = proxy
+			task.wait(0.05)
+		end
+
+		-- HipHeight: taruh proxy pada ketinggian yang membuat MESH napak.
+		--
+		-- Aturan Roblox: pusat HumanoidRootPart berada HipHeight stud di atas
+		-- lantai. Kita ingin bawah MESH menyentuh lantai, jadi:
+		--   HipHeight = (jarak pusat proxy ke bawah mesh)
+		-- Kalau mesh sejajar proxy (offset 0), itu = setengah tinggi mesh.
+		if mesh and proxy and model:GetAttribute("KeepHipHeight") ~= true then
+			local override = model:GetAttribute("HipHeight")
+			if typeof(override) == "number" then
+				humanoid.HipHeight = override
+			else
+				-- Hitung dari geometri render.
+				local _, renderSize = renderBounds(model)
+				local half = renderSize and (renderSize.Y * 0.5) or (mesh.Size.Y * 0.5)
+				-- Jarak pusat proxy ke pusat mesh (biasanya 0 kalau offset 0).
+				local proxyToMeshCenter = (mesh.Position - proxy.Position).Y
+				humanoid.HipHeight = math.max(0, half + proxyToMeshCenter)
+			end
+			result.hipHeight = humanoid.HipHeight
+		end
+
+		-- Rotasi mesh (untuk aset yang "depan"-nya nyamping). Mesh DIPUTAR
+		-- mengelilingi posisinya sendiri; posisi TIDAK berubah.
+		local yaw = numAttr(model, "MeshYawOffset", 0)
+		local pitch = numAttr(model, "MeshYawOffsetX", 0)
+		local roll = numAttr(model, "MeshYawOffsetZ", 0)
+		if mesh and (yaw ~= 0 or pitch ~= 0 or roll ~= 0) then
+			local rot = CFrame.Angles(math.rad(pitch), math.rad(yaw), math.rad(roll))
+			-- Weld membekukan offset, jadi bongkar dulu -> putar -> weld ulang.
+			for _, c in ipairs(proxy:GetChildren()) do
+				if c:IsA("WeldConstraint") and c.Name == WELD_NAME then
+					c:Destroy()
+				end
+			end
+			mesh.CFrame = CFrame.new(mesh.Position) * (rot * mesh.CFrame.Rotation)
+			local weld = Instance.new("WeldConstraint")
+			weld.Name = WELD_NAME
+			weld.Part0 = proxy
+			weld.Part1 = mesh
+			weld.Parent = proxy
+			result.rotatedMesh = 1
+		end
+	else
+		-- Tidak bikin proxy: perilaku lama (mesh jadi collision).
+		if model:GetAttribute("KeepCollision") ~= true then
+			result.collisionOn = enableCollision(model)
+		end
+	end
 
 	return result
 end
