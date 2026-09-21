@@ -33,41 +33,34 @@
 	  - "HipHeightPadding" = <n>  -> geser HipHeight (+ = badan naik). Default 0.
 ]]
 
-local RunService = game:GetService("RunService")
-
 local MonsterRig = {}
 
 --- Script animasi bawaan yang sering berebut Animator dengan AnimationManager.
 local CONFLICTING_SCRIPTS = { Anim = true, Animate = true }
 
---- Titik terendah (Y dunia) dari seluruh BasePart dalam model. math.huge bila
---- tidak ada part.
-local function lowestPartY(model: Model): number
-	local lo = math.huge
-	for _, d in ipairs(model:GetDescendants()) do
-		if d:IsA("BasePart") then
-			lo = math.min(lo, d.Position.Y - d.Size.Y * 0.5)
-		end
-	end
-	return lo
-end
-
---- HipHeight yang membuat kaki napak, dihitung dari geometri sekarang.
---- Untuk R6 (model 1-part), Roblox meletakkan PUSAT root di HipHeight di atas
---- tanah; untuk R15, jarak root-bawah ke kaki. Rumus lowest-part menutup
---- kedua kasus: selisih antara bawah root dengan titik terendah model.
---- Model 1-part -> selisih 0 -> tambah setengah tinggi root supaya BAWAH mesh
---- yang menyentuh lantai, bukan pusatnya.
+--- HipHeight yang membuat kaki napak, dihitung dari geometri RENDER sekarang.
+---
+--- Roblox meletakkan PUSAT root (`root.Position`) di `HipHeight` stud di atas
+--- lantai. Jadi HipHeight yang benar = jarak dari PUSAT root ke titik TERENDAH
+--- yang kelihatan pemain.
+---
+--- KENAPA `root.Size.Y*0.5` SALAH (bikin monster terbang): pada mesh badut,
+--- collision box (`Size.Y`) sering JAUH lebih besar dari mesh visualnya
+--- (contoh nyata: Size.Y=7.37 tapi mesh render cuma 1.61 stud, sisanya rongga).
+--- Memakai setengah Size.Y menaruh pusat 3.68 stud di atas tanah padahal bawah
+--- mesh cuma 0.80 stud dari pusat -> monster ngambang 2.88 stud.
+--- Solusi: ukur dari `GetBoundingBox()` (kotak yang membungkus GEOMETRI render),
+--- bukan dari Size.Y part.
 local function computeHipHeight(model: Model, root: BasePart): number?
-	local lowest = lowestPartY(model)
-	if lowest == math.huge then
+	local ok, cf, size = pcall(function()
+		return model:GetBoundingBox()
+	end)
+	if not ok or not cf or not size then
 		return nil
 	end
-	local rootBottom = root.Position.Y - root.Size.Y * 0.5
-	local gap = rootBottom - lowest        -- jarak bawah-root ke kaki terendah
-	-- Model 1-part: root ADALAH satu-satunya part -> gap = 0. Humanoid R6
-	-- menaruh PUSAT root di HipHeight, jadi setengah tinggi root harus masuk.
-	return gap + root.Size.Y * 0.5
+	local renderBottom = cf.Position.Y - size.Y * 0.5
+	-- Pusat root ke bawah render = HipHeight supaya bawah mesh menyentuh lantai.
+	return root.Position.Y - renderBottom
 end
 
 --- Matikan LocalScript "Animate"/"Anim" bawaan di dalam model. Mengembalikan
@@ -96,6 +89,33 @@ local function enableCollision(model: Model): number
 	return n
 end
 
+--- Pastikan Humanoid punya Animator, dan singkirkan AnimationController yang
+--- bentrok. Mengembalikan true bila AnimationController dihapus.
+---
+--- KENAPA: mesh hasil rig lama (pola "driver + skin") datang dengan
+--- AnimationController + Animator sendiri. Begitu kita kasih Humanoid, ada DUA
+--- kandidat penyetir: Humanoid.Animator (jalur AnimationManager) dan
+--- AnimationController.Animator (jalur lama). Animasi yang di-load ke Animator
+--- yang BUKAN penggerak mesh -> mesh diam di rest pose (T-pose). Humanoid selalu
+--- menang untuk model ber-Humanoid, jadi AnimationController tinggal jadi
+--- sumber kebingungan -> dibuang.
+local function fixAnimator(model: Model, humanoid: Humanoid): boolean
+	-- Humanoid wajib punya Animator (AnimationManager butuh ini).
+	if not humanoid:FindFirstChildOfClass("Animator") then
+		local a = Instance.new("Animator")
+		a.Parent = humanoid
+	end
+
+	local removed = false
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("AnimationController") then
+			d:Destroy()
+			removed = true
+		end
+	end
+	return removed
+end
+
 --- Siapkan monster ber-struktur baru. Idempotent (aman dipanggil ulang).
 --- Mengembalikan ringkasan untuk dilaporkan ke Output.
 function MonsterRig:setup(model: Model): { [string]: any }
@@ -104,6 +124,7 @@ function MonsterRig:setup(model: Model): { [string]: any }
 		hipHeightBefore = nil :: number?,
 		collisionOn = 0,
 		scriptsDisabled = {},
+		animControllerRemoved = false,
 	}
 
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
@@ -116,6 +137,10 @@ function MonsterRig:setup(model: Model): { [string]: any }
 	-- 1. Matikan script animasi bawaan yang bentrok (harus DULU: sebelum
 	--    AnimationManager mengambil alih Animator).
 	result.scriptsDisabled = disableConflictingScripts(model)
+
+	-- 1b. Satu penyetir animasi saja: Humanoid.Animator. Buang AnimationController
+	--     sisa rig lama supaya animasi benar-benar menggerakkan mesh (bukan T-pose).
+	result.animControllerRemoved = fixAnimator(model, humanoid)
 
 	-- 2. Collision ON (kecuali tim minta atur sendiri).
 	if model:GetAttribute("KeepCollision") ~= true then
