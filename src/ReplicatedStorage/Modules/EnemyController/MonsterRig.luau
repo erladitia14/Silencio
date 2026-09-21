@@ -7,61 +7,38 @@
 	STRUKTUR BARU (permintaan Aer, 21 Sep 2026):
 	  Enemies/
 	  └── Clown              <- tag "Monster", Model
-	      ├── HumanoidRootPart  = MeshPart badut (mesh + bone/animasi)  <- CanCollide ON
+	      ├── HumanoidRootPart  = MeshPart badut (mesh + bone/animasi)
 	      └── Humanoid
 
 	Beda dari pola lama "driver + skin" (SkinBinder): dulu rig R15 tipis di-weld
 	ke mesh kulit terpisah, dan mesh dibuat CanCollide=false supaya tidak menahan
 	rig. Akibatnya mesh visual nyembul keluar dari collision hitbox tipis ->
 	terlihat menembus tembok/tanah. Sekarang MESH-nya SENDIRI yang jadi
-	HumanoidRootPart dengan collision nyala, jadi tidak ada lagi yang nembus.
+	HumanoidRootPart, jadi tidak ada lagi yang nembus.
 
 	YANG DIKERJAKAN MODUL INI (idempotent, cukup tag "Monster"):
-	  1. HipHeight OTOMATIS dari geometri, supaya kaki napak (tidak tenggelam /
-	     melayang) tanpa mengisi angka manual. Rumus tervalidasi:
-	       HipHeight = (root bawah) - (titik terendah seluruh part model)
-	     Untuk model 1-part (mesh = root) hasilnya 0 -> pusat mesh di tanah,
-	     jadi ditambah setengah tinggi mesh supaya bawah mesh yang menyentuh lantai.
-	  2. Collision mesh dinyalakan (CanCollide = true) supaya tidak menembus.
+	  1. Collision mesh dinyalakan (CanCollide = true) supaya tidak menembus.
 	     Bisa di-skip dengan Attribute "KeepCollision" (biar tim yang atur).
-	  3. Matikan LocalScript "Animate"/"Anim" bawaan yang berebut Animator
-	     (hanya satu penyetir animasi; AnimationManager yang pegang).
+	  2. Satu penyetir animasi saja: pastikan Humanoid punya Animator, dan buang
+	     AnimationController sisa rig lama yang bikin animasi diam (T-pose).
+	  3. Matikan LocalScript "Animate"/"Anim" bawaan yang ikut merebut Animator.
+
+	PENTING — POSISI & HipHeight TIDAK DISENTUH.
+	Modul ini TIDAK mengubah HipHeight dan TIDAK memindahkan part apa pun.
+	Tinggi badan monster sepenuhnya urusan tim yang menata di Studio: letakkan
+	monster pada posisi yang benar, nilainya dipakai apa adanya.
+	(Menebak HipHeight dari geometri mesh sudah dicoba dan SALAH untuk skinned
+	mesh: bone yang menggerakkan mesh tidak sejalan dengan kotak part, jadi
+	hitung-hitungan malah mengangkat/menenggelamkan monster.)
 
 	OPT-OUT (Attribute pada Model):
-	  - "AutoHipHeight" = false   -> jangan hitung HipHeight otomatis
 	  - "KeepCollision" = true    -> jangan sentuh CanCollide part
-	  - "HipHeightPadding" = <n>  -> geser HipHeight (+ = badan naik). Default 0.
 ]]
 
 local MonsterRig = {}
 
 --- Script animasi bawaan yang sering berebut Animator dengan AnimationManager.
 local CONFLICTING_SCRIPTS = { Anim = true, Animate = true }
-
---- HipHeight yang membuat kaki napak, dihitung dari geometri RENDER sekarang.
----
---- Roblox meletakkan PUSAT root (`root.Position`) di `HipHeight` stud di atas
---- lantai. Jadi HipHeight yang benar = jarak dari PUSAT root ke titik TERENDAH
---- yang kelihatan pemain.
----
---- KENAPA `root.Size.Y*0.5` SALAH (bikin monster terbang): pada mesh badut,
---- collision box (`Size.Y`) sering JAUH lebih besar dari mesh visualnya
---- (contoh nyata: Size.Y=7.37 tapi mesh render cuma 1.61 stud, sisanya rongga).
---- Memakai setengah Size.Y menaruh pusat 3.68 stud di atas tanah padahal bawah
---- mesh cuma 0.80 stud dari pusat -> monster ngambang 2.88 stud.
---- Solusi: ukur dari `GetBoundingBox()` (kotak yang membungkus GEOMETRI render),
---- bukan dari Size.Y part.
-local function computeHipHeight(model: Model, root: BasePart): number?
-	local ok, cf, size = pcall(function()
-		return model:GetBoundingBox()
-	end)
-	if not ok or not cf or not size then
-		return nil
-	end
-	local renderBottom = cf.Position.Y - size.Y * 0.5
-	-- Pusat root ke bawah render = HipHeight supaya bawah mesh menyentuh lantai.
-	return root.Position.Y - renderBottom
-end
 
 --- Matikan LocalScript "Animate"/"Anim" bawaan di dalam model. Mengembalikan
 --- daftar nama yang dimatikan.
@@ -117,11 +94,10 @@ local function fixAnimator(model: Model, humanoid: Humanoid): boolean
 end
 
 --- Siapkan monster ber-struktur baru. Idempotent (aman dipanggil ulang).
+--- TIDAK menyentuh HipHeight / posisi part.
 --- Mengembalikan ringkasan untuk dilaporkan ke Output.
 function MonsterRig:setup(model: Model): { [string]: any }
 	local result = {
-		hipHeight = nil :: number?,
-		hipHeightBefore = nil :: number?,
 		collisionOn = 0,
 		scriptsDisabled = {},
 		animControllerRemoved = false,
@@ -138,25 +114,16 @@ function MonsterRig:setup(model: Model): { [string]: any }
 	--    AnimationManager mengambil alih Animator).
 	result.scriptsDisabled = disableConflictingScripts(model)
 
-	-- 1b. Satu penyetir animasi saja: Humanoid.Animator. Buang AnimationController
-	--     sisa rig lama supaya animasi benar-benar menggerakkan mesh (bukan T-pose).
+	-- 2. Satu penyetir animasi saja: Humanoid.Animator. Buang AnimationController
+	--    sisa rig lama supaya animasi benar-benar menggerakkan mesh (bukan T-pose).
 	result.animControllerRemoved = fixAnimator(model, humanoid)
 
-	-- 2. Collision ON (kecuali tim minta atur sendiri).
+	-- 3. Collision ON (kecuali tim minta atur sendiri).
 	if model:GetAttribute("KeepCollision") ~= true then
 		result.collisionOn = enableCollision(model)
 	end
 
-	-- 3. HipHeight otomatis (kecuali di-opt-out).
-	if model:GetAttribute("AutoHipHeight") ~= false then
-		result.hipHeightBefore = humanoid.HipHeight
-		local hip = computeHipHeight(model, root)
-		if hip then
-			local padding = tonumber(model:GetAttribute("HipHeightPadding")) or 0
-			humanoid.HipHeight = hip + padding
-			result.hipHeight = humanoid.HipHeight
-		end
-	end
+	-- CATATAN: HipHeight & posisi TIDAK diubah di sini (lihat header).
 
 	return result
 end

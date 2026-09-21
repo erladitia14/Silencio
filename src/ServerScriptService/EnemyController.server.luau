@@ -535,19 +535,19 @@ local function initializeMonster(monsterModel: Model)
 	print("[MonsterAI] " .. monsterModel.Name .. " chase mode: " .. chaseMode)
 
 	-- SIAPKAN RIG (struktur baru: satu model, mesh = HumanoidRootPart).
-	-- MonsterRig menghitung HipHeight otomatis dari geometri (kaki napak tanpa
-	-- angka manual), menyalakan collision mesh (tidak menembus lagi), dan
-	-- mematikan LocalScript "Animate"/"Anim" bawaan yang berebut Animator.
+	-- MonsterRig menyalakan collision mesh (tidak menembus lagi), memastikan
+	-- satu penyetir animasi (buang AnimationController bentrok), dan mematikan
+	-- LocalScript "Animate"/"Anim" bawaan. HipHeight & posisi TIDAK disentuh
+	-- (tim yang menata di Studio).
 	local rig = MonsterRig:setup(monsterModel)
 	if rig.error then
 		warn("[MonsterAI] " .. monsterModel.Name .. ": setup rig gagal -> " .. tostring(rig.error))
 	else
 		print(string.format(
-			"[MonsterAI] %s: rig siap (HipHeight %s -> %s, collision on %d%s)",
+			"[MonsterAI] %s: rig siap (collision on %d, AnimationController dibuang %s%s)",
 			monsterModel.Name,
-			rig.hipHeightBefore and string.format("%.2f", rig.hipHeightBefore) or "?",
-			rig.hipHeight and string.format("%.2f", rig.hipHeight) or "tidak diubah",
 			rig.collisionOn,
+			tostring(rig.animControllerRemoved),
 			#rig.scriptsDisabled > 0 and (", script dimatikan: " .. table.concat(rig.scriptsDisabled, " ")) or ""
 		))
 	end
