@@ -90,6 +90,57 @@ local function renderBounds(model: Model): (Vector3?, Vector3?)
 	return cf.Position, size
 end
 
+--- Y TERENDAH dari GEOMETRI NYATA mesh (world space).
+---
+--- Urutan sumber (yang paling dipercaya dulu):
+---   1. BONE  -> mesh skinned: bone yang menggerakkan mesh, jadi posisinya
+---      yang benar-benar menentukan di mana kaki berada.
+---   2. BasePart anak -> mesh biasa tanpa bone.
+---   3. Bounding box render -> jaring pengaman terakhir.
+---
+--- KENAPA BUKAN `part.Size.Y`: kotak part hasil import sering TIDAK sejalan
+--- dengan mesh visualnya. Contoh nyata di proyek ini: `Size.Y = 7.37` tapi
+--- kaki sebenarnya cuma 3.52 dari pusat -> selisih 0.16 stud bikin monster
+--- ngambang saat Humanoid memakai angka itu sebagai HipHeight.
+local function lowestPointY(mesh: BasePart, model: Model): number?
+	local lo = math.huge
+
+	-- 1. Bone (paling akurat untuk mesh skinned).
+	for _, d in ipairs(mesh:GetDescendants()) do
+		if d:IsA("Bone") then
+			local y = d.WorldPosition.Y
+			if y < lo then
+				lo = y
+			end
+		end
+	end
+	if lo < math.huge then
+		return lo
+	end
+
+	-- 2. BasePart lain di dalam mesh (mesh biasa).
+	for _, d in ipairs(mesh:GetDescendants()) do
+		if d:IsA("BasePart") then
+			local y = d.Position.Y - d.Size.Y * 0.5
+			if y < lo then
+				lo = y
+			end
+		end
+	end
+	if lo < math.huge then
+		return lo
+	end
+
+	-- 3. Jaring pengaman: bounding box render.
+	local _, size = renderBounds(model)
+	if size then
+		local center = mesh.Position.Y
+		return center - size.Y * 0.5
+	end
+
+	return nil
+end
+
 --- Cari part mesh utama: part pertama yang punya Bone (mesh skinned), kalau
 --- tidak ada ambil BasePart pertama. Mengembalikan nil bila model tanpa part.
 local function findMeshPart(model: Model): BasePart?
@@ -278,33 +329,15 @@ function MonsterRig:setup(model: Model): { [string]: any }
 			task.wait(0.05)
 		end
 
-		-- HipHeight: taruh proxy pada ketinggian yang membuat MESH napak.
-		--
-		-- Aturan Roblox: pusat HumanoidRootPart berada HipHeight stud di atas
-		-- lantai. Kita ingin bawah MESH menyentuh lantai, jadi:
-		--   HipHeight = (jarak pusat proxy ke bawah mesh)
-		-- Kalau mesh sejajar proxy (offset 0), itu = setengah tinggi mesh.
-		if mesh and proxy and model:GetAttribute("KeepHipHeight") ~= true then
-			local override = model:GetAttribute("HipHeight")
-			if typeof(override) == "number" then
-				humanoid.HipHeight = override
-			else
-				-- Hitung dari geometri render.
-				local _, renderSize = renderBounds(model)
-				local half = renderSize and (renderSize.Y * 0.5) or (mesh.Size.Y * 0.5)
-				-- Jarak pusat proxy ke pusat mesh (biasanya 0 kalau offset 0).
-				local proxyToMeshCenter = (mesh.Position - proxy.Position).Y
-				humanoid.HipHeight = math.max(0, half + proxyToMeshCenter)
-			end
-			result.hipHeight = humanoid.HipHeight
-		end
-
-		-- Rotasi mesh (untuk aset yang "depan"-nya nyamping). Mesh DIPUTAR
+		-- ROTASI MESH (untuk aset yang "depan"-nya nyamping). Mesh DIPUTAR
 		-- mengelilingi posisinya sendiri; posisi TIDAK berubah.
+		--
+		-- PENTING: dilakukan SEBELUM hitung HipHeight, karena memutar mesh
+		-- mengubah di mana kaki berada.
 		local yaw = numAttr(model, "MeshYawOffset", 0)
 		local pitch = numAttr(model, "MeshYawOffsetX", 0)
 		local roll = numAttr(model, "MeshYawOffsetZ", 0)
-		if mesh and (yaw ~= 0 or pitch ~= 0 or roll ~= 0) then
+		if mesh and proxy and (yaw ~= 0 or pitch ~= 0 or roll ~= 0) then
 			local rot = CFrame.Angles(math.rad(pitch), math.rad(yaw), math.rad(roll))
 			-- Weld membekukan offset, jadi bongkar dulu -> putar -> weld ulang.
 			for _, c in ipairs(proxy:GetChildren()) do
@@ -318,7 +351,44 @@ function MonsterRig:setup(model: Model): { [string]: any }
 			weld.Part0 = proxy
 			weld.Part1 = mesh
 			weld.Parent = proxy
+			task.wait(0.05)
 			result.rotatedMesh = 1
+		end
+
+		-- HipHeight: taruh proxy pada ketinggian yang membuat KAKI MESH napak.
+		--
+		-- SEMANTIK YANG BENAR (dibuktikan empiris pada rig R15 bawaan Roblox:
+		-- HipHeight 2.1924 == (pusat HRP -> kaki) 3.1924 - (HRP.Size.Y/2) 1.0):
+		--     HipHeight = jarak dari BAWAH HumanoidRootPart ke lantai
+		-- BUKAN dari pusat RootPart. Selisihnya = setengah tinggi proxy.
+		--
+		-- Jadi:
+		--     HipHeight = (pusat proxy -> titik terendah mesh) - proxy.Size.Y/2
+		--
+		-- Dan JANGAN pakai mesh.Size.Y/2 untuk "titik terendah": kotak part hasil
+		-- import sering tidak sejalan dengan mesh visualnya (kasus nyata di proyek
+		-- ini: Size.Y = 7.37 padahal kaki sebenarnya cuma 3.52 dari pusat). Ukur
+		-- dari GEOMETRI NYATA: titik terendah BONE (mesh skinned).
+		if mesh and proxy and model:GetAttribute("KeepHipHeight") ~= true then
+			local override = model:GetAttribute("HipHeight")
+			if typeof(override) == "number" then
+				humanoid.HipHeight = override
+			else
+				local lowest = lowestPointY(mesh, model)
+				local footDistance
+				if lowest then
+					footDistance = proxy.Position.Y - lowest
+				else
+					-- Jaring pengaman: tidak ada bone/part -> pakai kotak part.
+					footDistance = mesh.Size.Y * 0.5
+				end
+				-- HipHeightOffset: koreksi halus dari tim (stud). Positif = naikkan
+				-- monster, negatif = turunkan. Untuk mesh yang geometri render-nya
+				-- sedikit meleset dari bone (kasus nyata: 0.16 stud).
+				local offset = numAttr(model, "HipHeightOffset", 0)
+				humanoid.HipHeight = math.max(0, footDistance - proxy.Size.Y * 0.5 + offset)
+			end
+			result.hipHeight = humanoid.HipHeight
 		end
 	else
 		-- Tidak bikin proxy: perilaku lama (mesh jadi collision).
