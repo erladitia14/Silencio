@@ -108,10 +108,20 @@ function ReviveManager.canRevive(character: Model, reviver: Player?): boolean
 	if not DownedState.isDowned(character) then
 		return false
 	end
+
 	-- Tidak bisa menolong diri sendiri.
+	-- JEBAKAN (terjadi di playtest): membandingkan `reviver.Character == character`
+	-- saja BOCOR — kalau Character sedang nil / berganti instance (respawn cepat,
+	-- karakter di-reparent), perbandingan itu lolos dan pemain menolong dirinya
+	-- sendiri. Bandingkan IDENTITAS PLAYER-nya, itu selalu benar.
+	local owner = Players:GetPlayerFromCharacter(character)
+	if owner and reviver == owner then
+		return false
+	end
 	if reviver.Character == character then
 		return false
 	end
+
 	-- Pemain yang sedang tumbang tidak boleh menolong.
 	if Config.DownedCannotRevive and DownedState.isPlayerDowned(reviver) then
 		return false
@@ -139,6 +149,11 @@ function ReviveManager._beginHold(character: Model, reviver: Player)
 		return
 	end
 	if not ReviveManager.canRevive(character, reviver) then
+		return
+	end
+	-- Cek jarak DI SINI juga (bukan hanya saat _complete). Tanpa ini, holder
+	-- bisa masuk dari jarak mustahil dan baru dibuang di tick berikutnya.
+	if ReviveManager._distance(character, reviver) > Config.ReviveBreakDistance then
 		return
 	end
 	rec.holders[reviver] = os.clock()
