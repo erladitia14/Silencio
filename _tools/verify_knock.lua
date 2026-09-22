@@ -86,5 +86,12 @@ ck("play() saat tumbang", has(S.KnockService or "", "KnockAnimator.play("))
 local stopCount = select(2, (S.KnockService or ""):gsub("KnockAnimator%.stop%(", ""))
 ck("stop() di >=4 jalur keluar (dapat " .. stopCount .. ")", stopCount >= 4)
 
+-- ---------- 8. Tinggi billboard (permintaan Aer: UI naik) ----------
+ck("Config.KnockHudHeight ada", cfg:match("KnockHudHeight%s*=%s*([%d%.]+)") ~= nil)
+ck("KnockHud.new terima param height", has(S.KnockHud or "", "function KnockHud.new(adornee: BasePart, heightStuds: number?)"))
+ck("KnockHud pakai height (bukan hardcode 3.0)", has(S.KnockHud or "", "StudsOffsetWorldSpace = Vector3.new(0, height, 0)"))
+ck("KnockUI baca Config.KnockHudHeight", has(uiSrc, "KnockHudHeight"))
+ck("KnockUI oper HUD_HEIGHT ke new()", has(uiSrc, "HudClass.new(adornee, HUD_HEIGHT)"))
+
 table.insert(out, string.format("=== AD-HOC edit-mode (bukan suite green): %d PASS / %d FAIL ===", pass, fail))
 return table.concat(out, "\n")

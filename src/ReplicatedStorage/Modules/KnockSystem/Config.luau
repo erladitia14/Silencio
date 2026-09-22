@@ -107,6 +107,14 @@ Config.KnockAnimId = "rbxassetid://2506281703"  -- SitV2 (sementara)
 Config.PlayKnockAnimation = true
 
 -----------------------------------------------------------------
+-- UI BILLBOARD (KnockHud) — posisi & ukuran
+-----------------------------------------------------------------
+-- Tinggi billboard di atas root karakter (studs). Pemain tumbang badannya
+-- rendah, jadi kalau terlalu kecil UI-nya menempel/menutupi badannya.
+-- Menaikkan angka ini = UI naik makin tinggi.
+Config.KnockHudHeight = 6.0
+
+-----------------------------------------------------------------
 -- KANAL SINYAL (untuk SFX/UI tim — sistem ini tidak memaksa UI apa pun)
 -----------------------------------------------------------------
 -- BindableEvent di ReplicatedStorage, dibuat otomatis (idempotent):

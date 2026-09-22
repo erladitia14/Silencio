@@ -57,10 +57,31 @@ local function loadHudModule(): any?
 	return result
 end
 
+--- Tinggi billboard di atas root. Dibaca OPSIONAL dari Config supaya UI tetap
+--- jalan walau modul server tak dimuat (Config cuma untuk tuning tampilan).
+local function loadHudHeight(): number?
+	local modules = ReplicatedStorage:FindFirstChild("Modules")
+	local folder = modules and modules:FindFirstChild("KnockSystem")
+	local cfg = folder and folder:FindFirstChild("Config")
+	if not cfg or not cfg:IsA("ModuleScript") then
+		return nil
+	end
+	local ok, result = pcall(require, cfg)
+	if ok and type(result) == "table" then
+		local h = result.KnockHudHeight
+		if type(h) == "number" and h >= 0 then
+			return h
+		end
+	end
+	return nil
+end
+
 local HudClass = loadHudModule()
 if not HudClass then
 	return
 end
+
+local HUD_HEIGHT = loadHudHeight()
 
 ---------------------------------------------------------------------
 -- REGISTRY: satu HUD per karakter tumbang
@@ -83,7 +104,7 @@ local function attach(character: Model)
 		return
 	end
 	local ok, hud = pcall(function()
-		return HudClass.new(adornee)
+		return HudClass.new(adornee, HUD_HEIGHT)
 	end)
 	if not ok or not hud then
 		warn("[KnockUI] gagal membuat HUD -> " .. tostring(hud))

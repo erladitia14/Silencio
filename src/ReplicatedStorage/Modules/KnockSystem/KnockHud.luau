@@ -53,15 +53,27 @@ local function new(class: string, props: { [string]: any }): any
 	return inst
 end
 
+-- Tinggi default billboard di atas root karakter (studs).
+-- Pemain tumbang badannya rendah (teler di tanah), jadi butuh offset besar
+-- supaya UI tidak menempel/menutupi badannya. Bisa di-override lewat
+-- Config.KnockHudHeight (lihat KnockUI).
+local DEFAULT_HEIGHT = 6.0
+
 --- Membuat billboard untuk SATU karakter tumbang.
-function KnockHud.new(adornee: BasePart)
+--- @param heightStuds  tinggi dari root karakter (opsional)
+function KnockHud.new(adornee: BasePart, heightStuds: number?)
 	local self = setmetatable({}, KnockHud)
+
+	local height = tonumber(heightStuds) or DEFAULT_HEIGHT
+	if height < 0 then
+		height = DEFAULT_HEIGHT
+	end
 
 	local billboard = new("BillboardGui", {
 		Name = "KnockHud",
 		Adornee = adornee,
 		Size = UDim2.new(0, 190, 0, 74),
-		StudsOffsetWorldSpace = Vector3.new(0, 3.0, 0),
+		StudsOffsetWorldSpace = Vector3.new(0, height, 0),
 		AlwaysOnTop = false,
 		MaxDistance = 90,
 		LightInfluence = 0,
