@@ -23,6 +23,7 @@ local Signal          = require(script.Parent.Signal)
 local DownedState     = require(script.Parent.DownedState)
 local CrawlController  = require(script.Parent.CrawlController)
 local ReviveManager    = require(script.Parent.ReviveManager)
+local KnockAnimator    = require(script.Parent.KnockAnimator)
 
 local KnockService = {}
 
@@ -147,6 +148,9 @@ function KnockService.handleLethal(character: Model, humanoid: Humanoid): boolea
 
 	CrawlController.apply(character, humanoid)
 	ReviveManager.attach(character)
+	if Config.PlayKnockAnimation then
+		KnockAnimator.play(player, Config.KnockAnimId)
+	end
 
 	fireSignal(Config.SignalEvent.DOWNED, player)
 	return true
@@ -169,6 +173,7 @@ local function onReviveComplete(character: Model, reviver: Player)
 	DownedState.revive(character, humanoid)
 
 	local player = Players:GetPlayerFromCharacter(character)
+	KnockAnimator.stop(player)
 	fireSignal(Config.SignalEvent.REVIVED, player, reviver)
 end
 
@@ -186,6 +191,7 @@ local function bleedOutKill(character: Model)
 	CrawlController.restore(character, humanoid)
 	DownedState.kill(character, humanoid)
 
+	KnockAnimator.stop(player)
 	fireSignal(Config.SignalEvent.BLEED_OUT, player)
 end
 
@@ -206,6 +212,7 @@ local function tickAll()
 			DownedState.forget(character)
 			ReviveManager.detach(character)
 			CrawlController.restore(character, nil)
+			KnockAnimator.stop(rec.player)
 		else
 			-- Jaga kecepatan merangkak.
 			local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -274,7 +281,7 @@ local function hookCharacter(player: Player, character: Model)
 	charConns[character] = conns
 end
 
-local function cleanupCharacter(character: Model)
+local function cleanupCharacter(character: Model, player: Player?)
 	local conns = charConns[character]
 	if conns then
 		for _, c in conns do
@@ -286,6 +293,9 @@ local function cleanupCharacter(character: Model)
 	DownedState.forget(character)
 	ReviveManager.detach(character)
 	CrawlController.restore(character, nil)
+	-- Player dioper dari pemanggil: saat CharacterRemoving, GetPlayerFromCharacter
+	-- bisa sudah nil sehingga track animasi tidak akan pernah dibersihkan.
+	KnockAnimator.stop(player or Players:GetPlayerFromCharacter(character))
 end
 
 local function hookPlayer(player: Player)
@@ -298,7 +308,7 @@ local function hookPlayer(player: Player)
 		hookCharacter(player, character)
 	end)
 	player.CharacterRemoving:Connect(function(character)
-		cleanupCharacter(character)
+		cleanupCharacter(character, player)
 	end)
 	if player.Character then
 		hookCharacter(player, player.Character)
@@ -348,7 +358,7 @@ function KnockService.stop()
 		unhookMonster(monster)
 	end
 	for character in charConns do
-		cleanupCharacter(character)
+		cleanupCharacter(character, nil)
 	end
 	lastMonsterHit = {}
 end

@@ -94,6 +94,19 @@ Config.DownedCannotRevive = true
 Config.ReviveBreakDistance = Config.ReviveDistance + 4
 
 -----------------------------------------------------------------
+-- ANIMASI POSE TUMBANG (SEMENTARA pakai aset bawaan Roblox)
+-----------------------------------------------------------------
+-- Roblox TIDAK punya animasi "crawl" bawaan. Daftar resmi default R15:
+-- idle/walk/run/jump/fall/climb/sit/tool/emote. Yang paling mendekati pose
+-- tumbang = SitV2 (asset 2506281703, milik Roblox — terverifikasi lewat
+-- MarketplaceService:GetProductInfo).
+--
+-- GANTI dengan animasi beneran nanti: isi KnockAnimId dengan ID animasi lo.
+-- Isi "" -> tidak ada animasi (mekanis tetap jalan, tidak error).
+Config.KnockAnimId = "rbxassetid://2506281703"  -- SitV2 (sementara)
+Config.PlayKnockAnimation = true
+
+-----------------------------------------------------------------
 -- KANAL SINYAL (untuk SFX/UI tim — sistem ini tidak memaksa UI apa pun)
 -----------------------------------------------------------------
 -- BindableEvent di ReplicatedStorage, dibuat otomatis (idempotent):
