@@ -95,6 +95,15 @@ function TargetFinder:isValidTarget(character: Model?): boolean
 		return false
 	end
 
+	-- KNOCK SYSTEM (opsional, sistem terpisah): pemain yang TUMBANG ditandai
+	-- Attribute "Knocked" = true pada karakternya. Monster mengabaikannya
+	-- supaya melepas klaim & mencari korban lain (permintaan Aer). Dibaca
+	-- lewat Attribute, jadi EnemyController TIDAK bergantung pada modul
+	-- KnockSystem: tanpa sistem itu, Attribute tak pernah ada -> nihil efek.
+	if character:GetAttribute("Knocked") == true then
+		return false
+	end
+
 	if SafeZoneManager:isInSafeZone(character) then
 		return false
 	end
