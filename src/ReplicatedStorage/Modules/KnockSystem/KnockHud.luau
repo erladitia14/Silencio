@@ -53,14 +53,23 @@ local function new(class: string, props: { [string]: any }): any
 	return inst
 end
 
--- Tinggi default billboard di atas root karakter (studs).
--- Pemain tumbang badannya rendah (teler di tanah), jadi butuh offset besar
--- supaya UI tidak menempel/menutupi badannya. Bisa di-override lewat
--- Config.KnockHudHeight (lihat KnockUI).
+-- Tinggi default billboard di atas root karakter (studs), DIUKUR DI SUMBU DUNIA.
+--
+-- JEBAKAN (terjadi di playtest Aer): `BillboardGui.StudsOffsetWorldSpace`
+-- TIDAK benar-benar memakai sumbu dunia — offset-nya diterapkan di ruang LOKAL
+-- part (bug engine yang dilaporkan di DevForum: "StudsOffsetWorldSpace is being
+-- computed in Attachment and Bone local space"). Akibatnya saat rig TIDURAN,
+-- menaikkan nilai Y malah menggeser UI ke arah KEPALA (nyamping), bukan ke atas.
+--
+-- SOLUSI: jangan andalkan properti itu. Pakai Attachment yang WorldCFrame-nya
+-- kita set sendiri ke `root.Position + Vector3.new(0, tinggi, 0)` — itu ruang
+-- dunia murni, jadi UI selalu lurus ke atas apa pun rotasi rig. Diperbarui tiap
+-- frame lewat :tick() karena pemain tumbang masih bisa merangkak.
 local DEFAULT_HEIGHT = 6.0
 
 --- Membuat billboard untuk SATU karakter tumbang.
---- @param heightStuds  tinggi dari root karakter (opsional)
+--- @param adornee      part acuan (biasanya HumanoidRootPart)
+--- @param heightStuds  tinggi dari root DI SUMBU DUNIA (opsional)
 function KnockHud.new(adornee: BasePart, heightStuds: number?)
 	local self = setmetatable({}, KnockHud)
 
@@ -68,17 +77,28 @@ function KnockHud.new(adornee: BasePart, heightStuds: number?)
 	if height < 0 then
 		height = DEFAULT_HEIGHT
 	end
+	self.height = height
+	self.adornee = adornee
+
+	-- Anchor di ruang dunia. PENTING: set Parent DULU, baru WorldCFrame —
+	-- tanpa parent, WorldCFrame diperlakukan sebagai CFrame lokal (jebakan
+	-- yang sudah tercatat di project ini).
+	local anchor = Instance.new("Attachment")
+	anchor.Name = "KnockHudAnchor"
+	anchor.Parent = adornee
+	anchor.WorldCFrame = CFrame.new(adornee.Position + Vector3.new(0, height, 0))
 
 	local billboard = new("BillboardGui", {
 		Name = "KnockHud",
-		Adornee = adornee,
+		Adornee = anchor,
 		Size = UDim2.new(0, 190, 0, 74),
-		StudsOffsetWorldSpace = Vector3.new(0, height, 0),
+		-- Offset lokal dibiarkan nol: posisi sepenuhnya diatur WorldCFrame anchor.
+		StudsOffset = Vector3.new(0, 0, 0),
 		AlwaysOnTop = false,
 		MaxDistance = 90,
 		LightInfluence = 0,
 		ResetOnSpawn = false,
-		Parent = adornee,
+		Parent = anchor,
 	})
 
 	-- Bingkai utama (gelap, tepi darah)
@@ -186,6 +206,7 @@ function KnockHud.new(adornee: BasePart, heightStuds: number?)
 	new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = reviveFill })
 
 	self.billboard  = billboard
+	self.anchor     = anchor
 	self.frame      = frame
 	self.stroke     = stroke
 	self.title      = title
@@ -257,8 +278,18 @@ function KnockHud:update(payload)
 	end
 end
 
---- Denyut saat hampir mati (dipanggil dari loop RenderStepped oleh KnockUI).
+--- Denyut saat hampir mati + jaga posisi anchor di sumbu DUNIA.
+--- Dipanggil tiap frame dari KnockUI (RenderStepped).
 function KnockHud:tick(now: number)
+	-- Posisi: selalu `root.Position + (0, height, 0)` di ruang dunia. Pemain
+	-- tumbang masih bisa merangkak & badannya bisa berputar, jadi ini harus
+	-- diperbarui terus — kalau tidak, UI akan ikut miring/geser.
+	if self.anchor and self.anchor.Parent and self.adornee and self.adornee.Parent then
+		self.anchor.WorldCFrame = CFrame.new(
+			self.adornee.Position + Vector3.new(0, self.height or DEFAULT_HEIGHT, 0)
+		)
+	end
+
 	if not self.panic or not self.stroke or not self.stroke.Parent then
 		return
 	end
@@ -269,6 +300,11 @@ function KnockHud:tick(now: number)
 end
 
 function KnockHud:destroy()
+	if self.anchor then
+		self.anchor:Destroy()
+	end
+	self.anchor = nil
+	self.adornee = nil
 	if self.billboard then
 		self.billboard:Destroy()
 	end

@@ -89,9 +89,26 @@ ck("stop() di >=4 jalur keluar (dapat " .. stopCount .. ")", stopCount >= 4)
 -- ---------- 8. Tinggi billboard (permintaan Aer: UI naik) ----------
 ck("Config.KnockHudHeight ada", cfg:match("KnockHudHeight%s*=%s*([%d%.]+)") ~= nil)
 ck("KnockHud.new terima param height", has(S.KnockHud or "", "function KnockHud.new(adornee: BasePart, heightStuds: number?)"))
-ck("KnockHud pakai height (bukan hardcode 3.0)", has(S.KnockHud or "", "StudsOffsetWorldSpace = Vector3.new(0, height, 0)"))
+
+-- ---------- 9. UI di ANCHOR ruang dunia, bukan StudsOffsetWorldSpace ----------
+-- JEBAKAN: StudsOffsetWorldSpace dihitung di LOCAL space part (bug engine) ->
+-- saat rig tiduran, menaikkan Y malah geser ke arah kepala. Harus pakai
+-- Attachment + WorldCFrame yang kita set sendiri.
+ck("tidak lagi pakai StudsOffsetWorldSpace", not has(strip(S.KnockHud or ""), "StudsOffsetWorldSpace"))
+ck("pakai Attachment sebagai anchor", has(S.KnockHud or "", 'Instance.new("Attachment")'))
+ck("set WorldCFrame dari root.Position + Y",
+	has(S.KnockHud or "", "WorldCFrame = CFrame.new(adornee.Position + Vector3.new(0, height, 0))"))
+ck("Parent di-set SEBELUM WorldCFrame",
+	(S.KnockHud or ""):find('anchor.Parent = adornee') ~= nil
+	and ((S.KnockHud or ""):find('anchor.Parent = adornee') < ((S.KnockHud or ""):find('anchor.WorldCFrame'))))
+ck("BillboardGui di-parent ke anchor", has(S.KnockHud or "", "Parent = anchor"))
+ck("tick() jaga posisi anchor tiap frame",
+	has(S.KnockHud or "", "self.anchor.WorldCFrame = CFrame.new("))
+ck("destroy() buang anchor", has(S.KnockHud or "", "self.anchor:Destroy()"))
 ck("KnockUI baca Config.KnockHudHeight", has(uiSrc, "KnockHudHeight"))
 ck("KnockUI oper HUD_HEIGHT ke new()", has(uiSrc, "HudClass.new(adornee, HUD_HEIGHT)"))
+ck("KnockUI recreate HUD saat root berganti (bukan set Adornee)",
+	has(uiSrc, "detach(character)") and not has(uiSrc, "billboard.Adornee ="))
 
 table.insert(out, string.format("=== AD-HOC edit-mode (bukan suite green): %d PASS / %d FAIL ===", pass, fail))
 return table.concat(out, "\n")

@@ -139,13 +139,14 @@ local function refresh(character: Model)
 		return
 	end
 
-	-- Adornee bisa berganti (karakter baru / root diganti).
+	-- Root karakter bisa berganti (karakter baru). HUD sekarang di-anchor ke
+	-- Attachment di dalam root, jadi kalau root berubah kita bikin ulang HUD
+	-- (bukan cuma menunjuk ulang Adornee).
 	local adornee = getAdornee(character)
 	if adornee and adornee ~= rec.adornee then
-		rec.adornee = adornee
-		if rec.hud.billboard then
-			rec.hud.billboard.Adornee = adornee
-		end
+		detach(character)
+		attach(character)
+		return
 	end
 
 	local bleedOut = tonumber(character:GetAttribute(ATTR_BLEEDOUT)) or 0
@@ -226,7 +227,9 @@ Players.PlayerRemoving:Connect(function(player)
 end)
 
 ---------------------------------------------------------------------
--- DENYUT (hanya saat panik) — satu loop untuk semua HUD
+-- TICK TIAP FRAME — satu loop untuk semua HUD
+-- Penting: tick() TIDAK hanya untuk denyut, ia juga menjaga posisi anchor
+-- tetap lurus ke atas di sumbu dunia (rig tumbang bisa merangkak/berputar).
 ---------------------------------------------------------------------
 RunService.RenderStepped:Connect(function()
 	local now = os.clock()
