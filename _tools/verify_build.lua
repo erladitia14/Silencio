@@ -70,9 +70,16 @@ end
 local Feat = SSS:FindFirstChild("Feature")
 ck("SSS.Feature (tim) + TeleprotHandler utuh",
 	Feat ~= nil and Feat:FindFirstChild("TeleprotHandler") ~= nil)
-for _, n in {"SafeZoneUI","PuzzleInputClient","JumpscareHandler","CustomPrompt Handler","SilencioClient"} do
+for _, n in {"SafeZoneUI","PuzzleInputClient","JumpscareHandler","SilencioClient"} do
 	ck("SPS." .. n .. " utuh", SPS:FindFirstChild(n) ~= nil)
 end
+-- "CustomPrompt Handler" dulu LocalScript terpisah di StarterPlayerScripts; tim
+-- memindahkannya jadi ModuleScript di dalam SilencioClient. Cek keberadaannya di
+-- lokasi BARU, bukan menuntut lokasi lama (kalau tidak, harness selalu FAIL
+-- padahal tidak ada yang rusak).
+local silencioClient = SPS:FindFirstChild("SilencioClient")
+ck("SPS.SilencioClient.CustomPromptController utuh (pindahan tim)",
+	silencioClient ~= nil and silencioClient:FindFirstChild("CustomPromptController") ~= nil)
 
 table.insert(out, string.format("=== AD-HOC edit-mode (bukan suite green): %d PASS / %d FAIL ===", pass, fail))
 return table.concat(out, "\n")
