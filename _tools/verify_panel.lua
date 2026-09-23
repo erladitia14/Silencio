@@ -34,6 +34,25 @@ local Config = require(BP.Config)
 local HandIK = require(BP.HandIK)
 local AssemblyService = require(BP.AssemblyService)
 
+-- PENTING — Config di-require FRESH, bukan lewat cache.
+-- `require(BP.Config)` di sesi edit yang sudah pernah me-require modul itu akan
+-- mengembalikan nilai LAMA (cache per-instance). Akibatnya assertion bisa
+-- GAGAL PALSU tepat setelah nilai di-tune: source sudah 2.55 tapi require
+-- masih 2.45. Clone = instance baru = cache baru = nilai sebenarnya yang akan
+-- dimuat saat Play.
+local function freshRequire(mod)
+	local c = mod:Clone()
+	c.Parent = workspace
+	local ok, res = pcall(require, c)
+	c:Destroy()
+	return ok, res
+end
+
+local okFresh, ConfigFresh = freshRequire(BP.Config)
+if okFresh and ConfigFresh then
+	Config = ConfigFresh
+end
+
 check("Config ter-require", Config ~= nil)
 check("HandIK ter-require", HandIK ~= nil)
 check("AssemblyService ter-require", AssemblyService ~= nil)
@@ -55,8 +74,8 @@ if typeof(off) == "CFrame" then
 	-- Y di jendela aman 2.265 .. 2.670
 	check("Y dalam jendela aman 2.265..2.670", pos.Y >= 2.265 and pos.Y <= 2.670,
 		string.format("%.3f", pos.Y))
-	-- Y = 2.45 (nilai yang disetujui)
-	check("Y = 2.45 (nilai disetujui)", math.abs(pos.Y - 2.45) < 0.01, string.format("%.3f", pos.Y))
+	-- Y = 2.55 (nilai yang disetujui: telapak pas, lengan sedikit nekuk)
+	check("Y = 2.55 (nilai disetujui)", math.abs(pos.Y - 2.55) < 0.01, string.format("%.3f", pos.Y))
 	-- Z = 0 -> TIDAK di depan muka (syarat FPP)
 	check("Z = 0 (tidak di depan muka, syarat FPP)", math.abs(pos.Z) < 0.01,
 		string.format("%.3f", pos.Z))
@@ -223,6 +242,11 @@ else
 		end
 		check("attachment panel TERJANGKAU di offset sekarang", worst <= reach,
 			string.format("butuh %.3f / punya %.3f", worst, reach))
+		-- Berapa persen panjang lengan terpakai. Makin tinggi -> lengan makin
+		-- lurus ke atas (referensi Dead Rails: lengan sedikit nekuk = 92-97%).
+		local pct = (worst / reach) * 100
+		check("lengan terpakai 88-98% (lengan sedikit nekuk, bukan lurus penuh)",
+			pct >= 88 and pct <= 98, string.format("%.1f%%", pct))
 		local clearance = (off2.Position.Y - 0.027) - headTop
 		check("panel TIDAK nabrak kepala", clearance > 0.05,
 			string.format("celah %.3f stud", clearance))

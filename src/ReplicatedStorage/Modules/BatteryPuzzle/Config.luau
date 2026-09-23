@@ -61,9 +61,18 @@ Config.PanelCarryAnimId = "rbxassetid://71893510212987"
 --   attachment berjarak 1.54-1.59 stud -> MASIH TERJANGKAU.
 --
 -- JENDELA AMAN hasil sweep (kedua syarat: tidak nabrak kepala DAN terjangkau):
---   Y = 2.265 .. 2.670 stud.  Dipilih 2.45 (margin ~0.2 stud ke dua sisi).
---   Di bawah 2.265 -> panel nabrak kepala. Di atas 2.670 -> tangan tak sampai.
-Config.PanelCarryOffset = CFrame.new(0, 2.45, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+--   Y = 2.265 .. 2.670 stud.
+--
+-- Y = 2.55 (naik dari 2.45, 23 Sep 2026): Aer minta panel "aga kurang ke atas
+-- dikit lagi, gua mau pas di telapak tangannya". Referensinya (Dead Rails):
+-- telapak rata menahan panel dari bawah, lengan SEDIKIT nekuk (tidak lurus
+-- penuh). Persentase panjang lengan yang terpakai:
+--     2.45 -> 88.2%  (lengan masih terlalu nekuk)
+--     2.55 -> 93.5%  <- dipilih, paling dekat dengan referensi
+--     2.60 -> 96.1%
+--     2.67 -> 99.8%  (lengan lurus penuh, mentok jangkauan -> jangan)
+-- Naikkan lagi kalau masih kurang, tapi JANGAN lewat 2.67.
+Config.PanelCarryOffset = CFrame.new(0, 2.55, 0) * CFrame.Angles(math.rad(-90), 0, 0)
 
 -- ============================================================
 -- ENGINE CO-OP CARRY (1 ORANG VS 2 ORANG)
