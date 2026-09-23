@@ -20,6 +20,14 @@ local function check(name, ok, detail)
 		detail and ("  [" .. tostring(detail) .. "]") or ""))
 end
 
+-- Buang komentar dulu: pelajaran lama, string di komentar bikin assert palsu.
+-- Didefinisikan di ATAS supaya bisa dipakai di semua bagian.
+local function strip(s)
+	s = s:gsub("%-%-%[%[.-%]%]", "")
+	s = s:gsub("%-%-[^\n]*", "")
+	return s
+end
+
 local BP = game:GetService("ReplicatedStorage"):FindFirstChild("Modules")
 	and game.ReplicatedStorage.Modules:FindFirstChild("BatteryPuzzle")
 
@@ -92,10 +100,29 @@ end
 -- 2. CONFIG IK PANEL
 -- ============================================================
 table.insert(out, "")
-table.insert(out, "=== 2. CONFIG IK PANEL ===")
-check("UsePanelHandIK = true", Config.UsePanelHandIK == true, tostring(Config.UsePanelHandIK))
-check("PanelIKWeight = 1.0", Config.PanelIKWeight == 1.0, tostring(Config.PanelIKWeight))
+table.insert(out, "=== 2. CONFIG IK PANEL & ANIMASI ===")
+-- 23 Sep 2026: Aer minta "animnya pake default roblox aja, gausah ada carry pose".
+-- Konsekuensi: SEMUA animasi carry dikosongkan DAN kedua IK dimatikan (kalau IK
+-- masih nyala, ia sendiri yang MEMAKSA pose angkat walaupun animasinya default).
+-- Kode IK + animasi tetap utuh, cuma dijaga flag -> tinggal dinyalakan lagi.
+check("UsePanelHandIK = false (IK Panel tidak memaksa pose angkat)", Config.UsePanelHandIK == false,
+	tostring(Config.UsePanelHandIK))
+check("UseHandIK = false (IK Engine juga mati)", Config.UseHandIK == false,
+	tostring(Config.UseHandIK))
+check("PanelCarryAnimId kosong (pakai animasi default Roblox)",
+	Config.PanelCarryAnimId == "", string.format("%q", tostring(Config.PanelCarryAnimId)))
+check("EngineLeftAnimId kosong", Config.EngineLeftAnimId == "",
+	string.format("%q", tostring(Config.EngineLeftAnimId)))
+check("EngineRightAnimId kosong", Config.EngineRightAnimId == "",
+	string.format("%q", tostring(Config.EngineRightAnimId)))
+check("PanelIKWeight = 1.0 (siap kalau flag dinyalakan)", Config.PanelIKWeight == 1.0,
+	tostring(Config.PanelIKWeight))
 check("PanelIKType ada", Config.PanelIKType ~= nil, tostring(Config.PanelIKType))
+
+-- CarryAnimator.play() WAJIB langsung return kalau ID kosong (jangan error)
+local csrc = strip(BP.CarryAnimator.Source)
+check("CarryAnimator.play() guard ID kosong (return, bukan error)",
+	csrc:find('animId == ""', 1, true) ~= nil)
 
 -- ============================================================
 -- 3. API HandIK.attachBoth ADA & bertipe function
@@ -111,13 +138,6 @@ check("HandIK.detach masih ada", typeof(HandIK.detach) == "function")
 -- ============================================================
 table.insert(out, "")
 table.insert(out, "=== 4. WIRING DI AssemblyService ===")
-
--- Buang komentar dulu: pelajaran lama, string di komentar bikin assert palsu.
-local function strip(s)
-	s = s:gsub("%-%-%[%[.-%]%]", "")
-	s = s:gsub("%-%-[^\n]*", "")
-	return s
-end
 
 local src = strip(BP.AssemblyService.Source)
 

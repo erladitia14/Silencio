@@ -31,8 +31,13 @@ Config.StoreKey = Enum.KeyCode.Q
 
 -- Animasi "pose angkat 2 tangan" — HANYA saat membawa PANEL.
 -- Baterai (kecil) & Engine TIDAK pakai animasi ini.
--- Kosongkan ("") kalau tidak mau pakai animasi sama sekali.
-Config.PanelCarryAnimId = "rbxassetid://71893510212987"
+--
+-- Aer (23 Sep 2026): "animnya pake default roblox aja gitu maksud gua gausah ada
+-- carry pose dll" -> SEMUA animasi carry DIKOSONGKAN. Karakter memakai animasi
+-- bawaan Roblox (idle / walk / run) seperti biasa; panel tetap terbawa karena
+-- di-weld ke HumanoidRootPart, jadi TIDAK butuh animasi sama sekali.
+-- CarryAnimator.play() langsung `return` kalau ID kosong -> aman, tidak error.
+Config.PanelCarryAnimId = ""
 
 -- PANEL di-weld ke HumanoidRootPart (bukan satu tangan).
 -- CATATAN posisi (biar gampang tune sendiri):
@@ -101,9 +106,11 @@ Config.PanelDropGroundGap = 0.03   -- celah tipis di atas tanah (anti z-fighting
 Config.EngineSoloSpeed = 8                 -- WalkSpeed saat engine dibawa 1 orang (lambat)
 Config.EngineCoopSpeed = 14                -- WalkSpeed saat engine dibawa 2 orang (cepat)
 
--- Animasi Engine Carry per sisi
-Config.EngineLeftAnimId = "rbxassetid://87931635446245"
-Config.EngineRightAnimId = "rbxassetid://124217715255364"
+-- Animasi Engine Carry per sisi.
+-- Aer (23 Sep 2026): pakai animasi default Roblox saja -> DIKOSONGKAN.
+-- (EngineLeftAnimId lama 87931646245 sudah 404/tidak ada di Roblox.)
+Config.EngineLeftAnimId = ""
+Config.EngineRightAnimId = ""
 
 -- Offset relatif Engine terhadap HumanoidRootPart masing-masing carrier
 Config.EngineLeftCarryOffset = CFrame.new(0.145, -1.266, -3.298) * CFrame.Angles(0, math.rad(90), 0)
@@ -121,8 +128,8 @@ Config.EngineRightCarryOffset = CFrame.new(-0.145, -1.266, -2.958) * CFrame.Angl
 -- Urutan eksekusi Roblox: Animasi dulu -> baru IKControl.
 -- Karena itu IK TIDAK bertabrakan dengan animasi; ia hanya
 -- memenangkan lengan, sedangkan kaki tetap dari animasi jalan.
-Config.UseHandIK = true
-Config.IKWeight = 1.0                      -- 0 = mati, 1 = penuh
+Config.UseHandIK = false
+Config.IKWeight = 1.0                      -- 0 = mati, 1 = penuh (dipakai kalau UseHandIK=true)
 
 -- ============================================================
 -- IK TANGAN UNTUK PANEL (23 Sep 2026)
@@ -143,7 +150,14 @@ Config.IKWeight = 1.0                      -- 0 = mati, 1 = penuh
 -- MENORMALKAN Panel yang attachment-nya tertukar — ditemukan pada Panel_02
 -- (Left X=+1.736, Right X=-1.764, terbalik dibanding Panel_01). Kalau memakai
 -- nama apa adanya, tangan akan menyilang.
-Config.UsePanelHandIK = true
+-- Aer (23 Sep 2026): "gausah di timpa anim itu aja bisa ngga?" -> IK DIMATIKAN.
+-- Pose lengan sekarang MURNI dari animasi CarryPose (tidak ditimpa IKControl).
+--
+-- CATATAN: animasi CarryPose (71893510212987) masih GAGAL load karena izin
+-- aset (place milik group, animasi milik akun pribadi). Selama itu belum
+-- di-grant, tangan akan tampil NORMAL (bukan pose angkat) — bukan bug kode.
+-- Kode IK tetap ada & utuh; cukup ubah flag ini ke true untuk menyalakannya lagi.
+Config.UsePanelHandIK = false
 -- Type IK: Position = telapak ditarik ke TITIK attachment, rotasi pergelangan
 -- dibiarkan natural (anti-nekuk). Sama seperti Engine.
 Config.PanelIKType = Enum.IKControlType.Position
