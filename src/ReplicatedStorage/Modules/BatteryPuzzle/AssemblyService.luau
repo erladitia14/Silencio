@@ -586,6 +586,50 @@ function AssemblyService.helpCarry(player: Player, part: BasePart): boolean
 	return true
 end
 
+-- ----------------------------------------------------------------------
+-- Penempatan panel saat di-STORE (tombol Q)
+-- ----------------------------------------------------------------------
+-- Hitung CFrame panel yang REBAH RATA di permukaan tanah di depan pemain.
+--
+-- Kenapa tidak boleh memakai rotasi badan pemain apa adanya: panel ini tipis
+-- (Size.Z = 0.054) tapi tinggi (Size.Y = 3.580). Kalau ditaruh dengan rotasi
+-- badan (tegak), panel berdiri seperti tembok setipis 5 cm -> tidak natural,
+-- dan dasarnya tenggelam ke terrain karena Y dihitung dari tinggi badan.
+--
+-- Rotasi REBAH = sama seperti saat dibawa (PanelCarryOffset memutar -90 derajat
+-- pada sumbu X). Sesudah diputar:
+--   X lokal (bentang 4.873) -> melintang, mengikuti arah hadap pemain
+--   Y lokal (bentang 3.580) -> searah hadap pemain (maju/mundur)
+--   Z lokal (tebal  0.054) -> VERTIKAL
+-- Jadi tinggi panel di atas tanah = Size.Z / 2 (bukan Size.Y / 2).
+local function computePanelDropCFrame(root: BasePart, part: BasePart, char: Model?): CFrame
+	local dist = Config.PanelDropDistance or 3
+	local gap = Config.PanelDropGroundGap or 0.03
+	local ahead = root.Position + root.CFrame.LookVector * dist
+
+	-- Arah hadap pemain di bidang datar (yaw saja), supaya panel tidak miring
+	-- walau pemain sedang mendongak / menunduk.
+	local look = root.CFrame.LookVector
+	local yaw = 0
+	if math.abs(look.X) > 1e-4 or math.abs(look.Z) > 1e-4 then
+		yaw = math.atan2(-look.X, -look.Z)
+	end
+
+	-- Tinggi permukaan tanah tepat di titik jatuh (aman untuk terrain miring).
+	local groundY = ahead.Y
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	local exclude: { Instance } = { part }
+	if char then table.insert(exclude, char) end
+	params.FilterDescendantsInstances = exclude
+	local hit = workspace:Raycast(ahead + Vector3.new(0, 4, 0), Vector3.new(0, -60, 0), params)
+	if hit then groundY = hit.Position.Y end
+
+	return CFrame.new(ahead.X, groundY + part.Size.Z * 0.5 + gap, ahead.Z)
+		* CFrame.Angles(0, yaw, 0)
+		* CFrame.Angles(math.rad(-90), 0, 0)
+end
+
 function AssemblyService.drop(player: Player)
 	local part = carriedPart[player]
 	if not part then return end
@@ -673,7 +717,12 @@ function AssemblyService.drop(player: Player)
 
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if root then
+	if root and Config.PanelDropFlat ~= false then
+		-- REBAH RATA di tanah (lihat computePanelDropCFrame di atas).
+		-- Dulu: part.CFrame = root.CFrame * CFrame.new(0, -1.5, -3)
+		-- -> memakai rotasi badan apa adanya = panel TEGAK berdiri seperti tembok.
+		part.CFrame = computePanelDropCFrame(root, part, char)
+	elseif root then
 		part.CFrame = root.CFrame * CFrame.new(0, -1.5, -3)
 	elseif info then
 		part.CFrame = info.homeCF

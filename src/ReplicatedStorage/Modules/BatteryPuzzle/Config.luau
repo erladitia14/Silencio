@@ -75,6 +75,25 @@ Config.PanelCarryAnimId = "rbxassetid://71893510212987"
 Config.PanelCarryOffset = CFrame.new(0, 2.55, 0) * CFrame.Angles(math.rad(-90), 0, 0)
 
 -- ============================================================
+-- PENEMPATAN PANEL SAAT DI-STORE (tombol Q) — 23 Sep 2026
+-- ============================================================
+-- MASALAH YANG DIPERBAIKI: jalur drop lama menaruh panel memakai ROTASI BADAN
+-- pemain apa adanya (tegak), jadi panel berdiri seperti TEMBOK setinggi 3.58
+-- stud dengan tebal hanya 0.054 stud — mustahil berdiri wajar — lalu di-anchor.
+-- Dasar panel juga TENGGAM ke terrain (terukur 0.10 stud) karena posisinya
+-- dihitung dari tinggi badan, bukan dari permukaan tanah.
+--
+-- SOLUSI: pakai rotasi REBAH yang SAMA seperti waktu dibawa (PanelCarryOffset
+-- memutar -90 derajat di sumbu X), tapi diratakan ke permukaan tanah:
+--   sumbu lokal X (bentang 4.873) -> melintang mengikuti arah hadap pemain
+--   sumbu lokal Y (bentang 3.580) -> searah hadap pemain (maju/mundur)
+--   sumbu lokal Z (tebal  0.054) -> VERTIKAL  => panel rebah rata
+-- Tinggi diambil dari RAYCAST ke tanah, jadi aman di terrain miring.
+Config.PanelDropFlat = true        -- false = kembali ke perilaku lama (panel tegak)
+Config.PanelDropDistance = 3       -- jarak titik jatuh di depan pemain (stud)
+Config.PanelDropGroundGap = 0.03   -- celah tipis di atas tanah (anti z-fighting)
+
+-- ============================================================
 -- ENGINE CO-OP CARRY (1 ORANG VS 2 ORANG)
 -- Diukur langsung dari posisi Rig Left & Rig Right buatan Aer (19 Sep 2026).
 -- ============================================================

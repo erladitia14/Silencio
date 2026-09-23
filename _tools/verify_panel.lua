@@ -254,6 +254,132 @@ else
 end
 
 -- ============================================================
+-- 8. PENEMPATAN PANEL SAAT DI-STORE (rebah rata di tanah)
+-- ============================================================
+-- Bug lama: drop() memakai `root.CFrame * CFrame.new(0, -1.5, -3)` -> rotasi
+-- badan pemain apa adanya = panel TEGAK seperti tembok, dasar tenggelam.
+-- Terukur live di playtest: kemiringan 0.0 deg (tegak), tenggelam 0.10 stud.
+table.insert(out, "")
+table.insert(out, "=== 8. DROP PANEL REBAH RATA DI TANAH ===")
+
+check("Config.PanelDropFlat = true", Config.PanelDropFlat == true, tostring(Config.PanelDropFlat))
+check("Config.PanelDropDistance ada", type(Config.PanelDropDistance) == "number",
+	tostring(Config.PanelDropDistance))
+check("Config.PanelDropGroundGap ada", type(Config.PanelDropGroundGap) == "number",
+	tostring(Config.PanelDropGroundGap))
+
+-- helper harus ada di source (bukan inline di dalam drop, supaya bisa diuji)
+check("computePanelDropCFrame ada di source", src:find("computePanelDropCFrame", 1, true) ~= nil)
+check("computePanelDropCFrame pakai raycast ke tanah",
+	src:find("workspace:Raycast", 1, true) ~= nil)
+check("computePanelDropCFrame pakai yaw dari LookVector (tidak miring)",
+	src:find("math.atan2", 1, true) ~= nil)
+-- tinggi panel diambil dari Size.Z (tebal), bukan Size.Y (tinggi)
+check("tinggi drop = Size.Z/2 (rebah, bukan Size.Y/2)",
+	src:find("part.Size.Z * 0.5", 1, true) ~= nil)
+
+-- jalur drop HARUS memanggil helper, dan TIDAK lagi memakai offset lama.
+-- CATATAN: `src` sudah di-strip komentarnya, jadi penanda WAJIB kode nyata
+-- (bukan "-- Panel drop ..." yang sudah ikut terhapus).
+check("blok drop memanggil computePanelDropCFrame(root, part, char)",
+	src:find("computePanelDropCFrame(root, part, char)", 1, true) ~= nil)
+check("drop dijaga flag Config.PanelDropFlat",
+	src:find("Config.PanelDropFlat ~= false", 1, true) ~= nil)
+-- Offset lama boleh TINGGAL sebagai cabang fallback, tapi tidak boleh jadi
+-- jalur pertama. Pastikan ia muncul SESUDAH cabang baru.
+local iNew = src:find("computePanelDropCFrame(root, part, char)", 1, true)
+local iOld = src:find("root.CFrame * CFrame.new(0, -1.5, -3)", 1, true)
+check("offset lama hanya jadi fallback (muncul setelah jalur baru)",
+	iOld == nil or (iNew ~= nil and iOld > iNew),
+	string.format("new=%s old=%s", tostring(iNew), tostring(iOld)))
+
+-- ---- UJI MATEMATIS: replikasi helper, buktikan hasilnya rebah rata ----
+-- PENTING soal penanda orientasi (hasil ukur, bukan asumsi):
+--   panel REBAH  <=> LookVector.Y ~ ±1  dan UpVector.Y ~ 0
+--   panel TEGAK  <=> UpVector.Y   ~ ±1  dan LookVector.Y ~ 0
+-- (rotasi rebah = CFrame.Angles(-90,0,0) -> Up=(0,0,-1), Look=(0,-1,0))
+local function replicateDrop(part, rootCF, groundY)
+	local dist = Config.PanelDropDistance or 3
+	local gap = Config.PanelDropGroundGap or 0.03
+	local ahead = rootCF.Position + rootCF.LookVector * dist
+	local look = rootCF.LookVector
+	local yaw = 0
+	if math.abs(look.X) > 1e-4 or math.abs(look.Z) > 1e-4 then
+		yaw = math.atan2(-look.X, -look.Z)
+	end
+	return CFrame.new(ahead.X, groundY + part.Size.Z * 0.5 + gap, ahead.Z)
+		* CFrame.Angles(0, yaw, 0)
+		* CFrame.Angles(math.rad(-90), 0, 0)
+end
+
+local panelForTest = gen and gen:FindFirstChild("Panel_01")
+if panelForTest then
+	-- pemain berdiri tegak menghadap -Z (kasus paling umum)
+	local rootCF = CFrame.new(0, 3, 0)
+	local groundY = 0
+	local cf = replicateDrop(panelForTest, rootCF, groundY)
+
+	-- rebah: bidang panel menghadap langit -> LookVector vertikal
+	local lookY = math.abs(cf.LookVector.Y)
+	local upY = math.abs(cf.UpVector.Y)
+	check("panel REBAH RATA (|Look.Y| ~ 1, |Up.Y| ~ 0)", lookY > 0.99 and upY < 0.01,
+		string.format("Look.Y=%.4f Up.Y=%.4f", lookY, upY))
+
+	-- tinggi vertikal nyata = Size.Z (tebal), bukan Size.Y (3.580)
+	local s = panelForTest.Size
+	local lo, hi = math.huge, -math.huge
+	for _, x in ipairs({ -s.X / 2, s.X / 2 }) do
+		for _, y in ipairs({ -s.Y / 2, s.Y / 2 }) do
+			for _, z in ipairs({ -s.Z / 2, s.Z / 2 }) do
+				local w = cf:PointToWorldSpace(Vector3.new(x, y, z))
+				lo = math.min(lo, w.Y)
+				hi = math.max(hi, w.Y)
+			end
+		end
+	end
+	local tinggi = hi - lo
+	check("tinggi vertikal panel ~ Size.Z (0.054), bukan 3.580",
+		math.abs(tinggi - s.Z) < 0.01, string.format("%.3f", tinggi))
+
+	-- dasar panel harus di atas tanah, tidak tenggelam
+	local gap = Config.PanelDropGroundGap or 0.03
+	check("dasar panel di atas tanah (tidak tenggelam)", lo >= groundY - 1e-4,
+		string.format("dasar %.4f, tanah %.4f", lo, groundY))
+	check("celah dasar = PanelDropGroundGap", math.abs((lo - groundY) - gap) < 1e-3,
+		string.format("%.4f vs %.4f", lo - groundY, gap))
+
+	-- posisi jatuh harus di DEPAN pemain, bukan menimpa badan
+	local ahead = rootCF.Position + rootCF.LookVector * (Config.PanelDropDistance or 3)
+	local dxz = (Vector3.new(cf.Position.X, 0, cf.Position.Z)
+		- Vector3.new(rootCF.Position.X, 0, rootCF.Position.Z)).Magnitude
+	check("panel jatuh di depan pemain (~3 stud)", math.abs(dxz - (Config.PanelDropDistance or 3)) < 0.05,
+		string.format("%.3f", dxz))
+
+	-- ---- KONTROL NEGATIF: perilaku lama HARUS tegak ----
+	local oldCF = rootCF * CFrame.new(0, -1.5, -3)
+	local oldUpY = math.abs(oldCF.UpVector.Y)
+	local oldLookY = math.abs(oldCF.LookVector.Y)
+	check("KONTROL NEGATIF: offset lama menghasilkan panel TEGAK (|Up.Y| ~ 1, |Look.Y| ~ 0)",
+		oldUpY > 0.99 and oldLookY < 0.01,
+		string.format("Up.Y=%.4f Look.Y=%.4f", oldUpY, oldLookY))
+	-- dan tinggi vertikalnya 3.580 (tembok), bukti bug lama memang nyata
+	local s2 = panelForTest.Size
+	local olo, ohi = math.huge, -math.huge
+	for _, x in ipairs({ -s2.X / 2, s2.X / 2 }) do
+		for _, y in ipairs({ -s2.Y / 2, s2.Y / 2 }) do
+			for _, z in ipairs({ -s2.Z / 2, s2.Z / 2 }) do
+				local w = oldCF:PointToWorldSpace(Vector3.new(x, y, z))
+				olo = math.min(olo, w.Y)
+				ohi = math.max(ohi, w.Y)
+			end
+		end
+	end
+	check("KONTROL NEGATIF: tinggi lama 3.580 (tembak) vs baru 0.054",
+		math.abs((ohi - olo) - s2.Y) < 0.01,
+		string.format("lama %.3f", ohi - olo))
+end
+
+-- ============================================================
 -- HASIL
 -- ============================================================
 table.insert(out, "")
