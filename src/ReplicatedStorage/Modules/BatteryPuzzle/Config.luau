@@ -128,8 +128,8 @@ Config.EngineRightCarryOffset = CFrame.new(-0.145, -1.266, -2.958) * CFrame.Angl
 -- Urutan eksekusi Roblox: Animasi dulu -> baru IKControl.
 -- Karena itu IK TIDAK bertabrakan dengan animasi; ia hanya
 -- memenangkan lengan, sedangkan kaki tetap dari animasi jalan.
-Config.UseHandIK = false
-Config.IKWeight = 1.0                      -- 0 = mati, 1 = penuh (dipakai kalau UseHandIK=true)
+Config.UseHandIK = true
+Config.IKWeight = 1.0                      -- 0 = mati, 1 = penuh
 
 -- ============================================================
 -- IK TANGAN UNTUK PANEL (23 Sep 2026)
@@ -150,14 +150,18 @@ Config.IKWeight = 1.0                      -- 0 = mati, 1 = penuh (dipakai kalau
 -- MENORMALKAN Panel yang attachment-nya tertukar — ditemukan pada Panel_02
 -- (Left X=+1.736, Right X=-1.764, terbalik dibanding Panel_01). Kalau memakai
 -- nama apa adanya, tangan akan menyilang.
--- Aer (23 Sep 2026): "gausah di timpa anim itu aja bisa ngga?" -> IK DIMATIKAN.
--- Pose lengan sekarang MURNI dari animasi CarryPose (tidak ditimpa IKControl).
+-- Aer (23 Sep 2026): "gausah di timpa anim itu aja bisa ngga?" lalu "gua mau tetep
+-- tangannya megang ke atas bro bisa ngga?" -> IK DIBIARKAN NYALA.
 --
--- CATATAN: animasi CarryPose (71893510212987) masih GAGAL load karena izin
--- aset (place milik group, animasi milik akun pribadi). Selama itu belum
--- di-grant, tangan akan tampil NORMAL (bukan pose angkat) — bukan bug kode.
--- Kode IK tetap ada & utuh; cukup ubah flag ini ke true untuk menyalakannya lagi.
-Config.UsePanelHandIK = false
+-- Jadi: TIDAK ada animasi carry pose (badan/kaki pakai animasi DEFAULT Roblox),
+-- tapi TANGAN TETAP DIANGKAT & menempel ke Attachment Panel — itu kerjaan
+-- IKControl, bukan animasi. IKControl dievaluasi SETELAH animasi, jadi ia
+-- menang untuk lengan saja; kaki tetap dari animasi default.
+--
+-- Inilah kenapa animasi + IK itu DUA hal terpisah:
+--   PanelCarryAnimId  = pose badan/gerak (sekarang kosong -> default Roblox)
+--   UsePanelHandIK    = lengan diangkat ke Attachment (sekarang true)
+Config.UsePanelHandIK = true
 -- Type IK: Position = telapak ditarik ke TITIK attachment, rotasi pergelangan
 -- dibiarkan natural (anti-nekuk). Sama seperti Engine.
 Config.PanelIKType = Enum.IKControlType.Position

@@ -101,22 +101,24 @@ end
 -- ============================================================
 table.insert(out, "")
 table.insert(out, "=== 2. CONFIG IK PANEL & ANIMASI ===")
--- 23 Sep 2026: Aer minta "animnya pake default roblox aja, gausah ada carry pose".
--- Konsekuensi: SEMUA animasi carry dikosongkan DAN kedua IK dimatikan (kalau IK
--- masih nyala, ia sendiri yang MEMAKSA pose angkat walaupun animasinya default).
--- Kode IK + animasi tetap utuh, cuma dijaga flag -> tinggal dinyalakan lagi.
-check("UsePanelHandIK = false (IK Panel tidak memaksa pose angkat)", Config.UsePanelHandIK == false,
-	tostring(Config.UsePanelHandIK))
-check("UseHandIK = false (IK Engine juga mati)", Config.UseHandIK == false,
-	tostring(Config.UseHandIK))
-check("PanelCarryAnimId kosong (pakai animasi default Roblox)",
+-- 23 Sep 2026, keputusan Aer yang BERLAKU:
+--   "animnya pake default roblox aja, gausah ada carry pose dll"  -> animasi KOSONG
+--   "gua mau tetep tangannya megang ke atas bro bisa ngga?"        -> IK NYALA
+-- Jadi: badan/kaki dari animasi DEFAULT Roblox, TAPI lengan tetap diangkat
+-- menempel ke Attachment Panel oleh IKControl. Dua hal ini TERPISAH:
+--   PanelCarryAnimId = pose badan  (kosong -> default Roblox)
+--   UsePanelHandIK   = lengan diangkat ke Attachment (true)
+check("PanelCarryAnimId kosong (badan pakai animasi default Roblox)",
 	Config.PanelCarryAnimId == "", string.format("%q", tostring(Config.PanelCarryAnimId)))
 check("EngineLeftAnimId kosong", Config.EngineLeftAnimId == "",
 	string.format("%q", tostring(Config.EngineLeftAnimId)))
 check("EngineRightAnimId kosong", Config.EngineRightAnimId == "",
 	string.format("%q", tostring(Config.EngineRightAnimId)))
-check("PanelIKWeight = 1.0 (siap kalau flag dinyalakan)", Config.PanelIKWeight == 1.0,
-	tostring(Config.PanelIKWeight))
+check("UsePanelHandIK = true (tangan TETAP diangkat ke Attachment)", Config.UsePanelHandIK == true,
+	tostring(Config.UsePanelHandIK))
+check("UseHandIK = true (Engine juga)", Config.UseHandIK == true, tostring(Config.UseHandIK))
+check("PanelIKWeight = 1.0", Config.PanelIKWeight == 1.0, tostring(Config.PanelIKWeight))
+check("IKWeight = 1.0", Config.IKWeight == 1.0, tostring(Config.IKWeight))
 check("PanelIKType ada", Config.PanelIKType ~= nil, tostring(Config.PanelIKType))
 
 -- CarryAnimator.play() WAJIB langsung return kalau ID kosong (jangan error)
