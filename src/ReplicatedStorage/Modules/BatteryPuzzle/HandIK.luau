@@ -123,6 +123,75 @@ function HandIK.detach(player: Player)
 	active[player] = nil
 end
 
+-- ----------------------------------------------------------------------
+-- attachBoth — IK dua tangan ke DUA Attachment eksplisit.
+-- ----------------------------------------------------------------------
+-- Dipakai PANEL: Aer menaruh 2 Attachment di setiap Panel sebagai titik pegang,
+-- tapi namanya polos "Left"/"Right" (bukan pola "<Sisi>(<Tangan>)" seperti
+-- Engine), karena Panel dibawa 1 orang sehingga tidak ada sisi carrier.
+-- attach() yang berbasis pola akan melewatinya DIAM-DIAM, jadi dipakai
+-- fungsi ini yang menerima Attachment langsung.
+--
+-- PENTING — SISI DITENTUKAN DARI POSISI, BUKAN NAMA:
+--   Attachment dengan X lebih kecil (paling kiri di ruang lokal part) dipasang
+--   ke LeftArm. Ini menormalkan Panel yang attachment-nya tertukar (nyata:
+--   Panel_02 Left X=+1.736 / Right X=-1.764 -> terbalik dibanding Panel_01).
+--   Kalau memakai nama apa adanya, tangan akan menyilang.
+--
+-- @param player  pemain yang membawa
+-- @param atts    daftar Attachment (>=1) di part yang dibawa
+-- @return number jumlah IKControl yang berhasil dibuat
+function HandIK.attachBoth(player: Player, atts: { Attachment }): number
+	if not Config.UsePanelHandIK then return 0 end
+	if #atts == 0 then return 0 end
+
+	HandIK.detach(player)
+
+	local char = player.Character
+	if not char then return 0 end
+	local hum = getHumanoid(player)
+	if not hum then return 0 end
+	-- IKControl hanya bekerja pada rig R15.
+	if hum.RigType ~= Enum.HumanoidRigType.R15 then return 0 end
+
+	-- Urutkan attachment berdasarkan X di ruang LOKAL part pembawa
+	-- (ruang lokal part itu sumbu yang sama untuk kedua attachment).
+	local sorted = table.clone(atts)
+	table.sort(sorted, function(a, b)
+		return a.Position.X < b.Position.X
+	end)
+
+	-- Kiri dulu (X terkecil), lalu kanan.
+	local ARM_CHAIN = {
+		{ hand = "LeftHand", upper = "LeftUpperArm" },
+		{ hand = "RightHand", upper = "RightUpperArm" },
+	}
+
+	local ikControls: { IKControl } = {}
+	for i, att in ipairs(sorted) do
+		local chain = ARM_CHAIN[i]
+		if not chain then break end
+		local endEffector = findBone(char, chain.hand)
+		local chainRoot = findBone(char, chain.upper)
+		if endEffector and chainRoot then
+			local ik = Instance.new("IKControl")
+			ik.Name = "PanelCarryIK_" .. chain.hand
+			ik.Type = Config.PanelIKType or Enum.IKControlType.Position
+			ik.ChainRoot = chainRoot
+			ik.EndEffector = endEffector
+			ik.Target = att
+			ik.Weight = Config.PanelIKWeight
+			ik.Parent = hum
+			table.insert(ikControls, ik)
+		end
+	end
+
+	if #ikControls > 0 then
+		active[player] = { hum = hum, ikControls = ikControls }
+	end
+	return #ikControls
+end
+
 function HandIK.cleanup(player: Player)
 	HandIK.detach(player)
 end

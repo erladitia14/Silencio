@@ -34,18 +34,36 @@ Config.StoreKey = Enum.KeyCode.Q
 -- Kosongkan ("") kalau tidak mau pakai animasi sama sekali.
 Config.PanelCarryAnimId = "rbxassetid://71893510212987"
 
--- PANEL di-weld ke TENGAH DEPAN badan (HumanoidRootPart), bukan satu tangan,
--- supaya cocok dengan pose angkat 2 tangan. Offset relatif ke HumanoidRootPart.
+-- PANEL di-weld ke HumanoidRootPart (bukan satu tangan).
 -- CATATAN posisi (biar gampang tune sendiri):
 --   Sumbu 1 (X) : geser KIRI(-)/KANAN(+)
 --   Sumbu 2 (Y) : geser TURUN(-)/NAIK(+)
 --   Sumbu 3 (Z) : -Z = MAJU ke depan badan, +Z = mundur
 --   Angles(pitch X, yaw Y, roll Z) dalam radian (math.rad(derajat))
--- PanelCarryOffset: HASIL PENGUKURAN LANGSUNG DARI PLAYTEST AER (19 Sep 2026).
--- Diukur saat Aer memposisikan panel paling pas di tangannya:
---   Posisi: X = +0.21 (sedikit kanan), Y = +1.20 (setinggi dada/bahu), Z = -1.84 (di depan tangan)
---   Sudut: pitch = -7.8°, yaw = -6.3°, roll = 1.8°
-Config.PanelCarryOffset = CFrame.new(0.207, 1.198, -1.844) * CFrame.Angles(math.rad(-7.8), math.rad(-6.3), math.rad(1.8))
+--
+-- ===== PANEL DIBAWA REBAH DI ATAS KEPALA (23 Sep 2026) =====
+-- KENAPA DI ATAS KEPALA: game ini FPP. Posisi lama (Z = -1.84) menaruh panel
+-- TEPAT DI DEPAN MATA -> menutup pandangan. Di atas kepala (Z = 0) pandangan
+-- depan bebas.
+--
+-- KENAPA HARUS REBAH (rotasi -90 derajat X), BUKAN DITEGAKKAN:
+--   Diukur pada rig R15 (angka nyata, bukan perkiraan):
+--     - jangkauan lengan (sendi bahu -> telapak) = 1.803 stud
+--     - puncak kepala (rel HumanoidRootPart)     = 2.187 stud
+--     - tinggi maks telapak (lengan lurus ke atas) = 2.756 stud
+--     - Panel Size = 4.873 x 3.580 x 0.054 (tipis, bidang di sumbu Z)
+--   Kalau TEGAK di atas kepala: dasar panel harus >= 2.187, jadi panel
+--   berpusat di Y >= 2.187 + 3.580/2 = 3.977. Attachment-nya lalu berjarak
+--   3.263 stud dari sendi bahu -> BUTUH reach 1.81x lipat kemampuan lengan.
+--   MUSTAHIL: tangan tidak akan pernah sampai, IK akan memaksa lengan
+--   melar/melintang.
+--   Kalau REBAH: bentang panel jadi horizontal (tebal 0.054 -> sumbu Y),
+--   attachment berjarak 1.54-1.59 stud -> MASIH TERJANGKAU.
+--
+-- JENDELA AMAN hasil sweep (kedua syarat: tidak nabrak kepala DAN terjangkau):
+--   Y = 2.265 .. 2.670 stud.  Dipilih 2.45 (margin ~0.2 stud ke dua sisi).
+--   Di bawah 2.265 -> panel nabrak kepala. Di atas 2.670 -> tangan tak sampai.
+Config.PanelCarryOffset = CFrame.new(0, 2.45, 0) * CFrame.Angles(math.rad(-90), 0, 0)
 
 -- ============================================================
 -- ENGINE CO-OP CARRY (1 ORANG VS 2 ORANG)
@@ -77,6 +95,31 @@ Config.EngineRightCarryOffset = CFrame.new(-0.145, -1.266, -2.958) * CFrame.Angl
 -- memenangkan lengan, sedangkan kaki tetap dari animasi jalan.
 Config.UseHandIK = true
 Config.IKWeight = 1.0                      -- 0 = mati, 1 = penuh
+
+-- ============================================================
+-- IK TANGAN UNTUK PANEL (23 Sep 2026)
+-- ============================================================
+-- Aer menambahkan 2 Attachment di setiap Panel (Panel_01 & Panel_02) sebagai
+-- titik pegang tangan. Sebelumnya attachment itu TIDAK dibaca kode sama
+-- sekali: jalur Panel hanya memakai weld + offset (PanelCarryOffset), jadi
+-- attachment-nya menganggur.
+--
+-- Attachment Panel TIDAK memakai pola "<Sisi>(<Tangan>)" seperti Engine
+-- (karena Panel dibawa 1 orang, tidak ada sisi carrier). Namanya polos
+-- "Left" dan "Right", jadi HandIK.attach() yang berbasis pola akan
+-- MELEWATKANNYA DIAM-DIAM. Karena itu dipakai HandIK.attachBoth() yang
+-- menerima Attachment secara eksplisit.
+--
+-- Sisi ditentukan dari POSISI X, bukan dari nama: attachment dengan X lebih
+-- kecil (paling kiri di ruang lokal part) dipasangkan ke LeftArm. Ini sekaligus
+-- MENORMALKAN Panel yang attachment-nya tertukar — ditemukan pada Panel_02
+-- (Left X=+1.736, Right X=-1.764, terbalik dibanding Panel_01). Kalau memakai
+-- nama apa adanya, tangan akan menyilang.
+Config.UsePanelHandIK = true
+-- Type IK: Position = telapak ditarik ke TITIK attachment, rotasi pergelangan
+-- dibiarkan natural (anti-nekuk). Sama seperti Engine.
+Config.PanelIKType = Enum.IKControlType.Position
+Config.PanelIKWeight = 1.0                 -- 0 = mati, 1 = penuh
 -- Type IK:
 --   Position  = tangan ditarik ke TITIK attachment, rotasi pergelangan NATURAL (default, anti-nekuk)
 --   Transform = tangan ikut posisi + ORIENTASI attachment (perlu attachment yang diputar pas)

@@ -57,6 +57,7 @@ local pickups: { [BasePart]: {
 	helpPrompt: ProximityPrompt?,
 	attachments: {left: Attachment?, right: Attachment?},
 	ikAttachments: { [string]: Attachment },
+	panelAttachments: { Attachment },
 } } = {}
 
 -- Model generator pemilik (dideteksi dari parent slot)
@@ -466,6 +467,17 @@ function AssemblyService.pickup(player: Player, part: BasePart): boolean
 
 		part.CFrame = root.CFrame * weld.C0
 		CarryAnimator.play(player, Config.PanelCarryAnimId)
+
+		-- IK TANGAN: tempelkan KEDUA tangan ke Attachment milik Panel.
+		-- Attachment Panel namanya polos "Left"/"Right", jadi attachBoth()
+		-- (bukan attach()) yang dipakai; sisi ditentukan dari POSISI X
+		-- sehingga Panel dengan attachment tertukar tetap benar.
+		-- IKControl dibuat di server -> otomatis ter-replikasi & di-solve
+		-- per-client, jadi tangan selalu nempel walau panjang lengan pemain
+		-- berbeda-beda (animasi baked tidak bisa begitu).
+		if #info.panelAttachments > 0 then
+			HandIK.attachBoth(player, info.panelAttachments)
+		end
 	else
 		-- Engine: carrier 1 mulai dari Attachment Left.
 		carrierSide[player] = "Left"
@@ -818,6 +830,10 @@ local function registerPickup(part: BasePart)
 	local leftAttachment: Attachment? = nil
 	local rightAttachment: Attachment? = nil
 	local ikAttachments: { [string]: Attachment } = {}
+	-- PANEL: 2 Attachment polos ("Left"/"Right") sebagai titik pegang tangan.
+	-- Dikumpulkan APA ADANYA (tanpa cek nama) karena sisi ditentukan dari
+	-- POSISI X di HandIK.attachBoth, bukan dari nama.
+	local panelAttachments: { Attachment } = {}
 	if kind == "Engine" then
 		for _, child in ipairs(part:GetChildren()) do
 			if child:IsA("Attachment") then
@@ -841,6 +857,12 @@ local function registerPickup(part: BasePart)
 		if not rightAttachment then
 			local c = part:FindFirstChild("Right")
 			if c and c:IsA("Attachment") then rightAttachment = c end
+		end
+	elseif kind == "Panel" then
+		for _, child in ipairs(part:GetChildren()) do
+			if child:IsA("Attachment") then
+				table.insert(panelAttachments, child)
+			end
 		end
 	end
 
@@ -887,6 +909,7 @@ local function registerPickup(part: BasePart)
 		helpPrompt = helpPrompt,
 		attachments = {left = leftAttachment, right = rightAttachment},
 		ikAttachments = ikAttachments,
+		panelAttachments = panelAttachments,
 		homeCF = part.CFrame,
 	}
 end
