@@ -103,7 +103,7 @@ Config.ReviveBreakDistance = Config.ReviveDistance + 4
 --
 -- GANTI dengan animasi beneran nanti: isi KnockAnimId dengan ID animasi lo.
 -- Isi "" -> tidak ada animasi (mekanis tetap jalan, tidak error).
-Config.KnockAnimId = "rbxassetid://2506281703"  -- SitV2 (sementara)
+Config.KnockAnimId = "rbxassetid://101410159389643"  -- SitV2 (sementara)
 Config.PlayKnockAnimation = true
 
 -----------------------------------------------------------------

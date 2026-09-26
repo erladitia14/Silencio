@@ -115,10 +115,9 @@ function DownedState.enter(character: Model, humanoid: Humanoid): any
 	-- Pastikan anti-death aktif (mis. karakter di-spawn sebelum sistem siap).
 	DownedState.armAntiDeath(humanoid)
 
-	-- Tahan di 0 HP supaya bar UI tidak menampilkan angka negatif.
-	if humanoid.Health < 0 then
-		humanoid.Health = 0
-	end
+	-- Tahan di minimum 1 HP (bukan 0) agar engine Roblox (PlayerModule / ControlScript)
+	-- tidak mematikan input gerakan WASD/analog mobile pemain saat tumbang.
+	humanoid.Health = math.clamp(humanoid.Health, 1, 100)
 
 	-- Penanda untuk tim (replikasi otomatis ke client).
 	character:SetAttribute(Config.DownedAttribute, true)

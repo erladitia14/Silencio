@@ -26,7 +26,7 @@ local KnockAnimator = {}
 
 local tracks: { [Player]: AnimationTrack } = {}
 
-local PRIORITY = Enum.AnimationPriority.Action
+local PRIORITY = Enum.AnimationPriority.Action4
 local FADE = 0.2
 
 local function getAnimator(player: Player): Animator?

@@ -218,9 +218,9 @@ local function tickAll()
 			local humanoid = character:FindFirstChildOfClass("Humanoid")
 			if humanoid then
 				CrawlController.enforce(character, humanoid)
-				-- Jaga Health tidak menampilkan angka negatif.
-				if Config.get(rec.player, "ClampHealthWhileDowned") and humanoid.Health < 0 then
-					humanoid.Health = 0
+				-- Tahan di minimum 1 HP agar input gerak controller pemain tetap aktif.
+				if Config.get(rec.player, "ClampHealthWhileDowned") and humanoid.Health < 1 then
+					humanoid.Health = 1
 				end
 			end
 
