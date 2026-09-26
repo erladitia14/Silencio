@@ -51,10 +51,27 @@ ReplicatedStorage/Modules/    ← modul KITA
 ├── GeneratorSFX / GeneratorElectricFX / CustomPromptHelper / TeleportData
 ```
 
-> **Catatan penting:** repo git ini **belum sepenuhnya sinkron** dengan Studio — beberapa file
-> di `src/` tertinggal dari versi Studio (mis. `DamageEffect`, `CaseService`, `ZoneService`,
-> `EnemyController`). **Studio adalah yang berjalan saat ini.** Saat menyalin perubahan ke repo,
-> selalu ambil dari Studio dulu.
+> **Catatan penting — repo git ini belum sepenuhnya sinkron dengan Studio, dan drift-nya
+> DUA ARAH.** Beberapa file di Studio lebih baru dari repo, beberapa justru sebaliknya.
+> **Kalau ragu, baca `Source` dari Studio lewat MCP dulu** — jangan asumsikan salah satu
+> sisi paling benar.
+>
+> | Arah | File | Yang berbeda |
+> |---|---|---|
+> | **Studio lebih baru** | `DamageEffect` | fitur `UiDikejar` + ambang `65/25/12` (repo masih `22/13/8`) |
+> | | `BatteryService` | fallback `defaultWalkSpeed` / `Movement.WalkSpeed` |
+> | | `CaseService` | fallback lintas-modul + `registerCase` |
+> | | `AssemblyService` | `AssemblyService.insert`, slot `CanCollide = false`, prompt hold `0` |
+> | | `ActiveButtonService` | `ActiveButtonService.activate`, prompt hold `0` |
+> | | `ZoneService` | `ZoneService:triggerZone` (dipakai CustomPromptController) |
+> | | `EnemyController/Config` | `ChaseSpeed 20`, `DetectionRadius 95`, `FieldOfView 360`, dll |
+> | | `BatteryPuzzle/Config` | `InsertDuration 0` (repo masih `1.0`) |
+> | **Repo lebih baru** | `EnemyController` | print diagnostik + komentar (Studio sudah dibersihkan) |
+> | | `TargetFinder` | cek Attribute `Knocked` — **monster mengabaikan pemain tumbang** |
+>
+> **Konsekuensi gameplay dari yang terakhir:** karena cek `Knocked` hanya ada di repo,
+> di Studio monster **masih mengejar pemain yang tumbang**. Kalau perilaku "abaikan yang
+> tumbang" memang diinginkan, versi repo perlu didorong ke Studio.
 
 ---
 

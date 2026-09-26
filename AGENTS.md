@@ -19,8 +19,13 @@
 
 ## ⚠️ Alur Kerja — BACA DULU
 
-**Fakta yang berlaku = yang ada di Studio.** Repo ini **belum sepenuhnya sinkron** — beberapa
-file di `src/` tertinggal dari Studio. Kalau ragu, baca `Source` dari Studio lewat MCP dulu.
+**Repo ini dan Studio belum sepenuhnya sinkron — dan drift-nya DUA ARAH.** Sebagian file di
+Studio lebih baru dari repo (mis. `DamageEffect`, `BatteryService`, `CaseService`, `ZoneService`,
+`AssemblyService`, kedua `Config`), tapi ada juga yang sebaliknya (mis. `TargetFinder` di repo
+punya cek Attribute `Knocked` yang **belum ada** di Studio).
+
+**Kalau ragu, baca `Source` dari Studio lewat MCP dulu.** Jangan asumsikan salah satu sisi
+paling benar. Tabel drift lengkap: [`README.md`](README.md).
 
 | | |
 |---|---|
