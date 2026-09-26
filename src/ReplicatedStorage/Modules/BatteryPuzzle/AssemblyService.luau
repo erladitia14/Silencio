@@ -28,6 +28,8 @@ local CarryAnimator = require(script.Parent.CarryAnimator)
 local HandIK = require(script.Parent.HandIK)
 
 local AssemblyService = {}
+local registerPickup: (part: BasePart) -> ()
+local registerSlot: (part: BasePart) -> ()
 
 -- State
 local carriedPart: { [Player]: BasePart } = {}
@@ -230,7 +232,13 @@ end
 
 function AssemblyService.canPickup(player: Player, part: BasePart): boolean
 	if carriedPart[player] ~= nil then return false end
-	if pickups[part] == nil then return false end
+	if pickups[part] == nil then
+		if game:GetService("CollectionService"):HasTag(part, "AssemblyPickup") then
+			registerPickup(part)
+		else
+			return false
+		end
+	end
 	for _, p in pairs(carriedPart) do
 		if p == part then return false end
 	end
@@ -767,7 +775,7 @@ local function tryInsert(player: Player, slotPart: BasePart): boolean
 
 	-- Tampilkan placeholder slot
 	slotPart.Transparency = 0
-	slotPart.CanCollide = true
+	slotPart.CanCollide = false
 	slotPart.CanQuery = false
 	slotPart.CanTouch = false
 	rec.prompt.Enabled = false
@@ -812,7 +820,7 @@ end
 -- Registrasi Slot & Pickup
 -- ----------------------------------------------------------------------
 
-local function registerSlot(part: BasePart)
+registerSlot = function(part: BasePart)
 	if slots[part] then return end
 
 	local kindAttr = part:GetAttribute("Kind")
@@ -859,7 +867,7 @@ local function registerSlot(part: BasePart)
 	}
 end
 
-local function registerPickup(part: BasePart)
+registerPickup = function(part: BasePart)
 	if pickups[part] then return end
 
 	local kindAttr = part:GetAttribute("Kind")
@@ -915,36 +923,78 @@ local function registerPickup(part: BasePart)
 		end
 	end
 
-	-- Fallback parent tetap ke part bila Attachment belum ada, supaya engine tidak deadlock.
-	prompt.Parent = leftAttachment or part
+	-- Parent prompt pickup langsung ke BasePart supaya posisinya tepat di tengah part
+	-- dan tidak bias ke attachment pojok (sehingga pemain mobile bisa ambil dari sisi mana saja).
+	prompt.Parent = part
 	prompt.ActionText = Config.PickupPromptText
 	prompt.ObjectText = kind
 	prompt.KeyboardKeyCode = Enum.KeyCode.E
-	prompt.MaxActivationDistance = Config.PickupPromptDistance
+	prompt.MaxActivationDistance = math.max(Config.PickupPromptDistance or 8, 12)
 	prompt.HoldDuration = 0
-	prompt.RequiresLineOfSight = Config.RequireLineOfSight
+	prompt.RequiresLineOfSight = false
+	prompt.ClickablePrompt = true
 	prompt.Enabled = true
 
 	prompt.Triggered:Connect(function(player)
 		AssemblyService.pickup(player, part)
 	end)
 
+	-- Atribut interaksi agar CustomPromptController & Mobile UI memposisikan
+	-- billboard melayang pas di atas mesh dan responsif saat di-tap.
+	if not part:GetAttribute("PromptOffset") then
+		local halfHeight = part.Size.Y * 0.5
+		part:SetAttribute("PromptOffset", Vector3.new(0, halfHeight + 0.8, 0))
+	end
+	if not part:GetAttribute("InteractDistance") then
+		part:SetAttribute("InteractDistance", 12)
+	end
+	part:SetAttribute("InstantPrompt", true)
+
 	local helpPrompt: ProximityPrompt? = nil
 	if kind == "Engine" then
-		helpPrompt = part:FindFirstChild("EngineHelpCarryPrompt", true) :: ProximityPrompt?
+		-- PENTING: EngineHelpCarryPrompt dipasang di helper part terpisah (EngineHelpHandle)
+		-- agar tidak bentrok dengan prompt pickup di ControlRoom3PromptBridge / CustomPromptController.
+		-- Bila kedua prompt berbagi BasePart yang sama, prompt bantuan yang disabled akan
+		-- menimpa & me-unregister part Engine sehingga tombol tap di Mobile hilang total.
+		local helpPart = part:FindFirstChild("EngineHelpHandle") :: BasePart?
+		if not helpPart then
+			local hp = Instance.new("Part")
+			hp.Name = "EngineHelpHandle"
+			hp.Size = Vector3.new(0.5, 0.5, 0.5)
+			hp.Transparency = 1
+			hp.CanCollide = false
+			hp.CanTouch = false
+			hp.CanQuery = false
+			hp.Massless = true
+			if rightAttachment then
+				hp.CFrame = rightAttachment.WorldCFrame
+			else
+				hp.CFrame = part.CFrame * CFrame.new(1.5, 0.9, 0.9)
+			end
+			local weld = Instance.new("Weld")
+			weld.Name = "HelpHandleWeld"
+			weld.Part0 = part
+			weld.Part1 = hp
+			weld.C0 = part.CFrame:ToObjectSpace(hp.CFrame)
+			weld.Parent = hp
+			hp.Parent = part
+			helpPart = hp
+		end
+
+		helpPrompt = helpPart:FindFirstChild("EngineHelpCarryPrompt", true) :: ProximityPrompt?
 		if not helpPrompt then
 			helpPrompt = Instance.new("ProximityPrompt")
 			helpPrompt.Name = "EngineHelpCarryPrompt"
-			helpPrompt.Parent = part
+			helpPrompt.Parent = helpPart
 		end
 		helpPrompt.ActionText = "Help Carry"
 		helpPrompt.ObjectText = "Engine"
-		-- Prompt bantuan ditempatkan di Attachment Right (bukan di tengah Engine).
-		helpPrompt.Parent = rightAttachment or part
+		helpPrompt.Parent = helpPart
 		helpPrompt.KeyboardKeyCode = Enum.KeyCode.E
-		helpPrompt.MaxActivationDistance = Config.PickupPromptDistance + 4
-		helpPrompt.HoldDuration = 0.5
+		helpPrompt.MaxActivationDistance = math.max(Config.PickupPromptDistance or 8, 12)
+		helpPrompt.HoldDuration = 0
 		helpPrompt.RequiresLineOfSight = false
+		helpPrompt.ClickablePrompt = true
 		helpPrompt.Enabled = false
 
 		helpPrompt.Triggered:Connect(function(player)
@@ -1035,6 +1085,10 @@ function AssemblyService.start(opts: {
 	end)
 
 	AssemblyService.refreshPrompts()
+end
+
+function AssemblyService.insert(player: Player, slotPart: BasePart): boolean
+	return tryInsert(player, slotPart)
 end
 
 return AssemblyService
