@@ -8,6 +8,13 @@ Jika tetap di dalam, napas cuma **20 detik** dengan efek guncangan kamera (camer
 Bedanya dengan Safe Zone lama: dulu cukup berdiri di dalam Part untuk aman selamanya. Sekarang
 bilik punya **state**, masuknya **disengaja**, dan "berada di dalam" tidak sama dengan "dilindungi".
 
+> Bagian dari **Silencio – The Dark Story**. Indeks semua sistem: [`README.md`](README.md).
+> Sistem lain: [`ENEMY_AI.md`](ENEMY_AI.md) · [`KEY_SYSTEM.md`](KEY_SYSTEM.md).
+> **Knock & Revive** dan **Battery Puzzle** ada di [`README.md`](README.md).
+>
+> Safe Zone memblokir monster lewat `EnemyController/SafeZoneManager` — jembatan itu **tidak
+> diubah** saat Safe Zone jadi berbasis napas; monster tetap tidak bisa menarget & tidak bisa masuk.
+
 ---
 
 ## Cara Pakai

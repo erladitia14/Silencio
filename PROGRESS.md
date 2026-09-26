@@ -11,7 +11,7 @@
 
 ## Konvensi
 
-- **Source of truth:** folder lokal `C:\Users\erlan\Documents\Silencio` (Rojo) → di-push ke Studio.
+- **Source of truth:** folder lokal `C:\Users\erlan\Documents\Silencio` (`src/`) → di-push ke Studio **lewat MCP**. Rojo sudah tidak dipakai; `default.project.json` = artefak mati.
 - **Repo:** `erladitia14/Silencio` (private) · branch `main`.
 - **Verifikasi tanpa playtest:** struktural + compile-check Studio + behavioral test. Playtest = Aer.
 
