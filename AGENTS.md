@@ -82,8 +82,10 @@ ReplicatedStorage/Modules/                            ← KITA (5 sistem, 45 mod
 | **Enemy AI** — FSM monster, patrol/chase/attack, animasi | [`ENEMY_AI.md`](ENEMY_AI.md) | `Aer/EnemyController` |
 | **Key System** — kunci → pintu → power switch → lampu | [`KEY_SYSTEM.md`](KEY_SYSTEM.md) | `Aer/KeySystemController` |
 | **Safe Zone** — bilik sembunyi berbatas napas | [`SAFE_ZONE.md`](SAFE_ZONE.md) | `Aer/SafeZoneController` |
-| **Knock & Revive** — pemain tumbang, merangkak, dibangunkan rekan | [`README.md`](README.md) | `Aer/KnockController` |
-| **Battery Puzzle** — rakit baterai + panel generator | [`README.md`](README.md) | `Aer/BatteryPuzzleController` + `Aer/AssemblyController` |
+| **Knock & Revive** — pemain tumbang, merangkak, dibangunkan rekan | [`KNOCK_SYSTEM.md`](KNOCK_SYSTEM.md) | `Aer/KnockController` |
+| **Battery Puzzle** — rakit baterai + panel generator | [`BATTERY_PUZZLE.md`](BATTERY_PUZZLE.md) | `Aer/BatteryPuzzleController` + `Aer/AssemblyController` |
+| **DamageEffect** — efek horor sinematik saat dikejar | [`DAMAGE_EFFECT.md`](DAMAGE_EFFECT.md) | `StarterCharacterScripts/DamageEffect` |
+| **Generator SFX** — suara & efek listrik generator | [`GENERATOR_SFX.md`](GENERATOR_SFX.md) | `Aer/GeneratorSFXController` |
 
 Riwayat lengkap tiap perubahan + commit hash: [`PROGRESS.md`](PROGRESS.md).
 

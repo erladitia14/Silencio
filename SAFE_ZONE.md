@@ -9,8 +9,9 @@ Bedanya dengan Safe Zone lama: dulu cukup berdiri di dalam Part untuk aman selam
 bilik punya **state**, masuknya **disengaja**, dan "berada di dalam" tidak sama dengan "dilindungi".
 
 > Bagian dari **Silencio – The Dark Story**. Indeks semua sistem: [`README.md`](README.md).
-> Sistem lain: [`ENEMY_AI.md`](ENEMY_AI.md) · [`KEY_SYSTEM.md`](KEY_SYSTEM.md).
-> **Knock & Revive** dan **Battery Puzzle** ada di [`README.md`](README.md).
+> Sistem lain: [`ENEMY_AI.md`](ENEMY_AI.md) · [`KNOCK_SYSTEM.md`](KNOCK_SYSTEM.md) ·
+> [`BATTERY_PUZZLE.md`](BATTERY_PUZZLE.md) · [`KEY_SYSTEM.md`](KEY_SYSTEM.md) ·
+> [`DAMAGE_EFFECT.md`](DAMAGE_EFFECT.md) · [`GENERATOR_SFX.md`](GENERATOR_SFX.md).
 >
 > Safe Zone memblokir monster lewat `EnemyController/SafeZoneManager` — jembatan itu **tidak
 > diubah** saat Safe Zone jadi berbasis napas; monster tetap tidak bisa menarget & tidak bisa masuk.

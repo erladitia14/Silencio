@@ -6,8 +6,9 @@ Sistem progresi Chapter 1: **kunci → pintu ruang kontrol → power switch → 
 Studio. **Tidak perlu menempel script** dan **tidak perlu mengubah script inti.**
 
 > Bagian dari **Silencio – The Dark Story**. Indeks semua sistem: [`README.md`](README.md).
-> Sistem lain: [`ENEMY_AI.md`](ENEMY_AI.md) · [`SAFE_ZONE.md`](SAFE_ZONE.md).
-> **Knock & Revive** dan **Battery Puzzle** (rakit baterai + panel generator) ada di [`README.md`](README.md).
+> Sistem lain: [`ENEMY_AI.md`](ENEMY_AI.md) · [`KNOCK_SYSTEM.md`](KNOCK_SYSTEM.md) ·
+> [`BATTERY_PUZZLE.md`](BATTERY_PUZZLE.md) · [`SAFE_ZONE.md`](SAFE_ZONE.md) ·
+> [`DAMAGE_EFFECT.md`](DAMAGE_EFFECT.md) · [`GENERATOR_SFX.md`](GENERATOR_SFX.md).
 
 ---
 

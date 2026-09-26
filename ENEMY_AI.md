@@ -6,7 +6,9 @@ Sistem NPC Enemy AI modular untuk Roblox Studio, pola **Finite State Machine (FS
 patrol, chase, idle, damage, dan **animasi** langsung jalan. **Tidak perlu mengubah script AI.**
 
 > Bagian dari **Silencio – The Dark Story**. Indeks semua sistem: [`README.md`](README.md).
-> Sistem lain: [`KEY_SYSTEM.md`](KEY_SYSTEM.md) · [`SAFE_ZONE.md`](SAFE_ZONE.md).
+> Sistem lain: [`KNOCK_SYSTEM.md`](KNOCK_SYSTEM.md) · [`BATTERY_PUZZLE.md`](BATTERY_PUZZLE.md) ·
+> [`KEY_SYSTEM.md`](KEY_SYSTEM.md) · [`SAFE_ZONE.md`](SAFE_ZONE.md) ·
+> [`DAMAGE_EFFECT.md`](DAMAGE_EFFECT.md) · [`GENERATOR_SFX.md`](GENERATOR_SFX.md).
 
 ---
 
