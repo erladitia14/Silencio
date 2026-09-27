@@ -233,6 +233,7 @@ function MonsterRig:setup(model: Model): { [string]: any }
 		colliderSize = nil :: Vector3?,
 		collisionOn = 0,
 		rotatedMesh = 0,
+		colliderResized = nil :: Vector3?,
 	}
 
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
@@ -276,12 +277,23 @@ function MonsterRig:setup(model: Model): { [string]: any }
 			end
 			local originalMeshName = mesh:GetAttribute(ATTR_MESH_NAME) :: string
 
-			-- Ukuran collider: default 3 x (60% tinggi render) x 3, tapi jangan
+			-- Ukuran collider: default 3 x (60% tinggi MESH) x 3, tapi jangan
 			-- lebih pendek dari 3 stud supaya tetap stabil.
-			local _, renderSize = renderBounds(model)
+			--
+			-- PAKAI mesh.Size.Y, BUKAN renderBounds(model). Untuk mesh skinned,
+			-- GetBoundingBox() model bisa jauh lebih besar dari mesh aslinya
+			-- (kasus nyata di proyek ini: 11.99 vs 7.37 stud) karena ikut
+			-- ekstensi bone. Collider raksasa -> setengah tingginya melebihi
+			-- jarak ke kaki -> HipHeight jadi negatif, di-clamp 0, dan monster
+			-- MELAYANG di atas tanah.
 			local defaultH = 5
-			if renderSize then
-				defaultH = math.clamp(renderSize.Y * 0.6, 3, 12)
+			if mesh.Size.Y > 0 then
+				defaultH = math.clamp(mesh.Size.Y * 0.6, 3, 12)
+			else
+				local _, renderSize = renderBounds(model)
+				if renderSize then
+					defaultH = math.clamp(renderSize.Y * 0.6, 3, 12)
+				end
 			end
 			local colSize = vecAttr(model, "ColliderSize", Vector3.new(3, defaultH, 3))
 			local colOffset = vecAttr(model, "ColliderOffset", Vector3.zero)
@@ -382,6 +394,19 @@ function MonsterRig:setup(model: Model): { [string]: any }
 					-- Jaring pengaman: tidak ada bone/part -> pakai kotak part.
 					footDistance = mesh.Size.Y * 0.5
 				end
+
+				-- KOREKSI PROXY KETINGGIAN (jangan ke-regres): HipHeight tidak
+				-- bisa negatif, jadi kalau setengah tinggi proxy MELEBIHI jarak
+				-- ke kaki, rumusnya jadi negatif -> di-clamp 0 -> monster
+				-- MELAYANG di atas tanah. Kasus nyata: proxy 12 stud (kena
+				-- clamp lama) vs kaki 3.46 stud dari pusat -> melayang 2.5 stud.
+				-- Perkecil proxy supaya separuhnya menyisakan HipHeight positif.
+				local setengah = proxy.Size.Y * 0.5
+				if setengah >= footDistance and footDistance > 0 then
+					proxy.Size = Vector3.new(proxy.Size.X, footDistance, proxy.Size.Z)
+					result.colliderResized = proxy.Size
+				end
+
 				-- HipHeightOffset: koreksi halus dari tim (stud). Positif = naikkan
 				-- monster, negatif = turunkan. Untuk mesh yang geometri render-nya
 				-- sedikit meleset dari bone (kasus nyata: 0.16 stud).
