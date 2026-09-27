@@ -18,9 +18,9 @@ local Lighting          = game:GetService("Lighting")
 -- SETELAN (tuning efek horor)
 -----------------------------------------------------------------
 local MONSTER_TAG     = "Monster"
-local START_DIST      = 65    -- jarak mulai terasa bayangan & getar (UiDikejar dipicu damage, bukan jarak)
-local PULSE_DIST      = 25    -- jarak mulai berdenyut jantung (studs)
-local BLUR_DIST       = 12    -- jarak penglihatan mengabur (studs)
+local START_DIST      = 15    -- jarak mulai terasa bayangan & getar (UiDikejar dipicu damage, bukan jarak)
+local PULSE_DIST      = 12    -- jarak mulai berdenyut jantung (studs)
+local BLUR_DIST       = 8     -- jarak penglihatan mengabur (studs)
 
 local MAX_SHAKE       = 0.11  -- guncangan maksimum halus (radians)
 local SHAKE_SPEED     = 11    -- frekuensi getar mengalir
