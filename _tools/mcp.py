@@ -5,11 +5,15 @@ AUTH = open(os.path.expanduser("~/.robloxstudio-mcp/auth-token")).read().strip()
 URL = "http://127.0.0.1:58741/mcp"
 _id = [0]
 
-def call(tool, args=None, timeout=180):
+def call(tool, args=None, timeout=180, instance_id=None):
+    """Panggil tool MCP. instance_id wajib bila >1 place terhubung ke plugin."""
     _id[0] += 1
+    arguments = dict(args or {})
+    if instance_id:
+        arguments["instance_id"] = instance_id
     body = json.dumps({
         "jsonrpc": "2.0", "id": _id[0], "method": "tools/call",
-        "params": {"name": tool, "arguments": args or {}},
+        "params": {"name": tool, "arguments": arguments},
     }).encode()
     req = urllib.request.Request(URL, data=body, headers={
         "Content-Type": "application/json",
@@ -27,19 +31,19 @@ def call(tool, args=None, timeout=180):
     except Exception:
         return {"_raw": payload}
 
-def luau(code, timeout=180):
+def luau(code, timeout=180, instance_id=None):
     """Jalankan Luau di server VM, kembalikan teks hasilnya."""
-    r = call("execute_luau", {"code": code}, timeout=timeout)
+    r = call("execute_luau", {"code": code}, timeout=timeout, instance_id=instance_id)
     try:
         blocks = r["result"]["content"]
         return "\n".join(b.get("text", "") for b in blocks)
     except Exception:
         return json.dumps(r)[:4000]
 
-def push(path, source_path):
+def push(path, source_path, instance_id=None):
     """Push file lokal -> Script di Studio via set_script_source (baca dari disk)."""
     src = pathlib.Path(source_path).read_text(encoding="utf-8")
-    r = call("set_script_source", {"instancePath": path, "source": src})
+    r = call("set_script_source", {"instancePath": path, "source": src}, instance_id=instance_id)
     try:
         blocks = r["result"]["content"]
         return "\n".join(b.get("text", "") for b in blocks)

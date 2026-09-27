@@ -1,7 +1,12 @@
 --[[ verify_knock.lua — harness regresi KnockSystem (jalankan via _tools/mcp.py).
      Bukan suite green CI; ini verifikasi AD-HOC yang bisa diulang:
      compile semua modul + struktur + PARITAS NAMA ATTRIBUTE Config<->UI + wiring.
-     Cara pakai:  python -c "import mcp,pathlib;print(mcp.luau(pathlib.Path('_tools/verify_knock.lua').read_text(encoding='utf-8')))" ]]
+     Cara pakai:  python -c "import mcp,pathlib;print(mcp.luau(pathlib.Path('_tools/verify_knock.lua').read_text(encoding='utf-8')))"
+
+     CATATAN LOKASI (23 Sep 2026): orchestrator & UI dipindah ke folder "Aer"
+     (SSS.Aer.KnockController, SPS.Aer.KnockUI, SPS.Aer.RevivePromptFilter) saat
+     sinkronisasi place BUILD->Script. Harness ini sekarang MENCARI REKURSIF
+     supaya tidak rapuh terhadap perpindahan folder. ]]
 local out, pass, fail = {}, 0, 0
 local function ck(n, c, e)
 	if c then pass += 1; table.insert(out, "PASS " .. n)
@@ -13,6 +18,17 @@ local function strip(s)
 	return (s:gsub("%-%-[^\n]*", ""))
 end
 local function has(s, sub) return string.find(s, sub, 1, true) ~= nil end
+
+--- Cari LuaSourceContainer berdasarkan nama, di mana pun di bawah root.
+--- Mengembalikan instance pertama yang ketemu (tahan perpindahan folder).
+local function findByName(root, name, class)
+	for _, d in ipairs(root:GetDescendants()) do
+		if d.Name == name and (not class or d.ClassName == class) then
+			return d
+		end
+	end
+	return nil
+end
 
 local ks = game.ReplicatedStorage:FindFirstChild("Modules")
 	and game.ReplicatedStorage.Modules:FindFirstChild("KnockSystem")
@@ -32,10 +48,16 @@ for _, n in MODULES do
 		ck("modul " .. n .. " compile", loadstring(m.Source) ~= nil)
 	end
 end
-local ctrl = game.ServerScriptService:FindFirstChild("KnockController")
-ck("orchestrator KnockController ada & compile", ctrl ~= nil and loadstring(ctrl.Source) ~= nil)
-local uiScript = game.StarterPlayer.StarterPlayerScripts:FindFirstChild("KnockUI")
-ck("KnockUI ada & compile", uiScript ~= nil and loadstring(uiScript.Source) ~= nil)
+-- Lokasi fleksibel: cari rekursif (dulu hardcode SSS.KnockController / SPS.KnockUI).
+local ctrl = findByName(game.ServerScriptService, "KnockController")
+ck("orchestrator KnockController ada & compile", ctrl ~= nil and loadstring(ctrl.Source) ~= nil,
+	ctrl and ctrl:GetFullName() or "tidak ditemukan di ServerScriptService")
+if ctrl then table.insert(out, "PATH KnockController = " .. ctrl:GetFullName()) end
+
+local uiScript = findByName(game.StarterPlayer, "KnockUI")
+ck("KnockUI ada & compile", uiScript ~= nil and loadstring(uiScript.Source) ~= nil,
+	uiScript and uiScript:GetFullName() or "tidak ditemukan di StarterPlayer")
+if uiScript then table.insert(out, "PATH KnockUI = " .. uiScript:GetFullName()) end
 local uiSrc = uiScript and uiScript.Source or ""
 
 -- ---------- 2. Kontrak API modul UI (new titik, sisanya titik dua) ----------
