@@ -7,3 +7,12 @@
 
 sourcemap.json
 _tools/__pycache__/
+
+# Temp investigasi & backup lokal — JANGAN pernah di-commit
+_backup*/
+_cmp/
+_studio_*.txt
+_repo_*.txt
+_cm.tmp
+hermes-*
+_probe_*
