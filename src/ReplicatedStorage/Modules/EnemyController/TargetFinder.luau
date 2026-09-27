@@ -191,6 +191,58 @@ local reachCache: { [Model]: number } = {}
 --- Perkiraan radius tubuh player R15 standar (studs).
 local PLAYER_RADIUS = 1.0
 
+--- Hitung AABB (bounding box) HANYA dari part TUBUH monster.
+---
+--- PENTING: `Model:GetExtentsSize()` menghitung SELURUH descendant, termasuk
+--- part penanda navigasi di dalam folder "Waypoints". Kalau folder waypoint
+--- ditaruh di dalam template monster (supaya ikut ter-clone), titik-titik
+--- waypoint yang tersebar ratusan studs di map ikut masuk hitungan sehingga
+--- ukuran model membengkak (contoh nyata: Clown jadi 205 x 416 x 7 studs
+--- padahal badannya cuma ~6 x 7 x 2). Efeknya jangkauan serang meledak jadi
+--- ~119 studs dan player kehilangan HP dari jauh tanpa monster mendekat.
+---
+--- Karena itu part di dalam Folder (kontainer organisasi, bukan tubuh)
+--- dikecualikan dari perhitungan ukuran.
+--- Mengembalikan (minV, maxV) atau (nil, nil) bila tidak ada part tubuh.
+local function computeBodyExtents(monsterModel: Model): (Vector3?, Vector3?)
+	local minV = Vector3.new(math.huge, math.huge, math.huge)
+	local maxV = Vector3.new(-math.huge, -math.huge, -math.huge)
+	local found = false
+
+	for _, part in monsterModel:GetDescendants() do
+		if part:IsA("BasePart") then
+			local inFolder = false
+			local ancestor = part.Parent
+			while ancestor and ancestor ~= monsterModel do
+				if ancestor:IsA("Folder") then
+					inFolder = true
+					break
+				end
+				ancestor = ancestor.Parent
+			end
+
+			if not inFolder then
+				found = true
+				local cf, sz = part.CFrame, part.Size
+				for _, sx in ipairs({ -0.5, 0.5 }) do
+					for _, sy in ipairs({ -0.5, 0.5 }) do
+						for _, sz2 in ipairs({ -0.5, 0.5 }) do
+							local p = cf:PointToWorldSpace(Vector3.new(sz.X * sx, sz.Y * sy, sz.Z * sz2))
+							minV = Vector3.new(math.min(minV.X, p.X), math.min(minV.Y, p.Y), math.min(minV.Z, p.Z))
+							maxV = Vector3.new(math.max(maxV.X, p.X), math.max(maxV.Y, p.Y), math.max(maxV.Z, p.Z))
+						end
+					end
+				end
+			end
+		end
+	end
+
+	if not found then
+		return nil, nil
+	end
+	return minV, maxV
+end
+
 --- Hitung jangkauan serang efektif untuk sebuah monster.
 --- Mengembalikan jarak pusat-ke-pusat maksimum yang dihitung sebagai "menempel".
 function TargetFinder:getAttackReach(monsterModel: Model): number
@@ -206,35 +258,27 @@ function TargetFinder:getAttackReach(monsterModel: Model): number
 		return cached
 	end
 
-	-- 3. Hitung dari ukuran NPC
+	-- 3. Hitung dari ukuran TUBUH NPC (folder waypoint dikecualikan)
 	local reach = Config.AttackRadius
 
-	local ok, extents = pcall(function()
-		return monsterModel:GetExtentsSize()
-	end)
+	local minV, maxV = computeBodyExtents(monsterModel)
 
-	if ok and extents then
+	if minV and maxV then
+		local extents = maxV - minV
 		local monsterRoot = monsterModel:FindFirstChild("HumanoidRootPart") :: BasePart?
 
 		-- Komponen horizontal: setengah lebar badan + radius player
 		local bodyRadius = math.max(extents.X, extents.Z) / 2
 		local horizontal = bodyRadius + PLAYER_RADIUS
 
-		-- Komponen vertikal: selisih tinggi root monster vs root player.
-		-- Player R15 standar punya root ~3 studs di atas kaki; kalau root
-		-- monster jauh lebih tinggi, selisih ini yang bikin jarak melonjak.
+		-- Komponen vertikal: selisih tinggi root monster vs titik terendah
+		-- TUBUH (bukan seluruh descendant). Player R15 standar punya root
+		-- ~3 studs di atas kaki; kalau root monster jauh lebih tinggi,
+		-- selisih ini yang bikin jarak melonjak.
 		local vertical = 0
 		if monsterRoot then
-			local lowest = math.huge
-			for _, part in monsterModel:GetChildren() do
-				if part:IsA("BasePart") then
-					lowest = math.min(lowest, part.Position.Y - part.Size.Y / 2)
-				end
-			end
-			if lowest < math.huge then
-				local rootHeight = monsterRoot.Position.Y - lowest
-				vertical = math.max(0, rootHeight - 3.0)
-			end
+			local rootHeight = monsterRoot.Position.Y - minV.Y
+			vertical = math.max(0, rootHeight - 3.0)
 		end
 
 		local computed = math.sqrt(horizontal * horizontal + vertical * vertical)
@@ -243,6 +287,18 @@ function TargetFinder:getAttackReach(monsterModel: Model): number
 		-- lalu jangan sampai LEBIH KECIL dari nilai Config (monster kecil
 		-- tetap memakai jangkauan minimal yang sudah di-tune).
 		reach = math.max(Config.AttackRadius, computed * 1.15)
+	end
+
+	-- 4. Pagar pengaman: jangan pernah melebihi batas wajar.
+	-- Perhitungan adaptif boleh menyesuaikan ukuran NPC, tapi tidak boleh
+	-- berubah jadi "sniper" gara-gara ada instance asing di dalam model.
+	local maxReach = Config.AttackReachMax or 12
+	if reach > maxReach then
+		warn(string.format(
+			"[TargetFinder] Jangkauan serang %s dihitung %.1f studs (> batas %.1f). Dibatasi ke %.1f. Cek isi model (folder waypoint/part asing).",
+			monsterModel.Name, reach, maxReach, maxReach
+		))
+		reach = maxReach
 	end
 
 	reachCache[monsterModel] = reach

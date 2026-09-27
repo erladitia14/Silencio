@@ -89,6 +89,12 @@ Config.RetargetMinGap     = 8     -- ATAU minimal sekian studs lebih dekat
 Config.AttackRadius     = 4     -- Jarak jangkauan serangan (studs)
 Config.AttackCooldown   = 1.5   -- Cooldown antar serangan (detik)
 Config.Damage           = 25    -- Damage per serangan
+-- Batas atas jangkauan serang ADAPTIF (lihat TargetFinder.getAttackReach).
+-- Monster raksasa boleh dapat jangkauan lebih besar, tapi tidak boleh
+-- melebihi angka ini. Ini pagar pengaman kalau ada instance asing di dalam
+-- model (mis. folder Waypoints yang titik-titiknya tersebar di map) yang
+-- membuat ukuran model membengkak -> monster jadi "sniper".
+Config.AttackReachMax   = 12
 
 -----------------------------------------------------------------
 -- PATROL
