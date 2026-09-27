@@ -22,10 +22,15 @@
 **Repo ini dan Studio belum sepenuhnya sinkron — dan drift-nya DUA ARAH.** Sebagian file di
 Studio lebih baru dari repo (mis. `DamageEffect`, `BatteryService`, `CaseService`, `ZoneService`,
 `AssemblyService`, kedua `Config`), tapi ada juga yang sebaliknya (mis. `TargetFinder` di repo
-punya cek Attribute `Knocked` yang **belum ada** di Studio).
+punya cek Attribute tumbang yang belum ada di place `BUILD Chapter 1`).
 
 **Kalau ragu, baca `Source` dari Studio lewat MCP dulu.** Jangan asumsikan salah satu sisi
 paling benar. Tabel drift lengkap: [`README.md`](README.md).
+
+> **Knock & Revive = sistem MILIK TIM.** `SilencioServer.ReviveManager` (server) +
+> `SilencioClient.ReviveController` (client), Attribute `IsKnocked`, remote `PlayerKnocked`.
+> KnockSystem milik Aer sudah **DIHAPUS 23 Sep 2026** (dulu ada dua sistem paralel dan
+> sistem Aer selalu kalah lomba set Health). Jangan menghidupkannya lagi.
 
 | | |
 |---|---|
@@ -58,21 +63,19 @@ ServerScriptService/
 ├── SilencioServer/     ← TIM
 ├── Feature/            ← TIM (TeleprotHandler)
 └── Aer/                ← KITA
-    ├── EnemyController          ├── KnockController
-    ├── KeySystemController      ├── BatteryPuzzleController
-    ├── SafeZoneController       ├── AssemblyController
-    └── GeneratorSFXController
+    ├── EnemyController          ├── BatteryPuzzleController
+    ├── KeySystemController      ├── AssemblyController
+    ├── SafeZoneController       └── GeneratorSFXController
 
 StarterPlayer/StarterPlayerScripts/
-├── SilencioClient/     ← TIM (LocalScript + 9 modul)
+├── SilencioClient/     ← TIM (LocalScript + 9 modul, termasuk ReviveController)
 ├── Boba/               ← TIM (Teleport)
 └── Aer/                ← KITA
-    ├── KnockUI              ├── SafeZoneUI
-    ├── RevivePromptFilter   └── JumpscareHandler
+    ├── SafeZoneUI           ├── JumpscareHandler
     └── PuzzleInputClient
 
 StarterPlayer/StarterCharacterScripts/DamageEffect   ← KITA
-ReplicatedStorage/Modules/                            ← KITA (5 sistem, 45 modul)
+ReplicatedStorage/Modules/                            ← KITA (4 sistem)
 ```
 
 ### Sistem yang Sudah Jadi
@@ -82,7 +85,7 @@ ReplicatedStorage/Modules/                            ← KITA (5 sistem, 45 mod
 | **Enemy AI** — FSM monster, patrol/chase/attack, animasi | [`ENEMY_AI.md`](ENEMY_AI.md) | `Aer/EnemyController` |
 | **Key System** — kunci → pintu → power switch → lampu | [`KEY_SYSTEM.md`](KEY_SYSTEM.md) | `Aer/KeySystemController` |
 | **Safe Zone** — bilik sembunyi berbatas napas | [`SAFE_ZONE.md`](SAFE_ZONE.md) | `Aer/SafeZoneController` |
-| **Knock & Revive** — pemain tumbang, merangkak, dibangunkan rekan | [`KNOCK_SYSTEM.md`](KNOCK_SYSTEM.md) | `Aer/KnockController` |
+| **Knock & Revive** — pemain tumbang, merangkak, dibangunkan rekan | [`KNOCK_SYSTEM.md`](KNOCK_SYSTEM.md) | **MILIK TIM** (`SilencioServer/ReviveManager`) |
 | **Battery Puzzle** — rakit baterai + panel generator | [`BATTERY_PUZZLE.md`](BATTERY_PUZZLE.md) | `Aer/BatteryPuzzleController` + `Aer/AssemblyController` |
 | **DamageEffect** — efek horor sinematik saat dikejar | [`DAMAGE_EFFECT.md`](DAMAGE_EFFECT.md) | `StarterCharacterScripts/DamageEffect` |
 | **Generator SFX** — suara & efek listrik generator | [`GENERATOR_SFX.md`](GENERATOR_SFX.md) | `Aer/GeneratorSFXController` |

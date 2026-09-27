@@ -3,28 +3,35 @@
 Sistem **co-op down state**: pemain yang dipukul monster **tumbang** (bukan langsung mati),
 merangkak pelan, dan harus **dibangunkan rekan** sebelum bleed-out habis.
 
-**Tanpa tag, tanpa konfigurasi.** Otomatis aktif untuk semua pemain begitu game jalan.
-
 > Bagian dari **Silencio – The Dark Story**. Indeks semua sistem: [`README.md`](README.md).
 > Sistem lain: [`ENEMY_AI.md`](ENEMY_AI.md) · [`KEY_SYSTEM.md`](KEY_SYSTEM.md) ·
 > [`SAFE_ZONE.md`](SAFE_ZONE.md) · [`BATTERY_PUZZLE.md`](BATTERY_PUZZLE.md) ·
 > [`DAMAGE_EFFECT.md`](DAMAGE_EFFECT.md) · [`GENERATOR_SFX.md`](GENERATOR_SFX.md)
 
-> **Semua angka di dokumen ini dibaca langsung dari Studio** (bukan dari file lokal repo,
-> yang sebagian tertinggal). Sumber: `ReplicatedStorage.Modules.KnockSystem.Config`.
+> ⚠️ **Sistem ini MILIK TIM, bukan punya Aer.** Dulu ada DUA sistem knock paralel di project
+> ini — KnockSystem milik Aer (`ReplicatedStorage.Modules.KnockSystem` + `KnockController` +
+> `KnockUI` + `RevivePromptFilter`) dan `ReviveManager` milik Tim. Keduanya aktif bersamaan,
+> dan **sistem Tim selalu menang**: ia men-set `Health = 1` di dalam handler `HealthChanged`
+> sebelum sistem Aer sempat melihat kondisi lethal, jadi `DownedState.enter` milik Aer tidak
+> pernah jalan. KnockSystem milik Aer **sudah DIHAPUS 23 Sep 2026**. Jangan dihidupkan lagi.
+
+> **Semua angka di dokumen ini dibaca langsung dari Studio** (bukan file lokal repo).
+> Sumber: `ReplicatedStorage.SilencioHoror.Config.Revive`.
 
 ---
 
 ## Alur Singkat
 
-1. Monster ber-tag `Monster` menyerang → `KnockService` **memutuskan** apakah pemain tumbang
-   atau cuma kena damage.
-2. Pemain tumbang → Attribute **`Knocked`** = `true` di karakter.
-3. Pemain **merangkak** (`CrawlSpeed` = **6**, jump dimatikan), animasi knock
-   `rbxassetid://2506281703` (bawaan Roblox `SitV2`), Tool yang dipegang **di-drop**.
-4. **Bleed-out 30 detik**. Sisa ≤ 10 detik → sinyal `Warning` dikirim ke tim.
-5. Rekan datang (≤ **9 stud**) → `ProximityPrompt` **"Revive"** muncul → **tahan E 5 detik**.
-6. Berhasil → pemain bangun dengan Health **50**. Gagal (bleed-out habis) → **mati beneran**.
+1. Monster ber-tag `Monster` menyerang → HP pemain habis.
+2. `ReviveManager` (server) mencegat `HealthChanged <= 0` → **`Health = 1`** (anti-death) +
+   `KnockPlayer(player)`.
+3. Pemain tumbang → Attribute **`IsKnocked`** = `true` di karakter.
+4. Pemain **merangkak** (`CrawlSpeed` = **3.5**, jump dimatikan), Tool yang dipegang di-drop,
+   pose merangkak dipasang. Animasi: `rbxassetid://101410159389643` (Silencio Horror).
+5. **Bleed-out 45 detik.** Kalau habis → `EliminatePlayer` → mode **spectate**.
+6. Rekan datang (≤ **12 stud**) → prompt **"Revive Teammate"** → **tahan 10 detik** →
+   HP jadi **50**.
+7. Self-revive tersedia kapan saja lewat Developer Product **49 R$**.
 
 ---
 
@@ -32,157 +39,128 @@ merangkak pelan, dan harus **dibangunkan rekan** sebelum bleed-out habis.
 
 ```
 ServerScriptService/
-└── Aer/
-    └── KnockController              ← Script orchestrator
+└── SilencioServer/                     ← framework TIM
+    ├── ReviveManager                   ← OTAK: cegat fatal damage, bleed-out, revive, marketplace
+    ├── InteractionManager              ← validasi jarak interaksi
+    └── (Network, PlayerManager, ...)   ← sisa framework
 
 StarterPlayer/StarterPlayerScripts/
-└── Aer/
-    ├── KnockUI                      ← billboard bleed-out di atas kepala
-    └── RevivePromptFilter           ← sembunyikan prompt "Revive" di diri sendiri
+└── SilencioClient/
+    ├── ReviveController                ← HUD darah, overlay tumbang, prompt revive, pose merangkak
+    ├── SpectateController              ← mode tonton setelah eliminasi
+    └── CustomPromptController          ← billboard prompt "Revive Teammate"
 
-ReplicatedStorage/Modules/KnockSystem/    ← 8 modul
-├── Config          (8893 b)   ← semua tuning + nama attribute/signal
-├── Signal          ( 896 b)   ← helper BindableEvent
-├── DownedState     (6327 b)   ← state pemain tumbang (register/unregister)
-├── CrawlController (3610 b)   ← kecepatan merangkak + kunci jump
-├── ReviveManager   (7891 b)   ← ProximityPrompt "Revive" + logika menahan E
-├── KnockAnimator   (2974 b)   ← animasi knock
-├── KnockService    (11558 b)  ← OTAK: deteksi serangan monster & keputusan knock
-└── KnockHud        (10035 b)  ← modul presentasi billboard
+ReplicatedStorage/
+└── SilencioHoror/Config                ← semua tuning (tabel `Revive`)
 ```
+
+**Tidak ada folder modul khusus** — sistem ini menyatu di dalam framework `SilencioServer` /
+`SilencioClient` milik Tim. Karena itu **jangan buat folder `KnockSystem` baru**; kalau perlu
+mengubah perilaku, ubah `Config.Revive` atau koordinasi dengan Tim.
 
 ---
 
-## 🔌 Kontrak Data (tanpa RemoteEvent baru)
+## 🔌 Kontrak Data
 
-Semua state **dibaca dari Attribute karakter** — replikasi otomatis, jadi UI klien tidak
-butuh remote apa pun.
+### Attribute di karakter (replikasi otomatis — client tidak butuh remote)
 
 | Attribute | Tipe | Isi |
 |---|---|---|
-| **`Knocked`** | Bool | `true` = sedang tumbang |
-| **`KnockBleedOut`** | Number | Sisa detik bleed-out |
-| **`KnockReviveProgress`** | Number | Progres revive `0..1` |
+| **`IsKnocked`** | Bool | `true` = sedang tumbang |
+| **`IsDead`** | Bool | `true` = sudah tereliminasi (mode spectate) |
 
-**Sinyal antar-modul**: `BindableEvent` bernama **`KnockSignal`**
-(`Config.SignalName`) di dalam karakter. Event yang di-fire (`Config.SignalEvent`):
+### Remote (dibuat oleh `Network` dari `SilencioHoror.Config`)
 
-| Event | Kapan |
-|---|---|
-| `Downed` | Pemain baru tumbang |
-| `Revived` | Pemain berhasil dibangunkan |
-| `BleedOut` | Bleed-out habis → mati |
-| `Warning` | Sisa waktu ≤ `BleedOutWarningTime` |
-
-> Dipakai sistem lain (SFX/UI) untuk bereaksi tanpa mengubah KnockSystem.
+| Remote | Jenis | Arah | Isi |
+|---|---|---|---|
+| `PlayerKnocked` | Event | server → semua client | `(player, bleedoutDuration)` |
+| `PlayerRevived` | Event | server → semua client | `(targetPlayer, reviver, isSelfRevive)` |
+| `PlayerDiedPermanently` | Event | server → semua client | `(player)` |
+| `TeammateReviveComplete` | Event | client → server | `(targetPlayer)` |
+| `SpectateRespawnSuccess` | Event | server → client | — |
+| `PromptSelfRevive` | Function | client → server | konfirmasi self-revive |
+| `PromptSpectateRespawn` | Function | client → server | konfirmasi respawn berbayar |
 
 ---
 
-## ⚙️ Konfigurasi (`KnockSystem/Config`)
+## ⚙️ Konfigurasi (`SilencioHoror.Config.Revive`)
 
-### Deteksi knock
-
-| Config | Default | Arti |
+| Field | Default | Arti |
 |---|---|---|
-| `KnockOnlyFromMonster` | `true` | Knock hanya dari monster, bukan damage lain |
-| `MonsterTag` | `"Monster"` | Tag monster yang bisa menumbangkan |
-| `MonsterSignal` | `"AISignal"` | BindableEvent yang didengar (dari EnemyController) |
-| `MonsterAttackEvent` | `"Attack"` | Event yang memicu knock |
-| `MonsterHitWindow` | `2` | Jendela waktu (detik) setelah `Attack` dianggap sah |
-| `MonsterSignalTimeout` | `10` | Batas tunggu `AISignal` muncul di Model |
-| `KnockDecisionDelay` | `0.2` | Jeda sebelum memutuskan knock |
-
-### Tumbang
-
-| Config | Default | Arti |
-|---|---|---|
-| `BleedOutTime` | `30` | Detik sampai mati bila tak ditolong |
-| `BleedOutWarningTime` | `10` | Sisa ≤ ini → sinyal `Warning` |
-| `CrawlSpeed` | `6` | WalkSpeed saat merangkak (pemain normal 16) |
-| `DisableJump` | `true` | Jump dimatikan saat tumbang |
-| `DropTools` | `true` | Tool yang dipegang di-drop |
-| `ClampHealthWhileDowned` | `true` | Health dikunci saat tumbang |
-| `PlayKnockAnimation` | `true` | Putar animasi knock |
-| `KnockAnimId` | `rbxassetid://2506281703` | Animasi knock (Roblox `SitV2`) |
-
-### Revive
-
-| Config | Default | Arti |
-|---|---|---|
-| `ReviveHoldTime` | `5` | Detik menahan tombol |
-| `ReviveHealth` | `50` | Health setelah dibangunkan |
-| `ReviveDistance` | `9` | `MaxActivationDistance` ProximityPrompt (stud) |
-| `ReviveBreakDistance` | `13` | Jarak yang membatalkan revive |
-| `ReviveKey` | `Enum.KeyCode.E` | Tombol revive |
-| `ReviveActionText` | `"Revive"` | Teks aksi prompt |
-| `ReviveObjectText` | `""` | Nama objek di prompt (kosong = tidak tampil) |
-| `ReviveRequiresLineOfSight` | `false` | Wajib melihat korban |
-| `CancelReviveOnDamage` | `true` | Revive batal kalau yang merevive kena damage |
-| `DownedCannotRevive` | `true` | Pemain tumbang tidak bisa revive rekan |
-
-### Tampilan & tick
-
-| Config | Default | Arti |
-|---|---|---|
-| `KnockHudHeight` | `6` | Tinggi billboard di atas root (stud) |
-| `BleedOutTick` | `0.2` | Interval pengurangan bleed-out (detik) |
-| `CrawlTick` | `0.25` | Interval penjaga kecepatan merangkak |
-| `ReviveTick` | `0.1` | Interval pembaruan progres revive |
-
-> Ada juga tabel `NumberOverrides` / `BoolOverrides` di Config — jalur override per-kondisi.
-> **Semua angka di atas bisa berubah; cek Config di Studio kalau ragu.**
+| `BleedOutDuration` | 45 | Detik sebelum mati permanen |
+| `CrawlSpeed` | 3.5 | WalkSpeed saat merangkak (normal 16) |
+| `RevivedHealth` | 50 | HP setelah dibangunkan rekan |
+| `SelfReviveHealth` | 100 | HP setelah self-revive (beli) |
+| `TeammateReviveDuration` | 10 | Detik menahan prompt revive |
+| `ReviveInteractDistance` | 12 | Jarak maksimum revive (stud) |
+| `SelfRevivePrice` | 49 | Harga self-revive (R$) |
+| `SelfReviveProductId` | 3714758114 | Developer Product self-revive |
+| `SpectateRespawnPrice` | 119 | Harga respawn dari spectate (R$) |
+| `SpectateRespawnProductId` | 3714758147 | Developer Product respawn |
+| `KnockAnimationId` | `rbxassetid://101410159389643` | Animasi merangkak |
 
 ---
 
 ## 🖥️ Sisi Klien
 
-### `KnockUI` (LocalScript) — **tipis, nol logika tampilan**
+### `ReviveController` (`SilencioClient`)
 
-Memantau **semua** karakter ber-Attribute `Knocked = true`, lalu menampilkan billboard
-sisa bleed-out di atas kepala mereka. Kalau tim mau desain UI sendiri, **cukup ganti
-konstanta `UI_MODULE`** (atau isi modulnya) — server & mekanisme knock tidak perlu disentuh.
+- **HUD** — `DynamicHealthContainer` ("HEALTH: n / 100", muncul hanya saat < 100%) +
+  overlay `KnockedOverlay` (`FullBloodTint`, bar bleed-out, tombol self-revive).
+- **Saat tumbang** — pasang pose merangkak, WalkSpeed 3.5, tampilkan overlay.
+- **Saat revive** — lepas pose, WalkSpeed 12, HP = 100 (self) atau 50 (rekan).
+- **Prompt rekan** — pasang attribute di HRP pemain tumbang (`InteractDistance` 12,
+  `HoldDuration` 10, `PromptScale` 1.25) lalu `CustomPrompt.Register(hrp, "Revive Teammate")`.
+  Saat prompt ditrigger → `TeammateReviveComplete:FireServer(targetPlayer)`.
 
-**Kontrak modul UI** (dipenuhi `KnockHud`):
+### `SpectateController` (`SilencioClient`)
 
-```lua
-HudClass.new(adornee, height) -> objek
-objek:update(payload)   -- { name, bleedOut, total, fraction, reviveProgress }
-objek:tick(now)         -- tiap frame; JAGA anchor tetap tegak ke atas
-objek:destroy()
-```
-
-Catatan desain penting: `tick()` **bukan cuma denyut** — rig tumbang bisa merangkak/berputar,
-jadi `tick()` juga menjaga posisi anchor billboard tetap lurus ke sumbu dunia.
-
-> Script ini sengaja **tidak** me-`require` `Config` (biar UI tetap jalan walau modul server
-> tak dimuat). Nama Attribute ditulis ulang sebagai konstanta lokal.
-
-### `RevivePromptFilter` (LocalScript) — sembunyikan prompt di diri sendiri
-
-`ProximityPrompt` itu **global** — prompt di `HumanoidRootPart` pemain tumbang terlihat oleh
-**semua** pemain, termasuk pemain tumbang itu sendiri (jarak 0 stud). Server **sudah menolak**
-self-revive (`ReviveManager.canRevive`), jadi ini murni soal tampilan: jangan tawarkan tombol
-yang tidak bisa dipakai.
-
-Cara kerja: setiap `ProximityPrompt` bernama **`RevivePrompt`** muncul di Workspace, matikan
-secara **lokal** (`Enabled = false`) kalau karakternya milik player ini. Server tidak terpengaruh —
-pemain lain **tetap** melihat prompt di badan kita.
+Setelah `PlayerDiedPermanently`: pemain masuk mode tonton, label `"Status: Knocked (Bleeding Out)"`
+untuk rekan, tombol respawn berbayar (119 R$).
 
 ---
 
 ## 🤝 Hubungan dengan Enemy AI
 
-`EnemyController` meng-emit event `Attack` lewat `BindableEvent` **`AISignal`** di dalam Model
-monster. `KnockService` mendengarkannya, lalu memutuskan knock dalam `MonsterHitWindow`
-(2 detik) sejak serangan.
+`TargetFinder:isValidTarget` menolak karakter yang tumbang supaya monster melepas korban dan
+mencari target lain. Karena **historis ada dua sistem knock**, ia membaca KEDUA Attribute:
 
-**Konsekuensi untuk tim:** kalau Model monster **tidak punya `AISignal`**, atau script NPC
-tidak meng-emit `Attack` (mis. karena `NoAutoAnimations` di-set tapi script tidak mengirim
-event), pemain **tidak akan tumbang** — hanya kena damage biasa.
+```lua
+if character:GetAttribute("Knocked") == true then return false end    -- KnockSystem Aer (sudah dihapus)
+if character:GetAttribute("IsKnocked") == true then return false end  -- ReviveManager TIM (aktif)
+```
 
-→ Detail kanal `AIState` / `AISignal`: [`ENEMY_AI.md`](ENEMY_AI.md)
+Cek `IsKnocked` adalah yang benar-benar bekerja di place `Script`. Kalau salah satu terlewat,
+monster akan tetap mengejar pemain yang sedang tumbang.
 
-> **Catatan drift:** cek Attribute `Knocked` di `TargetFinder` (supaya monster **melepas
-> klaim** & mencari korban lain saat targetnya tumbang) **ada di repo tapi belum ada di
-> Studio**. Artinya di Studio monster **masih mengejar** pemain yang tumbang.
-> Lihat tabel drift di [`README.md`](README.md).
+> **Status place `BUILD Chapter 1`:** versi `TargetFinder` di sana belum punya cek ini
+> (menunggu perintah Aer). Jadi di BUILD monster masih mengejar pemain tumbang.
+
+> **Jangan bergantung pada `AISignal`.** Sistem knock lama (Aer) memutuskan knock dari
+> `BindableEvent` `AISignal` milik monster. Sistem TIM **tidak** — ia mencegat `HealthChanged`,
+> jadi knock tetap terjadi walau script NPC tidak meng-emit event apa pun.
+
+---
+
+## 🧪 Cara Menguji
+
+`SilencioServer` menyediakan API test global (dibuat saat server start):
+
+```lua
+_G.TestKnock(player)     -- paksa pemain tumbang
+_G.TestRevive(player)    -- paksa revive
+_G.TestDummy(player)     -- spawn dummy rekan tumbang untuk latihan revive
+_G.TestSpectate(player)  -- eliminasi pemain -> mode spectate
+_G.TestDamage(amount, player)
+```
+
+Harness ad-hoc: `_tools/verify_knock.lua` (place-agnostic) dan `_tools/verify_build.lua`.
+Jalankan lewat `_tools/mcp.py`:
+
+```bash
+cd _tools && python -c "import mcp,pathlib;print(mcp.luau(pathlib.Path('verify_knock.lua').read_text(encoding='utf-8'), instance_id='instance:93u-cgu'))"
+```
+
+> **Catatan:** `verify_knock.lua` ditulis saat KnockSystem Aer masih ada. Sejak sistem itu
+> dihapus, cek modul `Modules.KnockSystem.*` di dalamnya akan FAIL — itu **wajar**.
+> Yang masih relevan: cek bahwa `TargetFinder` membaca kedua Attribute.

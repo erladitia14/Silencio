@@ -12,7 +12,7 @@ Setiap sistem punya dokumennya sendiri — baca yang relevan saja.
 | Sistem | Dokumen | Isi singkat | Butuh tag? |
 |---|---|---|---|
 | **Enemy AI** | [`ENEMY_AI.md`](ENEMY_AI.md) | NPC monster: patrol, chase, attack, animasi (FSM) | `Monster` |
-| **Knock & Revive** | [`KNOCK_SYSTEM.md`](KNOCK_SYSTEM.md) | Pemain tumbang, merangkak, dibangunkan rekan | ✗ otomatis |
+| **Knock & Revive** | [`KNOCK_SYSTEM.md`](KNOCK_SYSTEM.md) | Pemain tumbang, merangkak, dibangunkan rekan (**sistem TIM**) | ✗ otomatis |
 | **Battery Puzzle** | [`BATTERY_PUZZLE.md`](BATTERY_PUZZLE.md) | Rakit baterai + panel/engine → generator nyala | 5 tag |
 | **Key System** | [`KEY_SYSTEM.md`](KEY_SYSTEM.md) | Kunci → pintu → power switch → lampu carnival | 4 tag |
 | **Safe Zone** | [`SAFE_ZONE.md`](SAFE_ZONE.md) | Bilik sembunyi berbatas napas | `SafeZone` |
@@ -84,8 +84,8 @@ Objek yang di-tag saat game sedang jalan juga langsung ikut terdaftar.
 | `NoBreath` | Part `SafeZone` | Bilik aman selamanya (tanpa timer napas) |
 | `KeyId` | Objek `KeyPickup` | Id kunci; harus cocok dengan `RequiredKey` pintu |
 
-Attribute *read-only* lintas sistem: `Knocked`, `KnockBleedOut`, `KnockReviveProgress`
-(karakter) · `AIState` (monster) · `GeneratorAssembled`, `GeneratorPowered`,
+Attribute *read-only* lintas sistem: `IsKnocked` (karakter, sistem TIM) ·
+`AIState` (monster) · `GeneratorAssembled`, `GeneratorPowered`,
 `BatteryPuzzleProgress`, `BatteryPuzzleComplete` (generator).
 
 ---
@@ -99,30 +99,33 @@ ServerScriptService/
 ├── SilencioServer/     ← MILIK TIM (framework + manager)
 ├── Feature/            ← MILIK TIM (TeleprotHandler)
 └── Aer/                ← MILIK KITA
-    ├── EnemyController            ├── KnockController
-    ├── KeySystemController        ├── BatteryPuzzleController
-    ├── SafeZoneController         ├── AssemblyController
-    └── GeneratorSFXController
+    ├── EnemyController            ├── BatteryPuzzleController
+    ├── KeySystemController        ├── AssemblyController
+    ├── SafeZoneController         └── GeneratorSFXController
 
 StarterPlayer/
 ├── StarterPlayerScripts/
 │   ├── SilencioClient/   ← MILIK TIM (LocalScript + 9 modul)
 │   ├── Boba/             ← MILIK TIM (Teleport)
 │   └── Aer/              ← MILIK KITA
-│       ├── KnockUI              ├── SafeZoneUI
-│       ├── RevivePromptFilter   ├── JumpscareHandler
+│       ├── SafeZoneUI           ├── JumpscareHandler
 │       └── PuzzleInputClient
 └── StarterCharacterScripts/
     └── DamageEffect      ← MILIK KITA
 
-ReplicatedStorage/Modules/    ← modul KITA (5 sistem)
+ReplicatedStorage/Modules/    ← modul KITA (4 sistem)
 ├── EnemyController/   (10 modul)
-├── KnockSystem/       ( 8 modul)
 ├── KeySystem/         ( 8 modul)
 ├── SafeZone/          (11 modul)
 ├── BatteryPuzzle/     ( 8 modul)
 └── GeneratorSFX / GeneratorElectricFX / CustomPromptHelper / TeleportData
 ```
+
+> **Knock & Revive = sistem MILIK TIM** (`ServerScriptService.SilencioServer.ReviveManager`
+> + `StarterPlayerScripts.SilencioClient.ReviveController`). KnockSystem milik Aer
+> (folder `Modules/KnockSystem`, `KnockController`, `KnockUI`, `RevivePromptFilter`)
+> sudah **DIHAPUS 23 Sep 2026** — dulu ada dua sistem knock paralel dan sistem Aer
+> selalu kalah lomba set Health, jadi tidak pernah aktif. Lihat `KNOCK_SYSTEM.md`.
 
 ---
 
@@ -152,11 +155,12 @@ sisi paling benar.
 | | `EnemyController/Config` | `ChaseSpeed 20`, `DetectionRadius 95`, `FieldOfView 360`, dll |
 | | `BatteryPuzzle/Config` | `InsertDuration 0` (repo masih `1.0`) |
 | **Repo lebih baru** | `EnemyController` | print diagnostik + komentar (Studio sudah dibersihkan) |
-| | `TargetFinder` | cek Attribute `Knocked` — **monster mengabaikan pemain tumbang** |
+| | `TargetFinder` | baca Attribute `Knocked` **dan** `IsKnocked` — monster mengabaikan pemain tumbang (dua sistem) |
 
-> **Konsekuensi gameplay:** karena cek `Knocked` hanya ada di repo, di Studio monster
-> **masih mengejar pemain yang tumbang**. Kalau perilaku "abaikan yang tumbang" diinginkan,
-> versi repo perlu didorong ke Studio.
+> **Catatan (23 Sep 2026):** `TargetFinder` sekarang membaca KEDUA Attribute —
+> `Knocked` (dulu milik KnockSystem Aer) dan `IsKnocked` (milik sistem TIM yang aktif).
+> Versi ini sudah **didorong ke place `Script`**, jadi monster sudah melepas pemain tumbang
+> versi TIM. Di place `BUILD Chapter 1` belum (menunggu perintah Aer).
 
 ---
 

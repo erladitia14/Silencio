@@ -99,12 +99,23 @@ function TargetFinder:isValidTarget(character: Model?): boolean
 		return false
 	end
 
-	-- KNOCK SYSTEM (sistem terpisah): pemain yang TUMBANG ditandai
-	-- Attribute "Knocked" = true pada karakternya. Monster mengabaikannya
-	-- supaya melepas klaim & mencari korban lain (permintaan Aer). Dibaca
-	-- lewat Attribute, jadi EnemyController TIDAK bergantung pada modul
-	-- KnockSystem: tanpa sistem itu, Attribute tak pernah ada -> nihil efek.
+	-- KNOCK SYSTEM (sistem terpisah): pemain yang TUMBANG ditandai lewat
+	-- Attribute pada karakternya. Monster mengabaikannya supaya melepas
+	-- klaim & mencari korban lain (permintaan Aer). Dibaca lewat Attribute,
+	-- jadi EnemyController TIDAK bergantung pada modul KnockSystem: tanpa
+	-- sistem itu, Attribute tak pernah ada -> nihil efek.
+	--
+	-- DUA NAMA ATTRIBUTE dibaca karena ada DUA sistem knock di project ini
+	-- dan place Script menjalankan sistem MILIK TIM:
+	--   "Knocked"   = KnockSystem milik Aer (RS.Modules.KnockSystem)
+	--   "IsKnocked" = ReviveManager milik Tim (SSS.SilencioServer)
+	-- Keduanya harus dihormati; kalau salah satu terlewat, monster tetap
+	-- mengejar pemain yang sedang tumbang.
 	if character:GetAttribute("Knocked") == true then
+		return false
+	end
+
+	if character:GetAttribute("IsKnocked") == true then
 		return false
 	end
 

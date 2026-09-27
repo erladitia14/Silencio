@@ -1,136 +1,119 @@
---[[ verify_knock.lua — harness regresi KnockSystem (jalankan via _tools/mcp.py).
-     Bukan suite green CI; ini verifikasi AD-HOC yang bisa diulang:
-     compile semua modul + struktur + PARITAS NAMA ATTRIBUTE Config<->UI + wiring.
-     Cara pakai:  python -c "import mcp,pathlib;print(mcp.luau(pathlib.Path('_tools/verify_knock.lua').read_text(encoding='utf-8')))"
+--[[ verify_knock.lua — verifikasi AD-HOC integrasi Knock & Revive (jalankan via _tools/mcp.py).
+     Bukan suite green CI; ini cek yang bisa diulang di EDIT MODE (tanpa playtest).
 
-     CATATAN LOKASI (23 Sep 2026): orchestrator & UI dipindah ke folder "Aer"
-     (SSS.Aer.KnockController, SPS.Aer.KnockUI, SPS.Aer.RevivePromptFilter) saat
-     sinkronisasi place BUILD->Script. Harness ini sekarang MENCARI REKURSIF
-     supaya tidak rapuh terhadap perpindahan folder. ]]
+     SEJARAH: dulu harness ini menguji KnockSystem milik Aer
+     (ReplicatedStorage.Modules.KnockSystem + KnockController + KnockUI + RevivePromptFilter).
+     Sistem itu DIHAPUS 23 Sep 2026 karena kalah lomba set Health melawan ReviveManager
+     milik Tim — lihat KNOCK_SYSTEM.md. Sekarang yang diuji adalah HAL YANG MASIH HIDUP:
+       1. KnockSystem Aer benar-benar sudah bersih (tidak ada sisa instance).
+       2. Sistem knock MILIK TIM masih utuh (ReviveManager + ReviveController).
+       3. TargetFinder menghormati KEDUA Attribute tumbang (`Knocked` + `IsKnocked`).
+
+     Cara pakai:
+       cd _tools && python -c "import mcp,pathlib;print(mcp.luau(pathlib.Path('verify_knock.lua').read_text(encoding='utf-8'), instance_id='instance:93u-cgu'))"
+]]
 local out, pass, fail = {}, 0, 0
 local function ck(n, c, e)
 	if c then pass += 1; table.insert(out, "PASS " .. n)
 	else fail += 1; table.insert(out, "FAIL " .. n .. (e and (" :: " .. tostring(e)) or "")) end
 end
--- WAJIB strip komentar sebelum scan string (kata bisa nyangkut di komentar).
-local function strip(s)
-	s = s:gsub("%-%-%[%[.-%]%]", "")
-	return (s:gsub("%-%-[^\n]*", ""))
-end
 local function has(s, sub) return string.find(s, sub, 1, true) ~= nil end
 
---- Cari LuaSourceContainer berdasarkan nama, di mana pun di bawah root.
---- Mengembalikan instance pertama yang ketemu (tahan perpindahan folder).
-local function findByName(root, name, class)
+local RS = game:GetService("ReplicatedStorage")
+local SSS = game:GetService("ServerScriptService")
+local SPS = game:GetService("StarterPlayer").StarterPlayerScripts
+
+--- Cari instance berdasarkan nama di mana pun di bawah root (tahan perpindahan folder).
+local function findByName(root, name)
 	for _, d in ipairs(root:GetDescendants()) do
-		if d.Name == name and (not class or d.ClassName == class) then
-			return d
-		end
+		if d.Name == name then return d end
 	end
 	return nil
 end
 
-local ks = game.ReplicatedStorage:FindFirstChild("Modules")
-	and game.ReplicatedStorage.Modules:FindFirstChild("KnockSystem")
-if not ks then
-	return "FATAL: folder Modules.KnockSystem tidak ada di ReplicatedStorage"
+-- ---------- 1. KnockSystem Aer sudah benar-benar dihapus ----------
+ck("folder Modules.KnockSystem sudah hilang",
+	RS:FindFirstChild("Modules") ~= nil and RS.Modules:FindFirstChild("KnockSystem") == nil)
+ck("orchestrator KnockController sudah hilang",
+	findByName(SSS, "KnockController") == nil)
+ck("KnockUI sudah hilang", findByName(game.StarterPlayer, "KnockUI") == nil)
+ck("RevivePromptFilter sudah hilang",
+	findByName(game.StarterPlayer, "RevivePromptFilter") == nil)
+ck("KnockService sudah hilang", findByName(RS, "KnockService") == nil)
+ck("KnockHud sudah hilang", findByName(RS, "KnockHud") == nil)
+ck("DownedState sudah hilang", findByName(RS, "DownedState") == nil)
+
+-- ---------- 2. Sistem knock MILIK TIM masih utuh ----------
+local reviveMgr = SSS:FindFirstChild("SilencioServer")
+	and SSS.SilencioServer:FindFirstChild("ReviveManager")
+ck("SSS.SilencioServer.ReviveManager ada", reviveMgr ~= nil)
+ck("ReviveManager compile", reviveMgr ~= nil and loadstring(reviveMgr.Source) ~= nil)
+
+local reviveCtrl = SPS:FindFirstChild("SilencioClient")
+	and SPS.SilencioClient:FindFirstChild("ReviveController")
+ck("SPS.SilencioClient.ReviveController ada", reviveCtrl ~= nil)
+ck("ReviveController compile", reviveCtrl ~= nil and loadstring(reviveCtrl.Source) ~= nil)
+
+if reviveMgr then
+	local src = reviveMgr.Source
+	-- Anti-death: set Health = 1 di handler HealthChanged -> ini yang mengalahkan sistem Aer.
+	ck("ReviveManager set Health = 1 (anti-death)", has(src, "Health = 1"))
+	ck("ReviveManager pakai Attribute IsKnocked", has(src, "IsKnocked"))
+	ck("ReviveManager pakai Attribute IsDead", has(src, "IsDead"))
+	ck("ReviveManager fire remote PlayerKnocked", has(src, "PlayerKnocked"))
+	ck("ReviveManager fire remote PlayerRevived", has(src, "PlayerRevived"))
+	ck("ReviveManager fire remote PlayerDiedPermanently", has(src, "PlayerDiedPermanently"))
+	-- Self-revive lewat jalur TERPISAH (PromptSelfRevive + Developer Product), bukan
+	-- lewat TeammateReviveComplete. Jadi prompt rekan tidak bisa dipakai reviver sendiri.
+	ck("ReviveManager punya jalur self-revive terpisah (PromptSelfRevive)",
+		has(src, "PromptSelfRevive"))
+	ck("ReviveManager validasi jarak reviver<->korban",
+		has(src, "Magnitude"))
+	-- TIDAK bergantung pada AISignal (beda dari sistem Aer yang sudah dihapus).
+	ck("ReviveManager TIDAK butuh AISignal", not has(src, "AISignal"))
 end
 
--- ---------- 1. Semua modul ada & compile ----------
-local MODULES = {"Config","Signal","DownedState","CrawlController",
-	"ReviveManager","KnockAnimator","KnockService","KnockHud"}
-local S = {}
-for _, n in MODULES do
-	local m = ks:FindFirstChild(n)
-	ck("modul " .. n .. " ada", m ~= nil)
-	if m then
-		S[n] = m.Source
-		ck("modul " .. n .. " compile", loadstring(m.Source) ~= nil)
+if reviveCtrl then
+	local src = reviveCtrl.Source
+	ck("ReviveController pasang pose merangkak", has(src, "applyCrawlingPose"))
+	ck("ReviveController daftar prompt revive rekan", has(src, "registerTeammateRevivePrompt"))
+	ck("ReviveController pakai remote TeammateReviveComplete",
+		has(src, "TeammateReviveComplete"))
+end
+
+-- ---------- 3. Konfigurasi TIM (Config.Revive) ----------
+local cfgMod = RS:FindFirstChild("SilencioHoror") and RS.SilencioHoror:FindFirstChild("Config")
+ck("RS.SilencioHoror.Config ada", cfgMod ~= nil)
+if cfgMod then
+	local ok, Config = pcall(require, cfgMod)
+	ck("Config bisa di-require", ok, ok and nil or tostring(Config))
+	if ok and type(Config) == "table" then
+		local R = Config.Revive
+		ck("Config.Revive ada", type(R) == "table")
+		if type(R) == "table" then
+			ck("BleedOutDuration = 45", R.BleedOutDuration == 45, "dapat " .. tostring(R.BleedOutDuration))
+			ck("CrawlSpeed = 3.5", R.CrawlSpeed == 3.5, "dapat " .. tostring(R.CrawlSpeed))
+			ck("RevivedHealth = 50", R.RevivedHealth == 50, "dapat " .. tostring(R.RevivedHealth))
+			ck("TeammateReviveDuration = 10", R.TeammateReviveDuration == 10,
+				"dapat " .. tostring(R.TeammateReviveDuration))
+			ck("ReviveInteractDistance = 12", R.ReviveInteractDistance == 12,
+				"dapat " .. tostring(R.ReviveInteractDistance))
+		end
 	end
 end
--- Lokasi fleksibel: cari rekursif (dulu hardcode SSS.KnockController / SPS.KnockUI).
-local ctrl = findByName(game.ServerScriptService, "KnockController")
-ck("orchestrator KnockController ada & compile", ctrl ~= nil and loadstring(ctrl.Source) ~= nil,
-	ctrl and ctrl:GetFullName() or "tidak ditemukan di ServerScriptService")
-if ctrl then table.insert(out, "PATH KnockController = " .. ctrl:GetFullName()) end
 
-local uiScript = findByName(game.StarterPlayer, "KnockUI")
-ck("KnockUI ada & compile", uiScript ~= nil and loadstring(uiScript.Source) ~= nil,
-	uiScript and uiScript:GetFullName() or "tidak ditemukan di StarterPlayer")
-if uiScript then table.insert(out, "PATH KnockUI = " .. uiScript:GetFullName()) end
-local uiSrc = uiScript and uiScript.Source or ""
-
--- ---------- 2. Kontrak API modul UI (new titik, sisanya titik dua) ----------
-for _, fn in {"new","update","tick","destroy"} do
-	local decl = (fn == "new") and "function KnockHud.new(" or ("function KnockHud:" .. fn .. "(")
-	ck("API KnockHud." .. fn, has(S.KnockHud or "", decl))
+-- ---------- 4. TargetFinder menghormati KEDUA Attribute tumbang ----------
+local tf = RS:FindFirstChild("Modules") and RS.Modules:FindFirstChild("EnemyController")
+	and RS.Modules.EnemyController:FindFirstChild("TargetFinder")
+ck("TargetFinder ada", tf ~= nil)
+if tf then
+	local src = tf.Source
+	ck("TargetFinder compile", loadstring(src) ~= nil)
+	ck("TargetFinder baca Attribute \"Knocked\" (sistem Aer lama)", has(src, 'GetAttribute("Knocked")'))
+	ck("TargetFinder baca Attribute \"IsKnocked\" (sistem TIM aktif)", has(src, 'GetAttribute("IsKnocked")'))
+	local ok, TF = pcall(require, tf)
+	ck("TargetFinder bisa di-require", ok, ok and nil or tostring(TF))
 end
-for _, fn in {"play","stop","cleanup"} do
-	ck("API KnockAnimator." .. fn, has(S.KnockAnimator or "", "function KnockAnimator." .. fn))
-end
-
--- ---------- 3. PARITAS NAMA ATTRIBUTE Config <-> UI (paling berisiko) ----------
-local cfg = S.Config or ""
-local rows = {
-	{"Knocked",        cfg:match('DownedAttribute%s*=%s*"([^"]+)"'),         uiSrc:match('ATTR_DOWNED%s*=%s*"([^"]+)"')},
-	{"BleedOut",       cfg:match('BleedOutAttribute%s*=%s*"([^"]+)"'),       uiSrc:match('ATTR_BLEEDOUT%s*=%s*"([^"]+)"')},
-	{"ReviveProgress", cfg:match('ReviveProgressAttribute%s*=%s*"([^"]+)"'), uiSrc:match('ATTR_REVIVE%s*=%s*"([^"]+)"')},
-}
-for _, r in rows do
-	ck("Attribute " .. r[1] .. " cocok Config<->UI", r[2] ~= nil and r[2] == r[3],
-		string.format("cfg=%s ui=%s", tostring(r[2]), tostring(r[3])))
-end
-
--- ---------- 4. Server benar-benar men-set ketiganya ----------
-ck("set Downed (DownedState)",         has(S.DownedState or "", "SetAttribute(Config.DownedAttribute"))
-ck("set BleedOut (DownedState)",       has(S.DownedState or "", "SetAttribute(Config.BleedOutAttribute"))
-ck("set BleedOut live (KnockService)", has(S.KnockService or "", "SetAttribute(Config.BleedOutAttribute"))
-ck("set Revive live (ReviveManager)",  has(S.ReviveManager or "", "SetAttribute(Config.ReviveProgressAttribute"))
-
--- ---------- 5. UI lewat Attribute, bukan RemoteEvent ----------
-local uiCode = strip(uiSrc)
-ck("UI pakai GetAttribute",      has(uiCode, "GetAttribute("))
-ck("UI pantau AttributeChanged", has(uiCode, "AttributeChanged"))
-ck("UI tanpa RemoteEvent",       not has(uiCode, "RemoteEvent"))
-ck("UI detach saat pulih",       has(uiCode, "detach(character)"))
-ck("UI bersih saat respawn",     has(uiCode, "CharacterRemoving"))
-
--- ---------- 6. Anti-mati & mati-beneran (inti sistem) ----------
-ck("arm anti-death (SetStateEnabled Dead false)",
-	has(S.DownedState or "", "Enum.HumanoidStateType.Dead, false"))
-ck("kill pakai ChangeState(Dead) (Health sudah 0)",
-	has(S.DownedState or "", "ChangeState(Enum.HumanoidStateType.Dead)"))
-ck("self-revive ditolak via identitas player",
-	has(S.ReviveManager or "", "GetPlayerFromCharacter(character)"))
-
--- ---------- 7. Wiring animasi (play saat tumbang, stop di jalur keluar) ----------
-ck("play() saat tumbang", has(S.KnockService or "", "KnockAnimator.play("))
-local stopCount = select(2, (S.KnockService or ""):gsub("KnockAnimator%.stop%(", ""))
-ck("stop() di >=4 jalur keluar (dapat " .. stopCount .. ")", stopCount >= 4)
-
--- ---------- 8. Tinggi billboard (permintaan Aer: UI naik) ----------
-ck("Config.KnockHudHeight ada", cfg:match("KnockHudHeight%s*=%s*([%d%.]+)") ~= nil)
-ck("KnockHud.new terima param height", has(S.KnockHud or "", "function KnockHud.new(adornee: BasePart, heightStuds: number?)"))
-
--- ---------- 9. UI di ANCHOR ruang dunia, bukan StudsOffsetWorldSpace ----------
--- JEBAKAN: StudsOffsetWorldSpace dihitung di LOCAL space part (bug engine) ->
--- saat rig tiduran, menaikkan Y malah geser ke arah kepala. Harus pakai
--- Attachment + WorldCFrame yang kita set sendiri.
-ck("tidak lagi pakai StudsOffsetWorldSpace", not has(strip(S.KnockHud or ""), "StudsOffsetWorldSpace"))
-ck("pakai Attachment sebagai anchor", has(S.KnockHud or "", 'Instance.new("Attachment")'))
-ck("set WorldCFrame dari root.Position + Y",
-	has(S.KnockHud or "", "WorldCFrame = CFrame.new(adornee.Position + Vector3.new(0, height, 0))"))
-ck("Parent di-set SEBELUM WorldCFrame",
-	(S.KnockHud or ""):find('anchor.Parent = adornee') ~= nil
-	and ((S.KnockHud or ""):find('anchor.Parent = adornee') < ((S.KnockHud or ""):find('anchor.WorldCFrame'))))
-ck("BillboardGui di-parent ke anchor", has(S.KnockHud or "", "Parent = anchor"))
-ck("tick() jaga posisi anchor tiap frame",
-	has(S.KnockHud or "", "self.anchor.WorldCFrame = CFrame.new("))
-ck("destroy() buang anchor", has(S.KnockHud or "", "self.anchor:Destroy()"))
-ck("KnockUI baca Config.KnockHudHeight", has(uiSrc, "KnockHudHeight"))
-ck("KnockUI oper HUD_HEIGHT ke new()", has(uiSrc, "HudClass.new(adornee, HUD_HEIGHT)"))
-ck("KnockUI recreate HUD saat root berganti (bukan set Adornee)",
-	has(uiSrc, "detach(character)") and not has(uiSrc, "billboard.Adornee ="))
 
 table.insert(out, string.format("=== AD-HOC edit-mode (bukan suite green): %d PASS / %d FAIL ===", pass, fail))
 return table.concat(out, "\n")
