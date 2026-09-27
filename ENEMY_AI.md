@@ -35,7 +35,7 @@ ServerStorage/
 ```
 
 > Semua controller kita (`EnemyController`, `KeySystemController`, `SafeZoneController`,
-> `KnockController`, `BatteryPuzzleController`, `AssemblyController`, `GeneratorSFXController`)
+> `BatteryPuzzleController`, `AssemblyController`, `GeneratorSFXController`)
 > ada di dalam **`ServerScriptService.Aer`**. Client kita ada di
 > **`StarterPlayer.StarterPlayerScripts.Aer`**. Struktur lengkap: [`README.md`](README.md).
 
@@ -279,23 +279,34 @@ di-override per-NPC — ubah di `Config.luau` bila perlu.
 
 ## 🤝 Hubungan dengan Knock & Revive
 
-Monster **tidak langsung membunuh** pemain. `CombatManager` memanggil `TakeDamage`, lalu sistem
-**KnockSystem** memutuskan apakah pemain **tumbang** (knocked) atau mati.
+Monster **tidak langsung membunuh** pemain. `CombatManager` memanggil `TakeDamage`; kalau HP
+habis, sistem knock memutuskan pemain **tumbang** (knocked) — bukan langsung mati.
 
-Cara KnockSystem mendengar monster (dari `KnockSystem/Config`):
+**Sistem knock kanonik = MILIK TIM** (`SSS.SilencioServer.ReviveManager`). Ia mencegat
+`Humanoid.HealthChanged <= 0`, men-set `Health = 1` (anti-death), lalu menumbangkan pemain
+dan menandai Attribute **`IsKnocked`** di karakter. Detail: [`KNOCK_SYSTEM.md`](KNOCK_SYSTEM.md).
 
-| Config Knock | Default | Arti |
-|---|---|---|
-| `MonsterTag` | `Monster` | Hanya monster ber-tag ini yang bisa menumbangkan |
-| `MonsterSignal` | `AISignal` | Nama BindableEvent yang didengar |
-| `MonsterAttackEvent` | `Attack` | Event yang memicu knock |
-| `MonsterHitWindow` | 2 | Jendela waktu (detik) setelah `Attack` dianggap sah |
-| `MonsterSignalTimeout` | 10 | Batas tunggu `AISignal` muncul di Model |
-| `KnockOnlyFromMonster` | `true` | Knock hanya dari monster, bukan damage lain |
+> **KnockSystem milik Aer sudah DIHAPUS** (23 Sep 2026). Ia dulu memutuskan knock dari
+> `BindableEvent` `AISignal` milik monster, tapi selalu kalah lomba set `Health` melawan
+> `ReviveManager`. Jadi **jangan bergantung pada `AISignal`**: sistem TIM tidak membutuhkannya,
+> dan knock tetap terjadi walau script NPC tidak meng-emit event apa pun.
 
-**Konsekuensi untuk tim:** kalau Model monster **tidak punya `AISignal`**, atau
-`NoAutoAnimations` tidak di-set sementara script NPC tidak meng-emit `Attack`, pemain
-**tidak akan tumbang** — hanya kena damage biasa.
+### Yang perlu dilakukan EnemyController
+
+Cuma satu hal: **abaikan pemain tumbang**. `TargetFinder:isValidTarget` mengembalikan `false`
+bila karakter punya Attribute `IsKnocked` (atau `Knocked`, sisa sistem lama) — sehingga monster
+melepas klaim dan mencari korban lain:
+
+```lua
+if character:GetAttribute("Knocked") == true then return false end    -- sistem Aer (sudah dihapus)
+if character:GetAttribute("IsKnocked") == true then return false end  -- sistem TIM (aktif)
+```
+
+EnemyController **tidak** me-`require` sistem knock mana pun — komunikasinya lewat Attribute,
+jadi tidak ada ketergantungan modul.
+
+> **Status place `BUILD Chapter 1`:** `TargetFinder` di sana belum punya cek `IsKnocked`
+> (menunggu perintah Aer), jadi monster di BUILD masih mengejar pemain tumbang.
 
 ---
 

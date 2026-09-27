@@ -154,13 +154,50 @@ _G.TestSpectate(player)  -- eliminasi pemain -> mode spectate
 _G.TestDamage(amount, player)
 ```
 
-Harness ad-hoc: `_tools/verify_knock.lua` (place-agnostic) dan `_tools/verify_build.lua`.
-Jalankan lewat `_tools/mcp.py`:
+Harness ad-hoc: `_tools/verify_knock.lua` (integrasi — place-agnostic) dan
+`_tools/verify_build.lua` (status place BUILD). Jalankan lewat `_tools/mcp.py`:
 
 ```bash
 cd _tools && python -c "import mcp,pathlib;print(mcp.luau(pathlib.Path('verify_knock.lua').read_text(encoding='utf-8'), instance_id='instance:93u-cgu'))"
 ```
 
-> **Catatan:** `verify_knock.lua` ditulis saat KnockSystem Aer masih ada. Sejak sistem itu
-> dihapus, cek modul `Modules.KnockSystem.*` di dalamnya akan FAIL — itu **wajar**.
-> Yang masih relevan: cek bahwa `TargetFinder` membaca kedua Attribute.
+---
+
+## 🐛 Riwayat Bug — bleed-out tidak pernah membunuh (DIPERBAIKI 23 Sep 2026)
+
+**Gejala:** pemain tumbang **tidak pernah** mati walau bleed-out habis — tumbang selamanya,
+HP malah naik pelan (regen legacy +1/detik).
+
+**Akar masalah:** `EliminatePlayer` dipanggil DARI DALAM `BleedoutThread` (thread `task.delay`
+di `KnockPlayer`), lalu fungsi itu memanggil `task.cancel(info.BleedoutThread)` — yaitu
+**membatalkan thread dirinya sendiri**. `task.cancel` menghentikan eksekusi seketika, jadi
+semua baris di bawahnya (`IsDead = true`, `Health = 0`, fire remote) tidak pernah jalan.
+
+**Fix** (di `ReviveManager.EliminatePlayer`):
+
+```lua
+if info and info.BleedoutThread and info.BleedoutThread ~= coroutine.running() then
+    task.cancel(info.BleedoutThread)
+end
+```
+
+`coroutine.running()` di dalam callback `task.delay` identik dengan thread yang dikembalikan
+`task.delay`, jadi penjaga ini mendeteksi "saya sedang berjalan di dalam thread ini".
+
+**Hasil verifikasi:**
+
+| Uji | Sebelum | Sesudah |
+|---|---|---|
+| Bleed-out habis → mati | ❌ `isDead=false`, HP 100 | ✅ `isDead=true`, HP 0 |
+| Revive membatalkan bleed-out | — | ✅ tetap hidup |
+| Self-revive (durasi 45s) | — | ✅ HP 100, walk 12 |
+| Thread lama tidak membunuh belakangan | — | ✅ tetap hidup |
+| Tumbang lagi setelah revive → mati | — | ✅ mati normal |
+
+> **Pelajaran umum:** `task.cancel(thread)` menghentikan eksekusi seketika — **termasuk thread
+> yang sedang berjalan**. Jangan pernah `task.cancel` thread milik fungsi yang bisa dipanggil
+> dari dalam thread itu sendiri. Jebakan ini tidak terlihat dari membaca kode; harus dijalankan.
+
+> **Catatan:** `ReviveManager` milik Tim dan **tidak ada di repo Git** (framework Tim tidak
+> di-track), jadi fix ini hanya hidup di Studio. Kalau place BUILD belum menerimanya, bug yang
+> sama masih ada di sana.
