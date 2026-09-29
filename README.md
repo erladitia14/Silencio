@@ -162,6 +162,25 @@ sisi paling benar.
 > Versi ini sudah **didorong ke place `Script`**, jadi monster sudah melepas pemain tumbang
 > versi TIM. Di place `BUILD Chapter 1` belum (menunggu perintah Aer).
 
+### ⚠️ Jebakan lintas sistem: `Waypoints` itu ANAK MODEL monster
+
+Titik patroli disimpan di `Clown.Waypoints` — jadi setiap `Model:PivotTo(...)` **ikut menggeser
+dan MEMUTAR** mereka (mereka descendant model). Kalau waypoint di-author dalam **koordinat
+absolut/dunia** (pola yang dipakai `ServerStorage.Phase1Monster.Clown`), memindahkan monster
+membuat jalur patroli meleset **ratusan stud** dan bisa **ngambang di udara** (terukur: waypoint
+naik ke Y=120 padahal tanah Y≈5). Akibat lanjutannya: `PathfindingService:ComputeAsync` balas
+`NoPath` → monster tidak bisa jalan ke waypoint sama sekali dan **tampak diam di tempat**.
+
+**Aturan untuk setiap kode yang memindahkan monster:** simpan `wp.CFrame` DULU → `PivotTo` →
+kembalikan `wp.CFrame`. Kalau tidak, jalur patroli rusak.
+
+| Script | Punya guard? |
+|---|---|
+| `SilencioServer.ControlRoomManager.SpawnPhase1Monster` | ✅ ya (pola acuan) |
+| `SilencioServer.SpinwheelTeleportManager.SpawnMazeMonster` | ✅ ya (ditambahkan 29 Sep 2026) |
+
+Kalau nanti ada script spawn monster baru, **salin pola ini** — jangan lupa.
+
 ---
 
 ## 🤝 Catatan untuk Tim

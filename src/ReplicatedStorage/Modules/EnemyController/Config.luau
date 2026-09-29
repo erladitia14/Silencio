@@ -116,7 +116,19 @@ Config.AgentHeight      = 5
 Config.AgentCanJump     = true
 Config.AgentJumpHeight  = 10
 Config.WaypointSpacing  = 4
-Config.PathTimeout      = 8     -- Timeout pathfinding (detik)
+Config.PathTimeout      = 8     -- Batas DASAR timeout pathfinding (detik)
+
+-- Anggaran waktu mengikuti JARAK, bukan angka mati.
+--
+-- Kenapa: satu waypoint patroli bisa jauh (kasus nyata: spawn monster 202 stud
+-- dari Waypoint1, dan W6->W7 110 stud). Timeout 5 detik yang dipakai
+-- EnemyController hanya cukup untuk 50 stud @PatrolSpeed 10 -> moveTo gagal ->
+-- state langsung pindah IDLE -> waypoint DI-SKIP dan monster tampak diam.
+--
+-- Rumus: max(PathTimeout, jarak / PatrolSpeed * PathTimeMargin) + PathTimeSlack
+Config.PathTimeMargin   = 3     -- kelonggaran pengali (belok, nabrak, path memutar)
+Config.PathTimeSlack    = 10    -- tambahan tetap (detik) untuk percepatan / animasi
+Config.PathStuckTime    = 4     -- detik tanpa kemajuan = monster benar-benar nyangkut
 
 -----------------------------------------------------------------
 -- MONSTER TAG (untuk CollectionService spawning)

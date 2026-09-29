@@ -200,6 +200,26 @@ Config.SafeZoneTag      = "SafeZone"
 Tuning navigasi (jarang diubah): `PathTimeout = 8`, `AgentRadius = 2.5`, `AgentHeight = 5`,
 `AgentCanJump = true`, `AgentJumpHeight = 10`.
 
+**Anggaran waktu navigasi ADAPTIF (29 Sep 2026).** Dulu `moveTo` memakai timeout tetap yang
+dikirim pemanggil (5 detik di `EnemyController`). Itu hanya cukup untuk ~50 stud @PatrolSpeed 10,
+padahal jarak nyata jauh lebih besar — spawn monster ke `Waypoint1` saja 200–1150 stud, dan
+`W6->W7` 110 stud. Akibatnya `moveTo` selalu gagal, state PATROL langsung pindah IDLE, dan
+**waypoint di-skip** → monster tampak diam di tempat.
+
+Sekarang anggaran dihitung dari jarak & kecepatan aktual:
+
+```
+budget = max(PathTimeout, jarak / WalkSpeed * PathTimeMargin) + PathTimeSlack
+```
+
+- `PathTimeMargin = 3` — jalur pathfinding selalu lebih panjang dari garis lurus (berbelok/memutar sudut).
+- `PathTimeSlack = 10` — percepatan awal & jeda animasi.
+- `PathStuckTime = 4` — kalau posisi tidak bergerak >0.5 stud selama ini, monster dianggap
+  **macet** (nabrak dinding/terperangkap) → menyerah lebih cepat, tidak menunggu anggaran penuh.
+- Argumen `timeout` di `moveTo` sekarang jadi **lantai**, bukan batas mati — pemanggil lama yang
+  masih mengirim 5 tidak lagi memotong perjalanan panjang.
+- `NavigationManager:getTravelBudget(speed, distance)` bisa dipanggil untuk memeriksa anggaran.
+
 Tuning retarget (anti-thrash): `RetargetInterval = 1`, `RetargetCommitTime = 2.5`,
 `RetargetHysteresis = 0.3`, `RetargetMinGap = 8`, `PersistentGiveUpTime = 0`.
 
