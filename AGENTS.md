@@ -37,7 +37,7 @@ paling benar. Tabel drift lengkap: [`README.md`](README.md).
 | **Repo** | Git repo biasa (branch `main`), remote `origin`. Commit & push seperti normal. |
 | **Sync ke Studio** | **MCP** (`set_script_source` untuk ModuleScript, `execute_luau` untuk instance). |
 | **Rojo** | **TIDAK DIPAKAI lagi.** `default.project.json` = artefak mati, jangan diandalkan. |
-| **Playtest** | Manual oleh Aer di Studio. |
+| **Playtest** | Place **clone** → agent boleh mandiri. Place **asli `BUILD Chapter 1`** → Aer (atau izin dulu). |
 
 > **Jangan pakai `rojo serve` / `rojo build`** — pipeline-nya sudah tidak dipakai, dan
 > `default.project.json` sudah tidak mencerminkan struktur place asli (`BUILD Chapter 1`).
@@ -114,5 +114,7 @@ Riwayat lengkap tiap perubahan + commit hash: [`PROGRESS.md`](PROGRESS.md).
 ## Security Rules
 - Never commit .env files or credentials to Git
 - Tracker sheet access limited to team members only
-- **Lakukan PLAYTEST mandiri bila place yang sedang dibuka bukan place asli** — Bila sedang membuka place asli BUILD Chapter 1. Mintalah izin pada Aer untuk melakukan playtest.
-  verifikasi edit-mode (baca `Source`, cek Attribute, jalankan harness di `_tools/`).
+- **Playtest mandiri BOLEH bila place yang sedang dibuka BUKAN place asli** (mis. place clone /
+  uji coba). Kalau yang dibuka **place asli `BUILD Chapter 1`**, minta izin Aer dulu.
+- Untuk perubahan milik kita (`Aer/*`, `ReplicatedStorage/Modules/*`), verifikasi edit-mode tetap
+  jalan seperti biasa: baca `Source`, cek Attribute, jalankan harness di `_tools/`.
