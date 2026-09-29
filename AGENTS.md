@@ -114,5 +114,5 @@ Riwayat lengkap tiap perubahan + commit hash: [`PROGRESS.md`](PROGRESS.md).
 ## Security Rules
 - Never commit .env files or credentials to Git
 - Tracker sheet access limited to team members only
-- **Jangan pernah menjalankan playtest sendiri** — Aer yang playtest. Agent hanya boleh
+- **Lakukan PLAYTEST mandiri bila place yang sedang dibuka bukan place asli** — Bila sedang membuka place asli BUILD Chapter 1. Mintalah izin pada Aer untuk melakukan playtest.
   verifikasi edit-mode (baca `Source`, cek Attribute, jalankan harness di `_tools/`).
