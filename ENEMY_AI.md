@@ -124,7 +124,22 @@ pandang terbatas, turunkan lewat Attribute per-NPC (mis. `160`).
 ## 🎬 Animasi
 
 Animasi **otomatis** — cukup tag. Sistem membaca ID animasi dari dalam Model itu sendiri:
-folder `Animations` → paket `Animate` milik rig → default Roblox.
+folder `Animations` → paket `Animate` milik rig → default Roblox (hanya rig standar).
+Rig ber-`Bone` tanpa `Motor6D` tidak memakai default R6/R15; animasi itu tidak cocok
+untuk skeleton mesh. Jika `Run` tidak tersedia, `CHASING` memakai **track Walk yang sama**.
+
+**Anti-restart FatClown:** pilihan Idle/Walk/Run mengikuti Attribute `AIState`, bukan
+`Humanoid.Running`. Kecepatan nol sesaat antar-titik path tidak lagi memotong Walk.
+Ini perbaikan **animasi saja**: navigasi, speed, waypoint, dan gerak fisik tidak diubah.
+`IDLE`/`ATTACKING` memakai Idle; Jump/Fall mengikuti state fisik dan kembali ke animasi
+AI setelah mendarat. `playAttack()` dan `playJumpscare()` tetap one-shot; selesai →
+state terkini, tanpa callback track lama menimpa track baru. `DEAD` menghentikan track.
+
+Verifikasi di clone `Testing Anim`: pengamatan FatClown 12 detik sebelum/sesudah,
+restart Walk saat masih PATROL **12 → 0**; setelah fix 4 loop normal teramati walau
+speed masih sempat nol 6 kali. Restart dihitung dari stop/play track, bukan setiap
+`TimePosition` mundur (loop normal juga kembali ke awal). Uji mock 34/34,
+8/8 mutan tertangkap, uji callback track engine 7/7. Ini bukan perbaikan fisika stop-and-go.
 
 ### Animasi per-state (opsional)
 
@@ -136,7 +151,8 @@ Buat **folder bernama `Animations`** di dalam Model `Monster`, isi `Animation` d
 | `Walk` | state `PATROL` |
 | `Run` | state `CHASING` |
 | `Attack` | event serangan (diputar sekali, tidak loop) |
-| `Death` | NPC mati |
+| `Jumpscare` | `playJumpscare()` dari controller, sekali sampai selesai |
+| `Jump` / `Fall` | State Humanoid di udara; mendarat kembali ke animasi AI |
 
 Nama folder & animasi **tidak case-sensitive** (`animations/idle` juga kebaca).
 Isi sebagian saja boleh — nama yang tidak ada jatuh ke fallback, tidak error.
@@ -148,13 +164,13 @@ workspace.Clown              ← tag "Monster"
     ├── Walk
     ├── Run
     ├── Attack
-    └── Death
+    └── Jumpscare
 ```
 
 > **Jebakan:** me-*rename* `Animation` yang sudah ada (mis. yang nempel di dalam script `Anim`)
 > menjadi `Idle` **tidak cukup**. Resolver mencari **folder** `Animations` sebagai anak Model;
-> Animation di luar folder itu hanya kepungut sebagai *fallback tunggal*, sehingga semua state
-> memakai animasi yang sama. Foldernya wajib ada.
+> Animation di luar folder itu tidak ditemukan oleh resolver ini. Untuk aset custom,
+> gunakan folder `Animations` atau struktur paket `Animate` yang didukung.
 
 > **Aset skinned mesh:** animasi R15 Roblox **tidak cocok** untuk mesh ber-tulang sendiri
 > (mis. `mixamorig:*`). Animasi harus di-publish terhadap rig mesh itu, dan di-upload oleh

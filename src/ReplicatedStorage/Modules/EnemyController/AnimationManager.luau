@@ -24,10 +24,27 @@
 	    pada Model, lalu pakai kanal "AIState" + "AISignal" dari EnemyController.
 --]]
 
-local Config = require(script.Parent.Config)
-
 local AnimationManager = {}
 AnimationManager.__index = AnimationManager
+
+-- Pemetaan STATE FSM (Attribute "AIState" yang di-publish EnemyController)
+-- -> nama animasi. INI sumber kebenaran animasi, BUKAN kecepatan.
+--
+-- ATTACKING -> Idle (berdiri; WalkSpeed=0 di state itu). Ayunan serangan tetap
+-- dipicu terpisah oleh playAttack(), jadi animasi Attack
+-- tidak ikut di-loop di sini.
+local STATE_TO_ANIM = {
+	IDLE      = "Idle",
+	PATROL    = "Walk",
+	CHASING   = "Run",
+	ATTACKING = "Idle",
+}
+
+-- Fallback berjenjang bila animasi state tidak tersedia di rig ini.
+local ANIM_FALLBACK = {
+	Run  = "Walk",
+	Walk = "Idle",
+}
 
 -- Animation ID bawaan Roblox (R15 & R6) — jaring pengaman terakhir
 local DEFAULT_ANIMS = {
@@ -98,6 +115,7 @@ function AnimationManager.new(monsterModel: Model)
 	self._currentTrack = nil :: AnimationTrack?
 	self._currentAnimName = "" :: string
 	self._connections = {} :: { RBXScriptConnection }
+	self._completionConnections = {} :: { [AnimationTrack]: RBXScriptConnection }
 	self._sources = {} :: { [string]: string }  -- dari mana tiap animasi didapat (untuk log)
 
 	-- Apakah rig ini BONE-BASED (mesh import: punya Bone, tanpa Motor6D)?
@@ -111,12 +129,12 @@ function AnimationManager.new(monsterModel: Model)
 	-- Jadi untuk rig bone-based, default Roblox TIDAK BOLEH dipakai sebagai
 	-- fallback: lebih baik tidak ada animasi (mesh tetap seperti sekarang)
 	-- daripada dipaksa memutar track yang tidak nyambung lalu T-pose.
-	local hasMotor6D = monsterModel:FindFirstChildOfClass("Motor6D") ~= nil
-	local hasBone = false
+	local hasMotor6D, hasBone = false, false
 	for _, d in ipairs(monsterModel:GetDescendants()) do
 		if d:IsA("Bone") then
 			hasBone = true
-			break
+		elseif d:IsA("Motor6D") then
+			hasMotor6D = true
 		end
 	end
 	self._boneBased = hasBone and not hasMotor6D
@@ -195,13 +213,13 @@ end
 
 --- Memuat semua track animasi utama
 function AnimationManager:_loadAnimations()
-	for _, name in ipairs({ "Idle", "Walk", "Run", "Jump", "Fall", "Attack" }) do
+	for _, name in ipairs({ "Idle", "Walk", "Run", "Jump", "Fall", "Attack", "Jumpscare" }) do
 		self:_loadTrack(name)
 	end
 
 	-- Laporkan hasil supaya jelas animasi mana yang aktif & dari mana asalnya
 	local report = {}
-	for _, name in ipairs({ "Idle", "Walk", "Run", "Jump", "Fall", "Attack" }) do
+	for _, name in ipairs({ "Idle", "Walk", "Run", "Jump", "Fall", "Attack", "Jumpscare" }) do
 		local mark = self._tracks[name] and "OK" or "-"
 		table.insert(report, string.format("%s:%s(%s)", name, mark, self._sources[name] or "?"))
 	end
@@ -223,12 +241,12 @@ function AnimationManager:play(name: string, transitionTime: number?)
 
 	local fadeTime = transitionTime or 0.25
 
-	if self._currentTrack and self._currentTrack ~= track then
-		self._currentTrack:Stop(fadeTime)
-	end
-
+	local previous = self._currentTrack
 	self._currentTrack = track
 	self._currentAnimName = name
+	if previous and previous ~= track then
+		previous:Stop(fadeTime)
+	end
 
 	if not track.IsPlaying then
 		track.Looped = true
@@ -236,73 +254,110 @@ function AnimationManager:play(name: string, transitionTime: number?)
 	end
 end
 
---- Memasang event listeners pada Humanoid untuk auto-animation saat bergerak
-function AnimationManager:_setupStateListeners()
-	-- Event saat pergerakan (speed) berubah
-	local runConn = self._humanoid.Running:Connect(function(speed)
-		if speed > 0.1 then
-			-- Ambang walk->run relatif terhadap PatrolSpeed NPC INI (bisa
-			-- di-override per-NPC), bukan default global. Kalau memakai global,
-			-- NPC dengan PatrolSpeed lebih tinggi akan memutar "Run" padahal
-			-- sedang patroli biasa.
-			if speed > (Config.get(self._model, "PatrolSpeed") + 2) then
-				self:play("Run")
-			else
-				self:play("Walk")
-			end
-		else
-			self:play("Idle")
+--- Animasi dasar mengikuti STATE AI, bukan speed sesaat antar-waypoint.
+--- Jump/Fall sementara mengikuti state fisik; mendarat kembali ke state AI.
+function AnimationManager:playState(stateName: string?)
+	if stateName == "DEAD" then
+		self._currentTrack = nil
+		self._currentAnimName = ""
+		for _, track in pairs(self._tracks) do
+			track:Stop(0.1)
 		end
-	end)
-	table.insert(self._connections, runConn)
+		return
+	end
 
-	-- Event saat melompat
-	local jumpConn = self._humanoid.Jumping:Connect(function()
-		self:play("Jump", 0.1)
-	end)
-	table.insert(self._connections, jumpConn)
+	local animName = STATE_TO_ANIM[stateName or "IDLE"]
+	if not animName then return end
 
-	-- Event saat melayang/jatuh
-	local freefallConn = self._humanoid.FreeFalling:Connect(function(active)
-		if active then
-			self:play("Fall", 0.1)
+	-- Jangan potong jumpscare, atau ayunan serangan yang masih berlangsung.
+	if self._currentTrack and self._currentTrack.IsPlaying then
+		if self._currentAnimName == "Jumpscare"
+			or (self._currentAnimName == "Attack" and stateName == "ATTACKING") then
+			return
 		end
-	end)
-	table.insert(self._connections, freefallConn)
+	end
 
-	-- Play Idle pertama kali
-	self:play("Idle")
+	local physical = self._humanoid:GetState()
+	if physical == Enum.HumanoidStateType.Jumping and self._tracks.Jump then
+		animName = "Jump"
+	elseif physical == Enum.HumanoidStateType.Freefall and self._tracks.Fall then
+		animName = "Fall"
+	end
+
+	-- Bone rig tanpa Run memakai track Walk yang SAMA, bukan default R6.
+	while animName do
+		if self._tracks[animName] then
+			self:play(animName)
+			return
+		end
+		animName = ANIM_FALLBACK[animName]
+	end
 end
 
---- Memainkan animasi serangan (Attack) secara eksplisit.
---- Mengembalikan false bila NPC ini belum punya animasi serang, supaya
---- pemanggil tidak menganggap animasi sudah jalan.
-function AnimationManager:playAttack(): boolean
-	local attackTrack = self._tracks["Attack"]
-	if not attackTrack then
-		attackTrack = self:_loadTrack("Attack")
+function AnimationManager:_setupStateListeners()
+	local stateConn = self._model:GetAttributeChangedSignal("AIState"):Connect(function()
+		self:playState(self._model:GetAttribute("AIState"))
+	end)
+	table.insert(self._connections, stateConn)
+
+	-- Tidak memakai Humanoid.Running: speed sempat nol bukan berarti IDLE.
+	-- StateChanged dipakai hanya untuk masuk/keluar animasi udara & kematian.
+	local function isAir(state)
+		return state == Enum.HumanoidStateType.Jumping
+			or state == Enum.HumanoidStateType.Freefall
+	end
+	local physicalConn = self._humanoid.StateChanged:Connect(function(oldState, newState)
+		if newState == Enum.HumanoidStateType.Dead then
+			self:playState("DEAD")
+		elseif isAir(oldState) or isAir(newState) then
+			self:playState(self._model:GetAttribute("AIState"))
+		end
+	end)
+	table.insert(self._connections, physicalConn)
+	self:playState(self._model:GetAttribute("AIState"))
+end
+
+--- One-shot mempertahankan API Attack/Jumpscare yang sudah dipakai controller.
+--- Setelah selesai, kembali ke state TERKINI; callback track lama tidak boleh
+--- mengambil alih track baru yang sudah menggantikannya.
+function AnimationManager:_playOneShot(name: string): boolean
+	local track = self._tracks[name] or self:_loadTrack(name)
+	if not track then return false end
+
+	if not self._completionConnections[track] then
+		local conn = track.Stopped:Connect(function()
+			if self._currentTrack ~= track then return end
+			self._currentTrack = nil
+			self._currentAnimName = ""
+			self:playState(self._model:GetAttribute("AIState"))
+		end)
+		self._completionConnections[track] = conn
+		table.insert(self._connections, conn)
 	end
 
-	if not attackTrack then
+	local previous = self._currentTrack
+	self._currentTrack = track
+	self._currentAnimName = name
+	if previous and previous ~= track then
+		previous:Stop(0.1)
+	end
+	if not track.IsPlaying then
+		track.Looped = false
+		track:Play(0.1)
+	end
+	return true
+end
+
+function AnimationManager:playAttack(): boolean
+	if self._currentAnimName == "Jumpscare" and self._currentTrack
+		and self._currentTrack.IsPlaying then
 		return false
 	end
+	return self:_playOneShot("Attack")
+end
 
-	-- Hentikan track lain yang sedang aktif (mis. Idle/Walk) dengan rapi
-	if self._currentTrack and self._currentTrack ~= attackTrack then
-		self._currentTrack:Stop(0.1)
-	end
-
-	-- FIX bug C: update _currentTrack & _currentAnimName supaya animasi attack
-	-- tidak keburu di-Stop oleh handler Running (Walk/Run) saat monster bergerak.
-	self._currentTrack = attackTrack
-	self._currentAnimName = "Attack"
-
-	if not attackTrack.IsPlaying then
-		attackTrack.Looped = false
-		attackTrack:Play(0.1)
-	end
-
-	return true
+function AnimationManager:playJumpscare(): boolean
+	return self:_playOneShot("Jumpscare")
 end
 
 --- Cleanup event connections saat monster dibersihkan
@@ -311,6 +366,9 @@ function AnimationManager:destroy()
 		conn:Disconnect()
 	end
 	self._connections = {}
+	self._completionConnections = {}
+	self._currentTrack = nil
+	self._currentAnimName = ""
 
 	for _, track in pairs(self._tracks) do
 		track:Stop()
