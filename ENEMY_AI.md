@@ -141,6 +141,17 @@ speed masih sempat nol 6 kali. Restart dihitung dari stop/play track, bukan seti
 `TimePosition` mundur (loop normal juga kembali ke awal). Uji mock 34/34,
 8/8 mutan tertangkap, uji callback track engine 7/7. Ini bukan perbaikan fisika stop-and-go.
 
+**Deployment ke `BUILD Chapter 1` (placeId `99701743439969`):** sebelum dipasang,
+Source dan buffer editor diperiksa. Versi BUILD masih 10.732 byte, memakai
+`Humanoid.Running`, belum memiliki `playState`; `playJumpscare` sudah ada dan tetap
+dipertahankan. Controller dan MonsterRig identik dengan versi `Testing Anim` yang diuji.
+Hanya `ReplicatedStorage.Modules.EnemyController.AnimationManager` diperbarui ke source
+commit `688f4c1` (12.349 byte), identik dengan lokal dan `Testing Anim`.
+Compile serta 34/34 uji perilaku edit-mode lolos; 8/8 mutan terisolasi tertangkap.
+Manifest 293 script: hanya AnimationManager berubah, 292 lainnya tetap.
+**Belum playtest di BUILD**; hasil runtime di atas berasal dari `Testing Anim`.
+Perubahan sudah masuk editor Studio, bukan klaim sudah publish experience.
+
 ### Animasi per-state (opsional)
 
 Buat **folder bernama `Animations`** di dalam Model `Monster`, isi `Animation` dengan nama berikut:
