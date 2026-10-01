@@ -149,8 +149,22 @@ Hanya `ReplicatedStorage.Modules.EnemyController.AnimationManager` diperbarui ke
 commit `688f4c1` (12.349 byte), identik dengan lokal dan `Testing Anim`.
 Compile serta 34/34 uji perilaku edit-mode lolos; 8/8 mutan terisolasi tertangkap.
 Manifest 293 script: hanya AnimationManager berubah, 292 lainnya tetap.
-**Belum playtest di BUILD**; hasil runtime di atas berasal dari `Testing Anim`.
-Perubahan sudah masuk editor Studio, bukan klaim sudah publish experience.
+**Playtest BUILD sudah dilakukan dengan izin Aer:** dua jendela pengamatan masing-masing
+10 detik pada `Workspace.FatClown` asli, direkam terpisah di server dan client.
+- Total gerak sekitar 78,2 stud; kedua peer mencatat **6 loop Walk normal, 0 restart dini**
+  saat masih PATROL, dan tidak ada sampel PATROL stabil yang kehilangan track Walk.
+- Speed nol sesaat tetap terjadi (server 17 kali, client 18 kali), tetapi tidak lagi
+  memotong animasi. Idle tetap muncul saat state benar-benar IDLE.
+- Di client, pose bone berubah pada 322 dari 324 sampel (sampel pertama belum punya
+  pembanding). Hanya satu Animator aktif; mesh/Walk/Idle berstatus asset fetch Success.
+- Pemain uji didekatkan sementara lalu dipulihkan: CHASING memakai Walk (Run tidak ada),
+  ATTACKING memakai Idle (Attack tidak ada). Tidak mengubah AI atau aset animasi.
+- Screenshot inspeksi masih gelap/tidak memperlihatkan mesh; **hasil ini membuktikan
+  kontinuitas track dan pose runtime, bukan penilaian visual kehalusan mesh**.
+Playtest sudah dihentikan. Kamera/lampu inspeksi client dan posisi pemain dipulihkan;
+293 entri manifest source (termasuk path duplikat) serta snapshot edit-model FatClown
+sama sebelum/sesudah. Tidak ada source produksi yang diubah saat playtest, dan
+**experience belum dipublish**.
 
 ### Animasi per-state (opsional)
 
