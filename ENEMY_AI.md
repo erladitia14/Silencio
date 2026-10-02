@@ -166,6 +166,35 @@ Playtest sudah dihentikan. Kamera/lampu inspeksi client dan posisi pemain dipuli
 sama sebelum/sesudah. Tidak ada source produksi yang diubah saat playtest, dan
 **experience belum dipublish**.
 
+### Waypoint patroli (hybrid di luar rig)
+
+Patch 1 Okt 2026 memisahkan folder waypoint dari rig supaya aman di-drag di Studio
+(drag model + descendant membuat waypoint ikut bergeser). Resolusi di `PatrolManager`:
+
+1. `workspace.Waypoints.<tag>` — tag = Attribute `WaypointSet` di rig; kalau Attribute
+   kosong, default = `rig.Name`. **Ini jalur utama baru.**
+2. `rig.Waypoints` — folder lama di dalam rig (backward compat untuk
+   `ServerStorage.Phase1Monster.Clown` punya tim).
+3. `workspace.Waypoints` berisi BasePart langsung (legacy single-monster).
+4. Fallback 4-titik square 20 stud di sekitar `HumanoidRootPart`.
+
+```
+workspace
+├── Waypoints
+│   ├── FatClown           ← folder per rig, nama = tag
+│   │   ├── Waypoint1 (BasePart)
+│   │   ├── Waypoint2
+│   │   └── …
+│   └── Clown              ← set berbeda untuk rig Clown template
+└── FatClown (Model)       ← Attribute WaypointSet="FatClown" (opsional kalau sama dgn Name)
+```
+
+Satu set waypoint boleh dipakai beberapa rig: cukup set `WaypointSet` ke tag yang sama.
+Rename folder di Studio aman asal `WaypointSet` menunjuk nama baru (atau kosongkan
+Attribute dan samakan nama folder dengan nama rig). `PatrolManager:getSource()`
+mengembalikan `"external" / "nested" / "legacy" / "fallback" / "none"` untuk debugging.
+`PatrolManager:refresh()` dipanggil kalau waypoint berubah saat runtime.
+
 ### Animasi per-state (opsional)
 
 Buat **folder bernama `Animations`** di dalam Model `Monster`, isi `Animation` dengan nama berikut:
